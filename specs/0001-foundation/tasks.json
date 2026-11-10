@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "spec_id": "0001-foundation",
+  "tasks": [
+    {
+      "id": "FND-001",
+      "title": "Define architecture, evidence ownership, and milestones",
+      "depends_on": [],
+      "write_paths": ["README.md", "AGENTS.md", "docs", "specs"],
+      "acceptance": ["FND-AC-01"],
+      "checks": ["Read the documented continuation path from a fresh context"]
+    },
+    {
+      "id": "FND-002",
+      "title": "Implement task validation and the local run recorder",
+      "depends_on": ["FND-001"],
+      "write_paths": ["go.mod", ".gitignore", ".gitattributes", "internal/spec", "internal/runlog"],
+      "acceptance": ["FND-AC-02", "FND-AC-03"],
+      "checks": ["go test ./internal/spec ./internal/runlog"]
+    },
+    {
+      "id": "FND-003",
+      "title": "Add the CLI, deterministic local checks, and a three-OS CI workflow",
+      "depends_on": ["FND-002"],
+      "write_paths": ["cmd/dev", "internal/check", ".github/workflows"],
+      "acceptance": ["FND-AC-04", "FND-AC-05"],
+      "checks": ["go run ./cmd/dev check", "Review workflow permissions and artifact retention"]
+    },
+    {
+      "id": "FND-004",
+      "title": "Record verified results and an honest handoff",
+      "depends_on": ["FND-003"],
+      "write_paths": ["reports"],
+      "acceptance": ["FND-AC-06"],
+      "checks": ["Compare report claims against actual run evidence"]
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+name: Foundation Checks
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: foundation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    defaults:
+      run:
+        shell: bash
+    env:
+      GOTOOLCHAIN: local
+      GOWORK: "off"
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up pinned Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Start evidence record
+        id: start
+        run: |
+          run_id="$(go run ./cmd/dev run new --spec specs/0001-foundation)"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Validate candidate
+        id: checks
+        env:
+          RUN_ID: ${{ steps.start.outputs.run_id }}
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            go run ./cmd/dev check --run "$RUN_ID"
+          else
+            go run ./cmd/dev check --run "$RUN_ID" --race
+          fi
+
+      - name: Record execution outcome (not approval)
+        if: always() && steps.start.outputs.run_id != ''
+        env:
+          RUN_ID: ${{ steps.start.outputs.run_id }}
+          CHECK_OUTCOME: ${{ steps.checks.outcome }}
+        run: |
+          if [ "$CHECK_OUTCOME" = "success" ]; then
+            go run ./cmd/dev run finish --id "$RUN_ID" --outcome succeeded --message "Foundation checks passed on $RUNNER_OS; independent review still required"
+          else
+            go run ./cmd/dev run finish --id "$RUN_ID" --outcome failed --message "Foundation checks did not pass on $RUNNER_OS"
+          fi
+
+      - name: Preserve CI evidence
+        if: always() && steps.start.outputs.run_id != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: foundation-${{ matrix.os }}-${{ github.run_attempt }}
+          path: .agent/runs/${{ steps.start.outputs.run_id }}/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 14

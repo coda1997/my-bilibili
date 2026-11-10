@@ -1,0 +1,14 @@
+# Controller-owned execution state and evidence; never commit raw runs.
+/.agent/
+/dist/
+/coverage.out
+
+# Local credentials, media, and editor state.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "spec_id": "0002-playback-spike",
+  "tasks": [
+    {
+      "id": "PLAY-001",
+      "title": "Pin the candidate and define safe fixtures and contracts",
+      "depends_on": [],
+      "write_paths": ["go.mod", "go.sum", "experiments/playback/contract", "experiments/playback/testdata"],
+      "acceptance": ["PLAY-AC-01"],
+      "checks": ["Inspect fixture provenance and ensure no account credentials are present"]
+    },
+    {
+      "id": "PLAY-002",
+      "title": "Exercise the native Go UI on both target platforms",
+      "depends_on": ["PLAY-001"],
+      "write_paths": ["experiments/playback/ui"],
+      "acceptance": ["PLAY-AC-02"],
+      "checks": ["Run the UI on macOS and Windows and preserve sanitized evidence"]
+    },
+    {
+      "id": "PLAY-003",
+      "title": "Exercise media behavior behind the frozen player contract",
+      "depends_on": ["PLAY-002"],
+      "write_paths": ["experiments/playback/player", "experiments/playback/ui", "experiments/playback/cmd"],
+      "acceptance": ["PLAY-AC-03"],
+      "checks": ["Run the capability matrix against authorized fixtures on both OSes"]
+    },
+    {
+      "id": "PLAY-004",
+      "title": "Integrate evidence and obtain a reviewed playback decision",
+      "depends_on": ["PLAY-003"],
+      "write_paths": ["reports/0002-playback-spike.md", "docs/adr/0003-playback-decision.md"],
+      "acceptance": ["PLAY-AC-04"],
+      "checks": ["Independent architecture review of the capability matrix and proposed adapter"]
+    }
+  ]
+}
