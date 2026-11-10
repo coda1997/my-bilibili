@@ -1,6 +1,7 @@
 # Architecture baseline
 
-Status: proposed baseline for stage zero; M0 acceptance is outstanding.
+Status: development foundation (M0) accepted by the owner on 2026-11-10.
+M1 UI/playback feasibility and its architecture decision remain outstanding.
 Current review dispositions: [readiness publication](../reports/0003-publication.md#independent-review).
 Historical findings: `reports/0001-independent-review.md`.
 
@@ -58,4 +59,5 @@ are inputs to those decisions, not authority to change the rules.
 
 - `docs/adr/0001-foundation-and-evidence.md`
 - `docs/adr/0002-go-ui-and-playback-boundary.md`
-- `docs/adr/0003-ascii-task-scopes.md` (proposed; human policy adoption pending)
+- `docs/adr/0003-ascii-task-scopes.md` (adopted by the owner on 2026-11-10;
+  M0 was separately accepted on the same date)

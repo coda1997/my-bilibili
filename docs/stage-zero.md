@@ -7,6 +7,8 @@ Execution events live in `.agent/runs/`; accepted conclusions live in reports.
 
 Specification: `specs/0001-foundation/spec.md`.
 
+Status: completed and accepted by the owner on 2026-11-10.
+
 Exit criteria:
 
 - A new contributor can find decisions, task contracts, checks, and handoffs.
@@ -23,7 +25,9 @@ Current handoff and finding dispositions:
 Readiness implementation, independent technical review, and PR #1 publication
 are complete. Candidate and merged-master CI passed on all three OSes; COR-001,
 COR-002, and ARC-001 are technically closed by their original reviewers.
-Human policy adoption and M0 acceptance remain separate pending decisions.
+The owner adopted the five task-scope/check/review policies on 2026-11-10;
+see the [current policy handoff](../reports/0003-policy-adoption.md).
+The owner separately accepted M0 on the same date.
 The `0001` and local-phase `0003` reports remain unchanged historical snapshots.
 
 ## M1. mygo and playback feasibility
@@ -76,10 +80,10 @@ signing, notarization, and public releases are deliberately not implemented.
 
 ## Next action
 
-The human owner should decide adoption of the proposed task-scope/check policy
-and M0 acceptance using the current handoff. The repairs, independent review,
-publication, and candidate CI are complete; the historical pending-CI notes do
-not request another repair or publication round. M1 remains a separately
-authorized feasibility task requiring independent contract review, real
+M0 acceptance and policy adoption are complete; see the
+[current handoff](../reports/0003-policy-adoption.md) and its linked publication
+evidence. Historical pending-policy/M0/CI notes do not request another repair
+or publication round. The next milestone is M1; its start remains separately
+authorized, requiring independent contract review, real
 macOS/Windows runtime access, and safe media fixtures.
 Do not record stage zero as complete until M0 through M3 have actual evidence.
