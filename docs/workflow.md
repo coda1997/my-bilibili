@@ -7,6 +7,11 @@ contract freeze, isolated implementation, candidate integration, deterministic
 checks, independent risk-based reviews, bounded repair, and controlled merge.
 It is a protocol first. Only the local evidence recorder and checks exist now.
 
+The owner adopted the five task-scope/check/review policies on 2026-11-10.
+See the [adoption record](../reports/0003-policy-adoption.md) for the exact
+scope and the separate owner acceptance of M0 on the same date. Neither
+decision grants autonomous or remote-action authority.
+
 Operational entrypoints: [development](development.md), [testing](testing.md),
 [PR/handoff](pull-requests.md), and the [role packet](templates/assignment.md).
 These guides and repo-local skills do not grant delegation or remote authority.
@@ -32,8 +37,8 @@ Each direct child of `specs/` contains `spec.md` and `tasks.json`.
   `checks`. All paths are repository-relative forward-slash paths, without
   globs, backslashes, parent traversal, or absolute paths.
 - Declared `write_paths` additionally use ASCII spellings. This candidate's
-  COR-002 repair is documented in [ADR 0003](adr/0003-ascii-task-scopes.md);
-  separate human adoption as trusted policy is pending. Generic safe spec and
+  COR-002 repair is documented in [ADR 0003](adr/0003-ascii-task-scopes.md),
+  adopted by the owner on 2026-11-10. Generic safe spec and
   evidence paths retain Unicode support. Invalid scopes are rejected even when
   tasks are dependency-ordered; this does not enforce actual filesystem access.
 - A write path names a file or a complete directory subtree. Tasks with

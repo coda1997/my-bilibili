@@ -1,7 +1,10 @@
 # Foundation specification
 
 Spec ID: `0001-foundation`
-Status: implementation contract; independent acceptance is still required.
+Status: development foundation (M0) accepted by the owner on 2026-11-10.
+See the [acceptance record](../../reports/0003-policy-adoption.md) and its
+linked independent review and publication evidence. The contract body and
+historical frozen inputs remain unchanged; M1 is not started.
 
 ## Goal
 

@@ -2,14 +2,18 @@
 
 Spec ID: `0003-agent-readiness`
 Status: implementation, independent technical review, three-OS CI, and
-user-authorized publication complete through PR #1 (`daca629`). Separate human
-adoption of trusted automation policy and M0 acceptance remain pending.
+user-authorized publication complete through PR #1 (`daca629`). The owner
+separately adopted the five task-scope/check/review policies and accepted M0
+on 2026-11-10.
 
-Current status and evidence: [publication handoff](../../reports/0003-publication.md).
+Current status: [adoption and M0 acceptance](../../reports/0003-policy-adoption.md).
+Technical evidence: [publication handoff](../../reports/0003-publication.md).
 The original local-only scope below preceded the user's separate authorization
 to publish and merge PR #1. Its contract body, acceptance criteria, task graph,
 and historical frozen inputs are unchanged; this status update does not grant
-authority for new remote actions or accept the proposed policy.
+authority for new remote actions or starting M1. The original contract's
+policy-approval and M0 restrictions below describe that earlier authorization;
+the owner's later decisions are recorded in the current status above.
 
 ## Goal
 

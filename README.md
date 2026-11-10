@@ -8,7 +8,7 @@ foundation, not a working Bilibili client or an autonomous agent orchestrator.
 
 ## Start here
 
-- [Current readiness handoff and remaining gates](reports/0003-publication.md)
+- [Current policy adoption, M0 acceptance, and next milestone](reports/0003-policy-adoption.md)
 - [Independent review dispositions](reports/0003-publication.md#independent-review)
 - [Stage-zero milestones and next action](docs/stage-zero.md)
 - [Application boundaries](docs/architecture.md)
@@ -21,8 +21,10 @@ foundation, not a working Bilibili client or an autonomous agent orchestrator.
 Readiness implementation and independent technical review are complete. PR #1
 merged as `daca629`; its PR and merged-master CI passed on all three OSes. The
 owner confirmed public visibility and protected, PR-based squash merging.
-Follow the current handoff for exact evidence and the remaining human policy
-and M0 acceptance decisions; these results do not validate later revisions.
+The owner adopted the five task-scope/check/review policies on 2026-11-10;
+see the current handoff for their scope. The owner separately accepted M0
+on the same date. M1 has not started; stage zero is not complete.
+The publication evidence does not validate later revisions.
 
 The [foundation handoff](reports/0001-foundation.md),
 [foundation review](reports/0001-independent-review.md), and local-phase

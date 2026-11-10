@@ -1,9 +1,10 @@
 # ADR 0003: Restrict declared task write scopes to ASCII
 
 Date: 2026-11-10
-Status: implemented and independently technically reviewed in PR #1; still
-proposed for adoption as trusted automation policy, requiring separate human
-approval. See the [publication handoff](../../reports/0003-publication.md).
+Status: implemented and independently technically reviewed in PR #1; adopted
+as task-scope policy by the owner on 2026-11-10. See the
+[adoption record](../../reports/0003-policy-adoption.md) and the
+[publication evidence](../../reports/0003-publication.md).
 
 ## Problem
 
@@ -45,5 +46,8 @@ cover valid ordered ASCII overlap and invalid unordered case aliases. Retain
 the native macOS reproduction as independent supporting evidence.
 
 Implementation and an independent technical recommendation do not constitute
-human policy approval. The current supervised candidate can be evaluated, but
-must not promote this ADR or modified checks into self-approved automation.
+human policy approval. The owner separately supplied that approval on
+2026-11-10, adopting all five enumerated policies in the adoption record.
+This does not implement autonomous enforcement or permit later policy changes
+to approve themselves. The owner separately accepted M0 on the same date;
+that decision is also recorded in the adoption record.
