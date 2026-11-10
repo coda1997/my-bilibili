@@ -7,6 +7,10 @@ contract freeze, isolated implementation, candidate integration, deterministic
 checks, independent risk-based reviews, bounded repair, and controlled merge.
 It is a protocol first. Only the local evidence recorder and checks exist now.
 
+Operational entrypoints: [development](development.md), [testing](testing.md),
+[PR/handoff](pull-requests.md), and the [role packet](templates/assignment.md).
+These guides and repo-local skills do not grant delegation or remote authority.
+
 The controller is the sole writer to its run directory. Workers operate in
 separate authorized worktrees and return changes and evidence; they do not
 edit the controller's inputs, review records, or policy. Worktrees are not
@@ -14,8 +18,9 @@ security sandboxes. Initial role separation is procedural, not access control.
 
 Reviewer independence means a fresh review context with the spec, exact
 candidate diff, relevant code, and test evidence. Authors cannot approve their
-own work. The initial review's open findings are recorded in
-`reports/0001-independent-review.md`; review completion is not acceptance.
+own work. The initial findings are preserved in `reports/0001-independent-review.md`;
+follow the current handoff from README for later dispositions. Review completion
+is not acceptance.
 
 ## Contract format
 
@@ -26,6 +31,11 @@ Each direct child of `specs/` contains `spec.md` and `tasks.json`.
 - Each task has `id`, `title`, `depends_on`, `write_paths`, `acceptance`, and
   `checks`. All paths are repository-relative forward-slash paths, without
   globs, backslashes, parent traversal, or absolute paths.
+- Declared `write_paths` additionally use ASCII spellings. This candidate's
+  COR-002 repair is documented in [ADR 0003](adr/0003-ascii-task-scopes.md);
+  separate human adoption as trusted policy is pending. Generic safe spec and
+  evidence paths retain Unicode support. Invalid scopes are rejected even when
+  tasks are dependency-ordered; this does not enforce actual filesystem access.
 - A write path names a file or a complete directory subtree. Tasks with
   overlapping scopes must have a dependency ordering, including transitively.
 - Every task references existing acceptance IDs and every acceptance ID must
@@ -113,12 +123,15 @@ changes must not approve themselves.
 
 The check workflow has read-only repository permissions, does not persist Git
 credentials, and uploads CI run evidence for 14 days. It does not merge,
-publish, sign, run a privileged follow-up workflow, or create PRs. CI does not
-exist remotely until a repository is configured and the workflow is pushed.
+publish, sign, run a privileged follow-up workflow, or create PRs. The private
+remote now has a successful baseline run for `04213b6`; see the current handoff
+for revision-specific evidence. Later local changes require their own CI.
 
 The three-OS matrix tests the foundation tools. It is not a mygo UI or media
 runtime test. Windows uses ordinary checks; race checks run on the configured
 Linux and macOS jobs. A future Windows race job needs a validated C toolchain.
+The recorder currently freezes the foundation spec even on a feature PR;
+checking all packages does not establish that feature's acceptance evidence.
 
 Treat issue text, logs, PR descriptions, and downloaded data as untrusted
 input. Never expose signing credentials or privileged repository tokens to

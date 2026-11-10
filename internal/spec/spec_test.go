@@ -88,6 +88,75 @@ func TestUnsafePaths(t *testing.T) {
 	}
 }
 
+func TestUnicodeWriteScopes(t *testing.T) {
+	composed, decomposed := "internal/caf\u00e9", "internal/cafe\u0301"
+	for _, scopes := range []struct {
+		name        string
+		left, right string
+	}{
+		{"composed file", composed + "/file.go", "internal/two"},
+		{"decomposed file", decomposed + "/file.go", "internal/two"},
+		{"composed subtree", composed, "internal/two"},
+		{"decomposed subtree", decomposed, "internal/two"},
+		{"equivalent files", composed + "/file.go", decomposed + "/file.go"},
+		{"reversed files", decomposed + "/file.go", composed + "/file.go"},
+		{"subtree then file", composed, decomposed + "/file.go"},
+		{"file then subtree", composed + "/file.go", decomposed},
+		{"decomposed subtree then file", decomposed, composed + "/file.go"},
+		{"decomposed file then subtree", decomposed + "/file.go", composed},
+		{"equivalent subtrees", composed, decomposed},
+		{"reversed subtrees", decomposed, composed},
+	} {
+		for _, ordering := range []string{"unordered", "ordered"} {
+			t.Run(scopes.name+"/"+ordering, func(t *testing.T) {
+				def := validDefinition()
+				def.Tasks[0].WritePaths = []string{scopes.left}
+				def.Tasks[1].WritePaths = []string{scopes.right}
+				if ordering == "ordered" {
+					def.Tasks[1].DependsOn = []string{"T1"}
+				}
+				if err := Validate(def, []byte(markdown)); err == nil || !strings.Contains(err.Error(), "ASCII") || !strings.Contains(err.Error(), "write path") {
+					t.Fatalf("expected ASCII write-path rejection, got %v", err)
+				}
+			})
+		}
+	}
+}
+
+func TestUnicodeGenericPaths(t *testing.T) {
+	for _, path := range []string{"evidence/caf\u00e9.txt", "evidence/cafe\u0301.txt", "specs/\u89c4\u683c/test"} {
+		if !ValidPath(path) {
+			t.Errorf("safe generic Unicode path rejected: %q", path)
+		}
+	}
+}
+
+func TestLoadUnicodeLocations(t *testing.T) {
+	for _, ancestor := range []string{"caf\u00e9", "cafe\u0301", "\u89c4\u683c"} {
+		t.Run(ancestor, func(t *testing.T) {
+			root := filepath.Join(t.TempDir(), "\u5de5\u4f5c\u533a")
+			path := "specs/" + ancestor + "/test"
+			dir := filepath.Join(root, filepath.FromSlash(path))
+			if err := os.MkdirAll(dir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			data, err := json.Marshal(validDefinition())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for name, data := range map[string][]byte{"spec.md": []byte(markdown), "tasks.json": data} {
+				if err := os.WriteFile(filepath.Join(dir, name), data, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			snapshot, err := Load(root, path)
+			if err != nil || snapshot.Path != path {
+				t.Fatalf("Unicode spec location failed: snapshot=%+v, error=%v", snapshot, err)
+			}
+		})
+	}
+}
+
 func TestLoad(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "specs", "test")

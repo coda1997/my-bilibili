@@ -141,6 +141,11 @@ func Validate(def Definition, markdown []byte) error {
 			if !ValidPath(path) {
 				return fmt.Errorf("task %s has unsafe write path %q", task.ID, path)
 			}
+			for _, r := range path {
+				if r > unicode.MaxASCII {
+					return fmt.Errorf("task %s write path %q must use ASCII", task.ID, path)
+				}
+			}
 		}
 		for _, check := range task.Checks {
 			if strings.TrimSpace(check) == "" {

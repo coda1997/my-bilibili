@@ -1,7 +1,8 @@
 # Architecture baseline
 
 Status: proposed baseline for stage zero; M0 acceptance is outstanding.
-Independent review findings: `reports/0001-independent-review.md`.
+Current review dispositions: `reports/0003-independent-review.md`.
+Historical findings: `reports/0001-independent-review.md`.
 
 ## Product scope
 
@@ -57,3 +58,4 @@ are inputs to those decisions, not authority to change the rules.
 
 - `docs/adr/0001-foundation-and-evidence.md`
 - `docs/adr/0002-go-ui-and-playback-boundary.md`
+- `docs/adr/0003-ascii-task-scopes.md` (proposed; human policy adoption pending)

@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "spec_id": "0003-agent-readiness",
+  "tasks": [
+    {
+      "id": "RDY-001",
+      "title": "Define the bounded readiness contract and path-policy proposal",
+      "depends_on": [],
+      "write_paths": ["specs/0003-agent-readiness", "docs/adr/0003-ascii-task-scopes.md"],
+      "acceptance": ["RDY-AC-05", "RDY-AC-06"],
+      "checks": ["Independent architecture review of the proposed contract before implementation"]
+    },
+    {
+      "id": "RDY-002",
+      "title": "Provide portable context, role and authoring templates, guides, and skills",
+      "depends_on": ["RDY-001"],
+      "write_paths": ["AGENTS.md", "README.md", "docs/development.md", "docs/testing.md", "docs/pull-requests.md", "docs/workflow.md", "docs/stage-zero.md", "docs/architecture.md", "docs/templates", ".agents/skills", ".github/pull_request_template.md"],
+      "acceptance": ["RDY-AC-01", "RDY-AC-02", "RDY-AC-03"],
+      "checks": ["Validate each new skill with the installed skill-creator validator", "Instantiate contract templates and run the real spec validator", "Independent fresh-context workflow exercise"]
+    },
+    {
+      "id": "RDY-003",
+      "title": "Repair COR-001 and add output/persistence regression coverage",
+      "depends_on": ["RDY-001"],
+      "write_paths": ["cmd/dev/main.go", "cmd/dev/main_test.go"],
+      "acceptance": ["RDY-AC-04"],
+      "checks": ["go test -count=1 -race ./cmd/dev", "Independent COR-001 re-verification"]
+    },
+    {
+      "id": "RDY-004",
+      "title": "Repair COR-002 using the separately reviewed task-scope restriction",
+      "depends_on": ["RDY-001"],
+      "write_paths": ["internal/spec/spec.go", "internal/spec/spec_test.go"],
+      "acceptance": ["RDY-AC-05"],
+      "checks": ["go test -count=1 -race ./internal/spec ./internal/runlog", "Independent COR-002 re-verification and legacy record read"]
+    },
+    {
+      "id": "RDY-005",
+      "title": "Freeze the candidate, obtain independent reviews, and publish the current handoff",
+      "depends_on": ["RDY-002", "RDY-003", "RDY-004"],
+      "write_paths": ["reports/0003-agent-readiness.md", "reports/0003-independent-review.md", "README.md", "docs/stage-zero.md", "docs/architecture.md"],
+      "acceptance": ["RDY-AC-01", "RDY-AC-06"],
+      "checks": ["go run ./cmd/dev check --race", "Independent review of the exact candidate and documented evidence", "Verify historical reports and frozen inputs remain unchanged"]
+    }
+  ]
+}
