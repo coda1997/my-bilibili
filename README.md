@@ -8,19 +8,31 @@ foundation, not a working Bilibili client or an autonomous agent orchestrator.
 
 ## Start here
 
+- [Current readiness handoff and remaining gates](reports/0003-agent-readiness.md)
+- [Independent review dispositions](reports/0003-independent-review.md)
 - [Stage-zero milestones and next action](docs/stage-zero.md)
 - [Application boundaries](docs/architecture.md)
+- [Start a feature and assign roles](docs/development.md)
+- [Tests, prerequisites, and CI limits](docs/testing.md)
+- [Write a PR or handoff](docs/pull-requests.md)
 - [Development protocol and evidence ownership](docs/workflow.md)
-- [Foundation specification](specs/0001-foundation/spec.md)
-- [Latest foundation handoff](reports/0001-foundation.md)
+- [Current readiness contract](specs/0003-agent-readiness/spec.md)
+
+The original [foundation handoff](reports/0001-foundation.md) and
+[review](reports/0001-independent-review.md) are historical records. The private
+remote is configured and baseline `04213b6` passed its three-OS CI run; that
+does not validate later local changes. Follow the current handoff for candidate
+checks, finding closure, pending human policy adoption, and M0 acceptance.
 
 ## Prerequisites
 
 Install Git and Go 1.27.3, the version pinned in `go.mod`, and put both on PATH.
-The module name is intentionally local until a remote repository is selected.
-No third-party Go dependencies are needed for the foundation.
+The module name remains local (`my-bilibili`); it is not a published library
+import path. No third-party Go dependencies are needed for the foundation.
+See [testing](docs/testing.md#prerequisites) for Windows and fresh-clone setup.
 
 ```sh
+export GOTOOLCHAIN=local GOWORK=off
 go run ./cmd/dev check
 go run ./cmd/dev check --race
 ```
@@ -42,7 +54,7 @@ Local toolchain provenance is recorded in `.agent/environment.json`.
 ## Start or resume recorded work
 
 ```sh
-go run ./cmd/dev run new --spec specs/0001-foundation
+go run ./cmd/dev run new --spec specs/<selected-spec>
 go run ./cmd/dev run list
 go run ./cmd/dev run status --id <run-id>
 go run ./cmd/dev run note --id <run-id> --phase implementation --message "Describe the checkpoint and next action"
@@ -50,7 +62,8 @@ go run ./cmd/dev check --run <run-id>
 go run ./cmd/dev run finish --id <run-id> --outcome needs-human --message "Implementation checked; independent review still required"
 ```
 
-Use the printed run ID in place of `<run-id>`. An uncommitted bootstrap checkout
+Replace `<selected-spec>` with the assigned spec directory and use the printed
+run ID in place of `<run-id>`. An uncommitted development checkout
 requires `run new ... --allow-dirty`; its manifest explicitly records the dirty
 or unborn source baseline. Such a run is not release evidence.
 
@@ -65,7 +78,8 @@ stage zero complete.
 | `docs/`, `specs/` | Decisions, protocol, acceptance criteria, task definitions | Yes |
 | `.agent/runs/<run-id>/` | Frozen inputs, immutable event records, local evidence | No |
 | `reports/` | Sanitized durable handoffs, conclusions, links to evidence | Yes |
-| GitHub Actions artifacts | Copies of CI run evidence, retained for 14 days | Remote, after a remote is configured |
+| `.agents/skills/` | Planning, implementation, review, and handoff procedures | Yes |
+| GitHub Actions artifacts | Copies of CI run evidence, not app packages; retained for 14 days | Private remote |
 
 Chat history is context, not the source of truth. Local runs are persistent
 across process restarts but are not a backup. Before deleting a checkout,

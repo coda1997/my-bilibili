@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "spec_id": "<spec-id>",
+  "tasks": [
+    {
+      "id": "FEAT-001",
+      "title": "Implement and verify the reviewed behavior",
+      "depends_on": [],
+      "write_paths": ["internal/<package>"],
+      "acceptance": ["FEAT-AC-01", "FEAT-AC-02"],
+      "checks": ["go test -count=1 ./internal/<package>", "go run ./cmd/dev check"]
+    }
+  ]
+}

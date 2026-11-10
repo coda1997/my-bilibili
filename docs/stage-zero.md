@@ -18,7 +18,11 @@ Exit criteria:
   has passed; local cross-compilation is not an OS runtime test.
 - An independent review is recorded. Self-review does not satisfy this item.
 
-Current implementation handoff: `reports/0001-foundation.md`.
+Current implementation handoff: `reports/0003-agent-readiness.md`.
+Current finding dispositions: `reports/0003-independent-review.md`.
+The private remote and baseline three-OS CI now exist. Acceptance still requires
+the repaired candidate's own evidence and separate human policy review; the
+historical `0001` reports remain unchanged, not the current task-state source.
 
 ## M1. mygo and playback feasibility
 
@@ -70,7 +74,9 @@ signing, notarization, and public releases are deliberately not implemented.
 
 ## Next action
 
-Review the M0 implementation independently, configure the intended remote when
-authorized, and run CI. In parallel with that decision, arrange macOS and
-Windows runtime access and safe media fixtures for M1. Do not record stage
-zero as complete until M0 through M3 have actual acceptance evidence.
+Follow the current readiness handoff: finish any independent repair review,
+obtain human review of the proposed task-scope/check policy, and request
+authorization to commit/push the exact candidate and run its three-OS CI.
+Only then decide M0 acceptance. M1 remains a separately authorized feasibility
+task requiring real macOS/Windows runtime access and safe media fixtures.
+Do not record stage zero as complete until M0 through M3 have actual evidence.

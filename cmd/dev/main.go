@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"my-bilibili/internal/check"
@@ -34,6 +35,8 @@ Evidence flags may be repeated. Files must already exist in the run directory.
 `
 
 func main() {
+	// Let recorded checks preserve evidence when an output pipe closes.
+	signal.Ignore(syscall.SIGPIPE)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	args := os.Args[1:]
@@ -171,6 +174,36 @@ func runCommand(root string, store *runlog.Store, args []string, out, errOut io.
 
 type checkRunner func(context.Context, string, io.Writer, bool) error
 
+type checkOutput struct {
+	log, display       io.Writer
+	logErr, displayErr error
+}
+
+func (w *checkOutput) Write(p []byte) (int, error) {
+	if w.logErr != nil {
+		return 0, w.logErr
+	}
+	n, err := w.log.Write(p)
+	if n != len(p) && err == nil {
+		err = io.ErrShortWrite
+	}
+	if err != nil {
+		w.logErr = err
+		return n, err
+	}
+	// The log is mandatory; display failures must not interrupt the check.
+	if w.displayErr == nil {
+		n, err := w.display.Write(p)
+		if n != len(p) && err == nil {
+			err = io.ErrShortWrite
+		}
+		if err != nil {
+			w.displayErr = fmt.Errorf("display check output: %w", err)
+		}
+	}
+	return len(p), nil
+}
+
 func recordedCheck(ctx context.Context, root string, store *runlog.Store, id string, race bool, out io.Writer, run checkRunner) error {
 	source, err := sourceInfo(root)
 	if err != nil {
@@ -180,7 +213,7 @@ func recordedCheck(ctx context.Context, root string, store *runlog.Store, id str
 	if err != nil {
 		return err
 	}
-	w := io.MultiWriter(out, file)
+	w := &checkOutput{log: file, display: out}
 	_, headerErr := fmt.Fprintf(w, "Go: %s; platform: %s/%s; race: %t\nSource: %s; dirty: %t\n", runtime.Version(), runtime.GOOS, runtime.GOARCH, race, source.Commit, source.Dirty)
 	checkErr := headerErr
 	if checkErr == nil {
@@ -196,16 +229,17 @@ func recordedCheck(ctx context.Context, root string, store *runlog.Store, id str
 	if checkErr != nil {
 		message = "Checks failed: " + checkErr.Error()
 	}
-	_, resultErr := fmt.Fprintln(w, message)
-	fileErr := errors.Join(resultErr, file.Sync(), file.Close())
+	_, _ = fmt.Fprintln(w, message)
+	// Sticky write errors also catch failures ignored by a runner.
+	fileErr := errors.Join(w.logErr, file.Sync(), file.Close())
 	if fileErr != nil {
-		return errors.Join(checkErr, fileErr)
+		return errors.Join(checkErr, w.displayErr, fmt.Errorf("persist check evidence: %w", fileErr))
 	}
 	if sourceErr == nil {
 		source = after
 	}
 	recordErr := store.Note(id, "validation", message, []string{relative}, source)
-	return errors.Join(checkErr, recordErr)
+	return errors.Join(checkErr, w.displayErr, recordErr)
 }
 
 func newFlags(name string, out io.Writer) *flag.FlagSet {
