@@ -10,8 +10,9 @@ Creating a PR never implies permission to merge it or publish a release.
 For authorized feature work use a local `codex/<short-task-name>` branch. Check
 the base branch from the remote rather than assuming `main`; this repository's
 configured default is currently `master`. Preserve existing branches/work.
-Before a push or PR, verify the intended remote is still the user's private
-repository. Do not change visibility to work around an account-plan limitation.
+Before a push or PR, verify the intended repository and visibility match the
+user's authorization. The owner confirmed public visibility on 2026-11-10.
+Do not change visibility to work around an account-plan limitation.
 
 Record the spec/task IDs and exact source identity. A draft for an uncommitted
 candidate must say so and refer to its manifest/archive; do not call the base
@@ -44,11 +45,15 @@ resolve a review comment solely because the author believes the fix works.
 
 Before requesting merge, establish every AC, required platform result, and
 blocking review disposition for the candidate. Confirm actual remote required
-checks/review enforcement, not merely the existence of workflow files. The
-2026-11-10 audit found `master` unprotected and private-repository protection
-APIs unavailable under the account plan. Recheck before relying on enforcement.
-Until protection and approval policy are explicitly arranged, use a human
-merge decision; never enable unattended merging as a fallback.
+checks/review enforcement, not merely the existence of workflow files. After
+the owner's 2026-11-10 settings update, `master` requires PR-based linear
+history, including administrators, and only squash merging is enabled. The
+observed configuration has zero required approving reviews and no required
+status-check contexts; protection alone does not enforce the independent-review
+or CI gates described here. Recheck the live rules before merging. Continue
+using an explicit human merge decision; never bypass protection or enable
+unattended merging as a fallback. See the [publication handoff](../reports/0003-publication.md)
+for the completed supervised merge and its actual checks.
 
 ## Durable handoff
 

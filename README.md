@@ -8,8 +8,8 @@ foundation, not a working Bilibili client or an autonomous agent orchestrator.
 
 ## Start here
 
-- [Current readiness handoff and remaining gates](reports/0003-agent-readiness.md)
-- [Independent review dispositions](reports/0003-independent-review.md)
+- [Current readiness handoff and remaining gates](reports/0003-publication.md)
+- [Independent review dispositions](reports/0003-publication.md#independent-review)
 - [Stage-zero milestones and next action](docs/stage-zero.md)
 - [Application boundaries](docs/architecture.md)
 - [Start a feature and assign roles](docs/development.md)
@@ -18,11 +18,16 @@ foundation, not a working Bilibili client or an autonomous agent orchestrator.
 - [Development protocol and evidence ownership](docs/workflow.md)
 - [Current readiness contract](specs/0003-agent-readiness/spec.md)
 
-The original [foundation handoff](reports/0001-foundation.md) and
-[review](reports/0001-independent-review.md) are historical records. The private
-remote is configured and baseline `04213b6` passed its three-OS CI run; that
-does not validate later local changes. Follow the current handoff for candidate
-checks, finding closure, pending human policy adoption, and M0 acceptance.
+Readiness implementation and independent technical review are complete. PR #1
+merged as `daca629`; its PR and merged-master CI passed on all three OSes. The
+owner confirmed public visibility and protected, PR-based squash merging.
+Follow the current handoff for exact evidence and the remaining human policy
+and M0 acceptance decisions; these results do not validate later revisions.
+
+The [foundation handoff](reports/0001-foundation.md),
+[foundation review](reports/0001-independent-review.md), and local-phase
+[readiness handoff](reports/0003-agent-readiness.md) and
+[review](reports/0003-independent-review.md) remain historical snapshots.
 
 ## Prerequisites
 
@@ -79,7 +84,7 @@ stage zero complete.
 | `.agent/runs/<run-id>/` | Frozen inputs, immutable event records, local evidence | No |
 | `reports/` | Sanitized durable handoffs, conclusions, links to evidence | Yes |
 | `.agents/skills/` | Planning, implementation, review, and handoff procedures | Yes |
-| GitHub Actions artifacts | Copies of CI run evidence, not app packages; retained for 14 days | Private remote |
+| GitHub Actions artifacts | Copies of CI run evidence, not app packages; retained for 14 days | Public remote, not Git history |
 
 Chat history is context, not the source of truth. Local runs are persistent
 across process restarts but are not a backup. Before deleting a checkout,

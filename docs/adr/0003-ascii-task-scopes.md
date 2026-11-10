@@ -1,8 +1,9 @@
 # ADR 0003: Restrict declared task write scopes to ASCII
 
 Date: 2026-11-10
-Status: proposed for implementation and independent review; separate human
-approval is required before adoption as trusted automation policy.
+Status: implemented and independently technically reviewed in PR #1; still
+proposed for adoption as trusted automation policy, requiring separate human
+approval. See the [publication handoff](../../reports/0003-publication.md).
 
 ## Problem
 

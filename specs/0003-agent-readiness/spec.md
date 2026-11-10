@@ -1,8 +1,15 @@
 # Agent development readiness and foundation repairs
 
 Spec ID: `0003-agent-readiness`
-Status: selected by the user for supervised implementation; independent
-acceptance and separate human policy review are pending.
+Status: implementation, independent technical review, three-OS CI, and
+user-authorized publication complete through PR #1 (`daca629`). Separate human
+adoption of trusted automation policy and M0 acceptance remain pending.
+
+Current status and evidence: [publication handoff](../../reports/0003-publication.md).
+The original local-only scope below preceded the user's separate authorization
+to publish and merge PR #1. Its contract body, acceptance criteria, task graph,
+and historical frozen inputs are unchanged; this status update does not grant
+authority for new remote actions or accept the proposed policy.
 
 ## Goal
 

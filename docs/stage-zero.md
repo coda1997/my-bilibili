@@ -18,11 +18,13 @@ Exit criteria:
   has passed; local cross-compilation is not an OS runtime test.
 - An independent review is recorded. Self-review does not satisfy this item.
 
-Current implementation handoff: `reports/0003-agent-readiness.md`.
-Current finding dispositions: `reports/0003-independent-review.md`.
-The private remote and baseline three-OS CI now exist. Acceptance still requires
-the repaired candidate's own evidence and separate human policy review; the
-historical `0001` reports remain unchanged, not the current task-state source.
+Current handoff and finding dispositions:
+[readiness publication](../reports/0003-publication.md).
+Readiness implementation, independent technical review, and PR #1 publication
+are complete. Candidate and merged-master CI passed on all three OSes; COR-001,
+COR-002, and ARC-001 are technically closed by their original reviewers.
+Human policy adoption and M0 acceptance remain separate pending decisions.
+The `0001` and local-phase `0003` reports remain unchanged historical snapshots.
 
 ## M1. mygo and playback feasibility
 
@@ -74,9 +76,10 @@ signing, notarization, and public releases are deliberately not implemented.
 
 ## Next action
 
-Follow the current readiness handoff: finish any independent repair review,
-obtain human review of the proposed task-scope/check policy, and request
-authorization to commit/push the exact candidate and run its three-OS CI.
-Only then decide M0 acceptance. M1 remains a separately authorized feasibility
-task requiring real macOS/Windows runtime access and safe media fixtures.
+The human owner should decide adoption of the proposed task-scope/check policy
+and M0 acceptance using the current handoff. The repairs, independent review,
+publication, and candidate CI are complete; the historical pending-CI notes do
+not request another repair or publication round. M1 remains a separately
+authorized feasibility task requiring independent contract review, real
+macOS/Windows runtime access, and safe media fixtures.
 Do not record stage zero as complete until M0 through M3 have actual evidence.
