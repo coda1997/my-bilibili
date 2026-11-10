@@ -117,9 +117,10 @@ Important limits:
   hardcoded to `specs/0001-foundation`. Feature-specific evidence selection is
   not implemented. Record feature AC evidence separately; do not claim that
   the uploaded foundation record proves the feature's acceptance.
-- Match the CI run's actual head SHA to the intended candidate. The existing
-  green run for `04213b6` proves that baseline, not later local changes. On a
-  PR distinguish its source head from GitHub's tested merge candidate.
+- Match the CI run's actual head SHA to the intended candidate. A green run for
+  an earlier revision does not validate later changes. The [current handoff](../reports/0003-publication.md)
+  records the completed readiness PR and merged-master results. On a PR,
+  distinguish its source head from GitHub's tested merge candidate.
 - Artifacts are run logs/records, not app binaries or installers. Retention is
   14 days; retain durable conclusions and required evidence before expiry.
 - Remote status, protected branches, and required reviews are not established

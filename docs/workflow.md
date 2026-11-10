@@ -123,9 +123,10 @@ changes must not approve themselves.
 
 The check workflow has read-only repository permissions, does not persist Git
 credentials, and uploads CI run evidence for 14 days. It does not merge,
-publish, sign, run a privileged follow-up workflow, or create PRs. The private
-remote now has a successful baseline run for `04213b6`; see the current handoff
-for revision-specific evidence. Later local changes require their own CI.
+publish, sign, run a privileged follow-up workflow, or create PRs. Readiness
+PR #1 and its merged-master revision passed three-OS CI on the now-public
+repository; see the [current handoff](../reports/0003-publication.md) for exact
+source and evidence identities. Later changes require their own CI.
 
 The three-OS matrix tests the foundation tools. It is not a mygo UI or media
 runtime test. Windows uses ordinary checks; race checks run on the configured

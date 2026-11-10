@@ -1,7 +1,7 @@
 # Architecture baseline
 
 Status: proposed baseline for stage zero; M0 acceptance is outstanding.
-Current review dispositions: `reports/0003-independent-review.md`.
+Current review dispositions: [readiness publication](../reports/0003-publication.md#independent-review).
 Historical findings: `reports/0001-independent-review.md`.
 
 ## Product scope
