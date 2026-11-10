@@ -42,6 +42,10 @@ is outstanding. Run [checks](testing.md), obtain authorized independent review,
 repair within the [bounded loop](workflow.md#review-and-repair-policy), and
 revalidate the changed candidate. Reviewers close their own findings; do not
 resolve a review comment solely because the author believes the fix works.
+If the original reviewer cannot continue, use the
+[proposed succession procedure](workflow.md#reviewer-succession-proposed-clarification).
+Keep closure pending until designation and independent verification are recorded;
+do not attribute a successor's decision to the original reviewer.
 
 Before requesting merge, establish every AC, required platform result, and
 blocking review disposition for the candidate. Confirm actual remote required

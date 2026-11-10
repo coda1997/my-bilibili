@@ -10,6 +10,9 @@
 - Checks actually performed:
 - Decision: request-changes / approve / needs-human
 - Separate human policy-approval status (not granted by this review):
+- Reviewer succession, if applicable: original reviewer/report/finding IDs,
+  human designation reference, reason, successor identity/independence, and
+  prior repair-round count; otherwise not applicable:
 
 ## Findings
 
@@ -23,6 +26,12 @@ For each finding record:
 - Acceptance criterion affected:
 - Required fix and verification:
 - Disposition and verifying reviewer:
+
+For successor closure, follow the proposed succession procedure in
+docs/workflow.md#reviewer-succession-proposed-clarification. Attribute the new
+verification to the successor, retain the original finding ID and report, and
+reference new candidate-specific evidence. Missing designation/evidence leaves
+closure pending; do not rewrite the original decision or reset repair rounds.
 
 ## Remaining uncertainty
 
