@@ -27,6 +27,27 @@ own work. The initial findings are preserved in `reports/0001-independent-review
 follow the current handoff from README for later dispositions. Review completion
 is not acceptance.
 
+## Read-only requests (proposed clarification)
+
+This clarification and reviewer succession below are local proposals pending
+independent review and separate human policy adoption. They do not amend the
+owner's previously adopted policies by themselves.
+
+Repository explanations, configuration audits, and other read-only investigations
+do not require an implementation spec, assignment packet, or new recorded run.
+Read README and the relevant guidance, inspect source identity and available
+evidence, and report findings and limits. Follow testing prerequisites if
+verification commands are needed. Do not treat inspection or author self-checks
+as independent approval; formal acceptance reviews still need the exact candidate
+and the review inputs described in this protocol.
+
+Read-only scope does not authorize candidate edits, commits, remote mutations,
+delegation, or starting another milestone. Ordinary tool caches or isolated
+scratch for requested verification are not candidate edits. If the request
+extends to a repository change, switch to the scoped change workflow and
+establish its authority and write paths before editing. Missing evidence is a
+reported limitation, not permission to invent a contract or acceptance result.
+
 ## Contract format
 
 Each direct child of `specs/` contains `spec.md` and `tasks.json`.
@@ -123,6 +144,27 @@ failure, ambiguous requirements, or reviewer disagreement goes to a human.
 Those rules are not yet machine-enforced. A future controller must load gate
 policy from a trusted baseline, not the candidate's editable copy. Policy
 changes must not approve themselves.
+
+### Reviewer succession (proposed clarification)
+
+If the original reviewer/context cannot continue, the human must explicitly
+designate a successor independent of the implementation before reassignment.
+The controller records the designation and reason in a new assignment, with
+the original reviewer/finding IDs, report locator, reproduction, required
+evidence, exact new candidate, frozen spec/tasks, and prior repair rounds.
+Reassignment alone does not close a finding or authorize delegation.
+
+The successor independently verifies the finding and fix against that candidate,
+runs the required checks where available, and issues a new attributed disposition
+referencing the original finding ID and new evidence. Preserve the original
+report, reviewer attribution, published packets, and closed run records; record
+succession and closure in a new report/event, never as the original reviewer's
+decision. An implementation author cannot act as their own successor reviewer.
+
+Without explicit designation or required verification evidence, leave closure
+pending and report the gap. If reviewers disagree, escalate to the human rather
+than replacing a reviewer to obtain a preferred verdict. Succession does not
+reset the repair-round count or waive acceptance, CI, or policy-approval gates.
 
 ## CI, storage, and release
 

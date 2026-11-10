@@ -31,5 +31,7 @@ evidence. Report unavailable inputs and checks rather than inventing results.
 
 Return candidate/spec identities, checks actually run, findings with severity,
 reproduction and required evidence, and a technical decision. Only the assigned
-independent reviewer closes their findings. Distinguish that decision from
+independent reviewer closes their findings. If the original reviewer cannot
+continue, follow the [proposed succession procedure](../../../docs/workflow.md#reviewer-succession-proposed-clarification);
+do not assume reassignment or closure authority. Distinguish that decision from
 human policy approval, missing CI/platform acceptance, and merge authority.
