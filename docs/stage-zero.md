@@ -32,26 +32,36 @@ The `0001` and local-phase `0003` reports remain unchanged historical snapshots.
 
 ## M1. mygo and playback feasibility
 
-Specification: `specs/0002-playback-spike/spec.md`.
+Specifications: [original playback spike](../specs/0002-playback-spike/spec.md)
+and [bounded replacement probe](../specs/0006-player-replacement-probe/spec.md).
 
-Status: authorized macOS-first experiment started 2026-11-10; partial handoff
-continued on 2026-11-11. [Current macOS evidence](../reports/0002-playback-macos.md)
-records exposed local/HTTP native picture, progression, pause and seek passes.
-The strict smoke still fails in delayed loading: mygo's synchronous tracks query
-blocks the UI thread. A metadata-gated view workaround was rejected because it
-prevents native error refresh; it is not retained as a repair. The smoke's
-stale-generation oracle is separately repaired. Header/separate-track capabilities
-remain unsupported; Windows and real target access are not-tested. Return the
-runtime scheduling/status gap to architecture; no final adapter decision or M1
-acceptance is issued. On2026-11-11 the owner separately chose to continue with
-mygo temporarily, document the issues and consider replacement later. The
-[bounded fixture preview](../reports/0005-provisional-playback.md) adds transport
-sliders/presets/retry and a warning; explicit preview PASS is separate from the
-default full suite's retained delayed-loading FAIL. Independent review approved
-the bounded preview code after closing its slider-capture feedback finding;
-reviewer occluded reruns remain separate/not-tested, not a new exposed pass. See
-[ADR0004](adr/0004-provisional-mygo-playback.md) and
-[open issues](known-issues/playback.md). This continuation is not an M1 gate waiver.
+Status: authorized macOS-first evaluation, in progress; no M1 acceptance or
+final adapter decision. The owner chose provisional mygo use on 2026-11-11
+and subsequently authorized the bounded libmpv replacement probe. The
+[current cleanup handoff](../reports/0007-coreaudio-cleanup.md) records the
+latest source/runtime identity, capability results and remaining gates.
+
+The replacement's RPL-001 surface and loading-teardown gate passed
+[independent review](../reports/0006-player-replacement-probe.md#independent-implementation-and-gate-one-review).
+RPL-002 then exposed a CoreAudio delayed-cleanup crash after library unload.
+The owner-requested runtime repair passes five isolated native cleanup
+scenarios and the full local race check. Independent repair review and
+CA-CLEANUP-001 closure remain pending. The complete capability invocation
+passes combined local/HTTP playback, controls, protected headers and header
+isolation, then fails separate-track readiness and requires forced app cleanup.
+Its 67.470292ms loading cancellation passes the owner-amended 200ms bound;
+the earlier 100.455083ms failure against 100ms remains a historical failure.
+Playing cancellation and final graceful window close were not reached in
+the latest invocation. Physical audio, measured sync, Windows and real-service
+access remain not-tested.
+
+The default [bounded mygo fixture preview](../reports/0005-provisional-playback.md)
+remains independently reviewed, with sliders/presets/retry and a warning. Its
+explicit preview PASS remains separate from its strict full suite's
+delayed-loading FAIL and unsupported header/separate-track capabilities.
+See [ADR 0004](adr/0004-provisional-mygo-playback.md) and
+[open mygo issues](known-issues/playback.md). Replacement progress does not
+close those historical issues or waive an M1 gate.
 
 Exit criteria:
 
@@ -100,16 +110,15 @@ signing, notarization, and public releases are deliberately not implemented.
 ## Next action
 
 M0 acceptance and policy adoption are complete; see the
-[current handoff](../reports/0003-policy-adoption.md) and its linked publication
-evidence. Historical pending-policy/M0/CI notes do not request another repair
-or publication round. M1's macOS-first start and independent contract review
-are now authorized; the repaired contract was reviewed before freeze. Continue
-from the [provisional playback handoff](../reports/0005-provisional-playback.md):
-use the independently reviewed bounded preview only with its controlled
-fixtures, and preserve the strict failure/open issues. The owner will consider
-a replacement later; that requires a separately scoped reviewed adapter probe.
-Arrange Windows runtime access and retain header/separate-track/target-access
-gates. The current exposed preview does not fix slow-load responsiveness or
-complete M1/authorize the full client. Historical occlusion is not the latest
-strict run's blocker; its delayed-loading failure remains.
+[policy handoff](../reports/0003-policy-adoption.md) and its linked publication
+evidence. Continue M1 from the
+[CoreAudio cleanup handoff](../reports/0007-coreaudio-cleanup.md). The owner
+authorized documentation, commits and a feature-branch push for this repair;
+publication does not supply independent approval. The next technical gates
+are a separately authorized independent review of the exact cleanup repair
+and a bounded diagnosis of the retained separate-track readiness failure.
+Preserve the 200ms cancellation bound, complete teardown contract and every
+failed outcome. Arrange Windows runtime access and authorized physical-audio,
+sync and target-service verification before final M1 acceptance. The default
+provisional preview remains limited to its controlled fixtures.
 Do not record stage zero as complete until M0 through M3 have actual evidence.
