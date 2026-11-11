@@ -4,35 +4,35 @@
   "tasks": [
     {
       "id": "PLAY-001",
-      "title": "Pin the candidate and define safe fixtures and contracts",
+      "title": "Record the intended pin and define safe fixtures and contracts",
       "depends_on": [],
-      "write_paths": ["go.mod", "go.sum", "experiments/playback/contract", "experiments/playback/testdata"],
+      "write_paths": ["experiments/playback/contract", "experiments/playback/testdata"],
       "acceptance": ["PLAY-AC-01"],
-      "checks": ["Inspect fixture provenance and ensure no account credentials are present"]
+      "checks": ["Verify the independently reviewed macOS-first contract, pinned mygo commit/module sums, generated fixture provenance, codec/duration/size/hash manifest and absence of account credentials", "Run deterministic contract/input tests and go run ./cmd/dev check --race"]
     },
     {
       "id": "PLAY-002",
       "title": "Exercise the native Go UI on both target platforms",
       "depends_on": ["PLAY-001"],
-      "write_paths": ["experiments/playback/ui"],
+      "write_paths": ["go.mod", "go.sum", "experiments/playback/ui", "experiments/playback/cmd"],
       "acceptance": ["PLAY-AC-02"],
-      "checks": ["Run the UI on macOS and Windows and preserve sanitized evidence"]
+      "checks": ["Test Chinese text insertion, observable commands and loading/error presentation without a native media dependency", "Run the actual minimal UI on macOS and preserve only app-window evidence; Windows remains not-tested until separately available", "go run ./cmd/dev check --race"]
     },
     {
       "id": "PLAY-003",
       "title": "Exercise media behavior behind the frozen player contract",
       "depends_on": ["PLAY-002"],
-      "write_paths": ["experiments/playback/player", "experiments/playback/ui", "experiments/playback/cmd"],
+      "write_paths": ["go.mod", "go.sum", "experiments/playback/player", "experiments/playback/ui", "experiments/playback/cmd"],
       "acceptance": ["PLAY-AC-03"],
-      "checks": ["Run the capability matrix against authorized fixtures on both OSes"]
+      "checks": ["Test input/metadata limits, state transitions, cancellation, stale generations, idempotent close and safe errors with controlled backends", "Test loopback-only fixture routes, Range, protected headers, bounded delays, concurrency and shutdown", "Run native macOS local/HTTP/control/switch/close probes and record unsupported metadata/separate-track capabilities as failures, not successful playback", "go run ./cmd/dev check --race; Windows and real Bilibili access remain not-tested"]
     },
     {
       "id": "PLAY-004",
       "title": "Integrate evidence and obtain a reviewed playback decision",
       "depends_on": ["PLAY-003"],
-      "write_paths": ["reports/0002-playback-spike.md", "docs/adr/0003-playback-decision.md"],
+      "write_paths": ["reports/0002-playback-macos.md", "reports/0002-playback-spike.md", "docs/adr/0004-playback-decision.md", "README.md", "docs/stage-zero.md"],
       "acceptance": ["PLAY-AC-04"],
-      "checks": ["Independent architecture review of the capability matrix and proposed adapter"]
+      "checks": ["Obtain authorized independent architecture review before contract freeze and implementation", "Identify the exact candidate and obtain independent correctness/resource/native-evidence review; the author cannot approve it", "Publish a sanitized partial macOS capability matrix and next action without marking Windows, real service access or final M1 complete", "go run ./cmd/dev check --race; do not change CI/check/workflow policy"]
     }
   ]
 }

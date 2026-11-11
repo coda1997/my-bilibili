@@ -1,7 +1,9 @@
 # Architecture baseline
 
 Status: development foundation (M0) accepted by the owner on 2026-11-10.
-M1 UI/playback feasibility and its architecture decision remain outstanding.
+M1 UI/playback feasibility and its final architecture decision remain outstanding.
+The owner chose provisional mygo playback on2026-11-11, limited to the existing
+fixture preview while considering replacement later; this does not accept M1.
 Current review dispositions: [readiness publication](../reports/0003-publication.md#independent-review).
 Historical findings: `reports/0001-independent-review.md`.
 
@@ -61,3 +63,5 @@ are inputs to those decisions, not authority to change the rules.
 - `docs/adr/0002-go-ui-and-playback-boundary.md`
 - `docs/adr/0003-ascii-task-scopes.md` (adopted by the owner on 2026-11-10;
   M0 was separately accepted on the same date)
+- [ADR0004: provisional mygo playback](adr/0004-provisional-mygo-playback.md)
+  (temporary use, not final player/M1 approval); [open playback issues](known-issues/playback.md)

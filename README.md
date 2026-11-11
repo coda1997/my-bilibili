@@ -3,11 +3,17 @@
 A Go desktop Bilibili client for macOS and Windows, and an experiment in
 spec-driven, independently reviewed agent development.
 
-The repository is in stage zero. The current deliverable is the development
-foundation, not a working Bilibili client or an autonomous agent orchestrator.
+The repository is in stage zero. M0 is accepted and a bounded macOS M1
+UI/playback experiment exists. This is not a working Bilibili client or an
+autonomous agent orchestrator. Local/HTTP native playback and controls ran on
+macOS; delayed loading still blocks the pinned player's UI thread. The owner
+selected temporary mygo use while considering a later player replacement.
 
 ## Start here
 
+- [Current provisional playback preview and verification](reports/0005-provisional-playback.md)
+- [Open playback issues and replacement criteria](docs/known-issues/playback.md)
+- [Historical macOS M1 results and limitations](reports/0002-playback-macos.md)
 - [Current policy adoption, M0 acceptance, and next milestone](reports/0003-policy-adoption.md)
 - [Independent review dispositions](reports/0003-publication.md#independent-review)
 - [Stage-zero milestones and next action](docs/stage-zero.md)
@@ -23,8 +29,24 @@ merged as `daca629`; its PR and merged-master CI passed on all three OSes. The
 owner confirmed public visibility and protected, PR-based squash merging.
 The owner adopted the five task-scope/check/review policies on 2026-11-10;
 see the current handoff for their scope. The owner separately accepted M0
-on the same date. M1 has not started; stage zero is not complete.
-The publication evidence does not validate later revisions.
+on the same date. The 2026-11-11 exposed-window continuation passes synthetic
+local/HTTP picture, progression, pause and seek assertions. Its complete native
+smoke still fails during delayed loading: the pinned player synchronously
+queries tracks on the UI thread. A view-only workaround was rejected because
+it suppresses native failure-state refresh. Only the smoke driver's stale-session
+generation oracle is repaired; the runtime blocker is not fixed. Required
+headers and separate-track playback remain unsupported. Windows and real service
+access are not-tested; no final player decision or M1 acceptance exists.
+The new bounded fixture preview adds sampled transport sliders, speed presets,
+copied-input retry and a visible temporary-player warning. Its explicit preview
+suite passes on macOS; the default strict full suite still fails delayed loading.
+Independent review approves the bounded preview code after closing its
+captured-slider feedback defect. Reviewer reruns were occluded/not-tested;
+the separately reviewed author exposed results remain identified in the report.
+This temporary-use decision does not waive final M1 or authorize M2/P0/the full
+shell. See [ADR 0004](docs/adr/0004-provisional-mygo-playback.md) and the current
+report for exact evidence/review state. The publication evidence does not
+validate later revisions.
 
 The [foundation handoff](reports/0001-foundation.md),
 [foundation review](reports/0001-independent-review.md), and local-phase
@@ -35,8 +57,14 @@ The [foundation handoff](reports/0001-foundation.md),
 
 Install Git and Go 1.27.3, the version pinned in `go.mod`, and put both on PATH.
 The module name remains local (`my-bilibili`); it is not a published library
-import path. No third-party Go dependencies are needed for the foundation.
+import path. Foundation tools use the standard library; the M1 experiment
+pins mygo and its module graph in `go.mod`/`go.sum`. Initial module download
+needs network access. The current macOS checkout uses the owner's global
+Homebrew Go at `/opt/homebrew/bin/go`; its local toolchain is only a backup.
 See [testing](docs/testing.md#prerequisites) for Windows and fresh-clone setup.
+Explicit native experiment commands are in
+[the experiment guide](experiments/playback/cmd/README.md); ordinary Go tests
+do not establish native media or platform support.
 
 ```sh
 export GOTOOLCHAIN=local GOWORK=off

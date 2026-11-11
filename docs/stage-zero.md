@@ -34,6 +34,25 @@ The `0001` and local-phase `0003` reports remain unchanged historical snapshots.
 
 Specification: `specs/0002-playback-spike/spec.md`.
 
+Status: authorized macOS-first experiment started 2026-11-10; partial handoff
+continued on 2026-11-11. [Current macOS evidence](../reports/0002-playback-macos.md)
+records exposed local/HTTP native picture, progression, pause and seek passes.
+The strict smoke still fails in delayed loading: mygo's synchronous tracks query
+blocks the UI thread. A metadata-gated view workaround was rejected because it
+prevents native error refresh; it is not retained as a repair. The smoke's
+stale-generation oracle is separately repaired. Header/separate-track capabilities
+remain unsupported; Windows and real target access are not-tested. Return the
+runtime scheduling/status gap to architecture; no final adapter decision or M1
+acceptance is issued. On2026-11-11 the owner separately chose to continue with
+mygo temporarily, document the issues and consider replacement later. The
+[bounded fixture preview](../reports/0005-provisional-playback.md) adds transport
+sliders/presets/retry and a warning; explicit preview PASS is separate from the
+default full suite's retained delayed-loading FAIL. Independent review approved
+the bounded preview code after closing its slider-capture feedback finding;
+reviewer occluded reruns remain separate/not-tested, not a new exposed pass. See
+[ADR0004](adr/0004-provisional-mygo-playback.md) and
+[open issues](known-issues/playback.md). This continuation is not an M1 gate waiver.
+
 Exit criteria:
 
 - Pin and record an evaluated mygo version or commit.
@@ -83,7 +102,14 @@ signing, notarization, and public releases are deliberately not implemented.
 M0 acceptance and policy adoption are complete; see the
 [current handoff](../reports/0003-policy-adoption.md) and its linked publication
 evidence. Historical pending-policy/M0/CI notes do not request another repair
-or publication round. The next milestone is M1; its start remains separately
-authorized, requiring independent contract review, real
-macOS/Windows runtime access, and safe media fixtures.
+or publication round. M1's macOS-first start and independent contract review
+are now authorized; the repaired contract was reviewed before freeze. Continue
+from the [provisional playback handoff](../reports/0005-provisional-playback.md):
+use the independently reviewed bounded preview only with its controlled
+fixtures, and preserve the strict failure/open issues. The owner will consider
+a replacement later; that requires a separately scoped reviewed adapter probe.
+Arrange Windows runtime access and retain header/separate-track/target-access
+gates. The current exposed preview does not fix slow-load responsiveness or
+complete M1/authorize the full client. Historical occlusion is not the latest
+strict run's blocker; its delayed-loading failure remains.
 Do not record stage zero as complete until M0 through M3 have actual evidence.
