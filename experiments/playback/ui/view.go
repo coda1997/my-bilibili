@@ -41,6 +41,7 @@ type View struct {
 	Surface    func(*gui.Context, contract.Engine)
 	Quit       func()
 	Text       string
+	Warning    string
 	lastError  contract.ErrorCode
 	cancel     context.CancelFunc
 	lastInput  *contract.Input
@@ -147,7 +148,11 @@ func (v *View) Render(c *gui.Context) {
 	gui.Scroll(c.Key("lab-scroll")).Fill().Padding(22).Gap(10).Background(gui.RGB(245, 241, 231)).Children(func() {
 		gui.Text(c, "M1 / NATIVE PLAYBACK LAB").Font("Menlo").FontSize(13).TextColor(ink)
 		gui.Text(c, "A small window. Real evidence.").Font("Georgia").FontSize(27).TextColor(ink)
-		gui.Text(c, ProvisionalWarning).FontSize(12).TextColor(gui.RGB(125, 57, 24)).Width(640)
+		warning := v.Warning
+		if warning == "" {
+			warning = ProvisionalWarning
+		}
+		gui.Text(c, warning).FontSize(12).TextColor(gui.RGB(125, 57, 24)).Width(640)
 		gui.TextInput(c.Key("chinese"), &v.Text).Label("Chinese input (injected, not IME)").Width(600)
 		gui.Box(c).Width(640).Height(360).Background(gui.RGB(24, 30, 34)).Children(func() {
 			if v.Surface != nil && v.Controller.Engine() != nil {

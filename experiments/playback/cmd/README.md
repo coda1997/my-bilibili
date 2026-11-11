@@ -6,6 +6,9 @@ Ordinary `go test` uses fakes, headless UI and loopback fixtures, not a GUI,
 native decoder, FFmpeg or external network. Initial module download requires
 network access; fixtures are checked into this experiment with their hashes.
 
+The opt-in libmpv replacement surface gate uses separate commands below. The
+commands in this first section continue to select the provisional mygo player.
+
 ```sh
 export GOTOOLCHAIN=local GOWORK=off
 go run ./cmd/dev check --race
@@ -73,3 +76,60 @@ Normal builds do not import the automation plugin. The smoke itself serves only
 the three hash-verified generated media files from `../testdata`, with no
 forwarding, proxy, remux, custom decoder or Bilibili SDK. Existing FFmpeg is an
 explicit offline fixture generator only; see `../testdata/README.md`.
+
+## Replacement surface gate (RPL-001 only)
+
+This separate macOS arm64 experiment uses pinned mpv v0.42.0 client API 2.6,
+the existing purego v0.11.1 pin and mygo's public bitmap API. It polls native
+events on a control owner and software rendering on a render owner, using two
+640x360 buffers at up to 30Hz. Ordinary tests and the provisional app never
+load this library. Other native targets return Unsupported.
+
+Supply an authorized, provenance-verified local runtime before running. There
+is no automatic download, global install or fallback.
+The approved CoreAudio-without-Cocoa build correction and its manual provenance
+recipe are in [mpvprobe/runtime](../mpvprobe/runtime/README.md). Preserve its
+strict linker and loader preflight before invoking the native surface gate.
+
+The runtime manifest uses the following JSON fields, plus separate
+source/build/license/OS records:
+
+```json
+{
+  "SourceCommit": "b0841e8c4d156b8403dc1876c4cbd9011eb583f3",
+  "API": "2.6",
+  "Library": {"Path": "/absolute/resolved/libmpv.2.dylib", "SHA256": "64 lowercase hex characters"},
+  "Dependencies": [
+    {"Path": "/absolute/resolved/dependency.dylib", "SHA256": "64 lowercase hex characters"}
+  ]
+}
+```
+
+Record and hash all non-system runtime dependencies, actual build options,
+licenses, acquisition checksums, fixture identity and OS/toolchain. System
+frameworks in the macOS dyld cache are identified by their paths and OS build;
+do not fabricate standalone hashes for unavailable files. The explicit smoke
+also records the owned app's loaded images in `native.log`.
+
+```sh
+go build -tags e2e -o .agent/m1/replacement-surface-r0 ./experiments/playback/cmd/replacement-native
+go run ./experiments/playback/cmd/replacement-smoke \
+  -stage surface -app .agent/m1/replacement-surface-r0 \
+  -runtime /absolute/runtime-manifest.json -out /absolute/fresh-evidence-directory
+```
+
+Keep the owned window exposed and avoid manual input. The first gate checks
+local/HTTP synthetic picture, delayed-request switching and cancellation,
+zero owned native/worker counters and graceful delayed-load window close.
+Cancellation includes action receipt and external closed/no-owned observation
+within 100ms. App cleanup is bounded to 3s; RPC/readiness/overall limits remain
+3s/10s/90s. Captures and failures are retained; forced reaping fails the gate.
+An occluded window is not-tested and exits nonzero. Unknown stages, including
+`capabilities`, reject before app/runtime/fixture access.
+
+Preserve the first native gate outcome. Failure ends this probe with a
+rejection/needs-human report; do not retry into a passing result or relax
+teardown semantics. Passing gate-one evidence needs separately authorized
+independent review before RPL-002. Controls, required headers, separate audio,
+physical audio, measured sync, Windows and real service access are not accepted
+by this surface stage. The default preview and historical M1 gaps remain.

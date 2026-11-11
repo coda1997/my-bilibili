@@ -1,0 +1,13 @@
+--- a/meson.build
++++ b/meson.build
+@@ -875,6 +875,10 @@
+     sources += files('audio/out/ao_coreaudio.c',
+                      'audio/out/ao_coreaudio_exclusive.c',
+                      'audio/out/ao_coreaudio_properties.c')
++    # CoreAudio uses these CoreFoundation helpers even without Cocoa.
++    if not features['cocoa']
++        sources += files('osdep/utils-mac.c')
++    endif
+ endif
+ 
+ if features['audiounit'] or features['coreaudio'] or features['avfoundation']

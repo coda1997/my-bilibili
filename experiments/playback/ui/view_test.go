@@ -120,6 +120,19 @@ func click(t *testing.T, tt *gui.Tester, label string) {
 	}
 }
 
+func TestExplicitProbeWarningPreservesDefault(t *testing.T) {
+	for _, warning := range []string{"", "EXPERIMENTAL replacement fixture probe"} {
+		v := &View{Controller: contract.New(testOpener{&testEngine{}}, nil), Warning: warning}
+		tt := gui.NewTester(v.Render, 760, 1200)
+		label := warning
+		if label == "" {
+			label = ProvisionalWarning
+		}
+		access(t, tt, label, false)
+		v.Close()
+	}
+}
+
 func TestSampledTransportInteractionsAndNoFeedback(t *testing.T) {
 	now := time.Unix(1, 0)
 	sample := contract.Snapshot{State: contract.Ready, Duration: 8 * time.Second, Position: time.Second, Volume: .5, Rate: 1}
