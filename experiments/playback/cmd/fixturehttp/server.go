@@ -23,7 +23,16 @@ import (
 const Header = "X-M1-Fixture"
 const Sentinel = "synthetic-only"
 
-type Stats struct{ Plain, ProtectedDenied, ProtectedAllowed, Delayed, Failed, Range, Rejected, Active, Peak int64 }
+// Probe values contain commas to exercise typed list encoding. Only match
+// counters are recorded; request metadata never enters logs or observations.
+const ProbeSentinel = "synthetic-only,comma"
+const ProbeReferer = "http://127.0.0.1/synthetic,referrer"
+
+type StreamStats struct{ Requests, HeaderMatches, RefererMatches, Allowed, Denied int64 }
+type Stats struct {
+	Plain, ProtectedDenied, ProtectedAllowed, Delayed, Failed, Range, Rejected, Active, Peak int64
+	Streams                                                                                  map[string]StreamStats `json:"streams,omitempty"`
+}
 type Server struct {
 	BaseURL  string
 	server   *http.Server
@@ -32,6 +41,8 @@ type Server struct {
 	once     sync.Once
 	closeErr error
 	stats    [9]atomic.Int64
+	probe    bool
+	streams  [3][5]atomic.Int64
 }
 
 type fixture struct {
@@ -104,6 +115,16 @@ func load(dir string) (map[string]fixture, error) {
 }
 
 func Start(ctx context.Context, dir string, delay time.Duration) (*Server, error) {
+	return start(ctx, dir, delay, false)
+}
+
+// StartProbe opts into strict custom-header + Referer protection and sanitized
+// per-file observations. Start preserves all legacy routing/header semantics.
+func StartProbe(ctx context.Context, dir string, delay time.Duration) (*Server, error) {
+	return start(ctx, dir, delay, true)
+}
+
+func start(ctx context.Context, dir string, delay time.Duration, probe bool) (*Server, error) {
 	if ctx == nil || delay < 0 || delay > 3*time.Second {
 		return nil, errors.New("invalid server options")
 	}
@@ -116,7 +137,7 @@ func Start(ctx context.Context, dir string, delay time.Duration) (*Server, error
 		return nil, errors.New("loopback listener unavailable")
 	}
 	root, cancel := context.WithCancel(ctx)
-	s := &Server{BaseURL: "http://" + listener.Addr().String(), cancel: cancel, done: make(chan struct{})}
+	s := &Server{BaseURL: "http://" + listener.Addr().String(), cancel: cancel, done: make(chan struct{}), probe: probe}
 	sem := make(chan struct{}, 8)
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		select {
@@ -153,7 +174,26 @@ func Start(ctx context.Context, dir string, delay time.Duration) (*Server, error
 			s.stats[0].Add(1)
 		case "protected":
 			w.Header().Set("Cache-Control", "no-store")
-			if r.Header.Get(Header) != Sentinel {
+			matched := r.Header.Get(Header) == Sentinel
+			if probe {
+				index := map[string]int{"combined.mp4": 0, "video.mp4": 1, "audio.m4a": 2}[parts[2]]
+				counts := &s.streams[index]
+				counts[0].Add(1)
+				header, referer := r.Header.Get(Header) == ProbeSentinel, r.Header.Get("Referer") == ProbeReferer
+				if header {
+					counts[1].Add(1)
+				}
+				if referer {
+					counts[2].Add(1)
+				}
+				matched = header && referer
+				if matched {
+					counts[3].Add(1)
+				} else {
+					counts[4].Add(1)
+				}
+			}
+			if !matched {
 				s.stats[1].Add(1)
 				w.WriteHeader(http.StatusForbidden)
 				return
@@ -189,7 +229,15 @@ func Start(ctx context.Context, dir string, delay time.Duration) (*Server, error
 }
 
 func (s *Server) Stats() Stats {
-	return Stats{s.stats[0].Load(), s.stats[1].Load(), s.stats[2].Load(), s.stats[3].Load(), s.stats[4].Load(), s.stats[5].Load(), s.stats[6].Load(), s.stats[7].Load(), s.stats[8].Load()}
+	result := Stats{Plain: s.stats[0].Load(), ProtectedDenied: s.stats[1].Load(), ProtectedAllowed: s.stats[2].Load(), Delayed: s.stats[3].Load(), Failed: s.stats[4].Load(), Range: s.stats[5].Load(), Rejected: s.stats[6].Load(), Active: s.stats[7].Load(), Peak: s.stats[8].Load()}
+	if s.probe {
+		result.Streams = make(map[string]StreamStats, 3)
+		for i, name := range []string{"combined.mp4", "video.mp4", "audio.m4a"} {
+			c := &s.streams[i]
+			result.Streams[name] = StreamStats{c[0].Load(), c[1].Load(), c[2].Load(), c[3].Load(), c[4].Load()}
+		}
+	}
+	return result
 }
 
 func (s *Server) Close() error {

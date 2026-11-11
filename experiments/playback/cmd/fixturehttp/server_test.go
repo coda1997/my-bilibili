@@ -168,3 +168,41 @@ func TestFixtureValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestProbeProtectionObservesBothStreamsWithoutChangingLegacy(t *testing.T) {
+	s, err := StartProbe(context.Background(), fixtureDir(t), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	c := &http.Client{Timeout: time.Second}
+	defer c.CloseIdleConnections()
+	for _, file := range []string{"combined.mp4", "video.mp4", "audio.m4a"} {
+		for _, tc := range []struct {
+			header, referrer string
+			status           int
+		}{
+			{"", "", 403}, {"wrong", ProbeReferer, 403}, {ProbeSentinel, "wrong", 403}, {ProbeSentinel, ProbeReferer, 200},
+		} {
+			req, _ := http.NewRequest("GET", s.BaseURL+"/protected/"+file, nil)
+			req.Header.Set(Header, tc.header)
+			req.Header.Set("Referer", tc.referrer)
+			resp, err := c.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+			if resp.StatusCode != tc.status {
+				t.Fatal(file, resp.StatusCode, tc.status)
+			}
+		}
+		got := s.Stats().Streams[file]
+		if got != (StreamStats{Requests: 4, HeaderMatches: 2, RefererMatches: 2, Allowed: 1, Denied: 3}) {
+			t.Fatal(file, got)
+		}
+	}
+	if s.Stats().ProtectedAllowed != 3 || s.Stats().ProtectedDenied != 9 {
+		t.Fatal(s.Stats())
+	}
+}

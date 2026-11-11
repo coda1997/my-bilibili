@@ -32,6 +32,9 @@ type nativeAPI struct {
 	version      func() uint64
 	create       func() uintptr
 	option       func(uintptr, string, string) int32
+	optionNode   func(uintptr, string, int32, unsafe.Pointer) int32
+	getProperty  func(uintptr, string, int32, unsafe.Pointer) int32
+	freeNode     func(unsafe.Pointer)
 	initialize   func(uintptr) int32
 	observe      func(uintptr, uint64, string, int32) int32
 	command      func(uintptr, uint64, unsafe.Pointer) int32

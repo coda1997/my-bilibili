@@ -24,6 +24,7 @@ func load(path string) (*nativeAPI, error) {
 	}{
 		{"mpv_client_api_version", &a.version}, {"mpv_create", &a.create},
 		{"mpv_set_option_string", &a.option}, {"mpv_initialize", &a.initialize},
+		{"mpv_set_option", &a.optionNode}, {"mpv_get_property", &a.getProperty}, {"mpv_free_node_contents", &a.freeNode},
 		{"mpv_observe_property", &a.observe}, {"mpv_command_async", &a.command},
 		{"mpv_wait_event", &a.wait}, {"mpv_terminate_destroy", &a.destroy},
 		{"mpv_render_context_create", &a.renderCreate}, {"mpv_render_context_update", &a.renderUpdate},

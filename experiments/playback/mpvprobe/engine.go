@@ -3,6 +3,7 @@ package mpvprobe
 import (
 	"context"
 	"image"
+	"maps"
 	"math"
 	"runtime"
 	"strconv"
@@ -36,11 +37,7 @@ func (o Opener) Open(ctx context.Context, in contract.Input) (contract.Engine, e
 	if ctx.Err() != nil {
 		return nil, contract.Canceled
 	}
-	// Gate one evaluates combined fixtures only. Broader transport capability
-	// work remains RPL-002, after independently reviewed first-gate evidence.
-	if len(in.Headers) != 0 || in.AudioURL != "" {
-		return nil, contract.Unsupported
-	}
+	in.Headers = maps.Clone(in.Headers)
 	loader := o.loader
 	if loader == nil {
 		loader = load
@@ -56,6 +53,7 @@ type engine struct {
 	s        contract.Snapshot
 	closed   bool
 	failure  contract.ErrorCode
+	tracks   Tracks
 	once     sync.Once
 	commands chan []string
 	stop     chan struct{}
@@ -132,6 +130,7 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 	defer func() {
 		workers.Add(-1)
 		e.mu.Lock()
+		e.closed = true
 		if e.failure != contract.NoError {
 			e.s.State, e.s.Error = contract.Failed, e.failure
 		}
@@ -172,14 +171,14 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 			return
 		}
 	}
-	if a.initialize(core) < 0 {
+	if !a.transport(core, in) || a.initialize(core) < 0 {
 		e.fail(contract.Media)
 		return
 	}
 	properties := []struct {
 		name string
 		kind int32
-	}{{"time-pos", 5}, {"duration", 5}, {"pause", 3}, {"volume", 5}, {"speed", 5}, {"eof-reached", 3}}
+	}{{"time-pos", 5}, {"duration", 5}, {"pause", 3}, {"volume", 5}, {"speed", 5}, {"eof-reached", 3}, {"track-list", 6}}
 	for i, p := range properties {
 		if a.observe(core, uint64(i+1), p.name, p.kind) < 0 {
 			e.fail(contract.Media)
@@ -251,12 +250,37 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 					return
 				}
 			case 8:
+				tracks, ok := a.tracks(core)
+				// mpv can keep playing video after a failed optional audio-files
+				// load. This presentation explicitly requires its external audio.
+				if !ok || !tracks.Video || in.AudioURL != "" && (!tracks.Audio || !tracks.ExternalAudio) {
+					e.fail(contract.Media)
+					return
+				}
+				e.mu.Lock()
+				e.tracks = tracks
+				e.mu.Unlock()
 				loaded = true
 			case 22:
 				if ev.Data != nil {
 					p := *(*property)(ev.Data)
 					if p.Data != nil {
-						e.update(ev.Reply, p, &paused)
+						if ev.Reply == 7 && loaded {
+							if p.Format != 6 {
+								e.fail(contract.Media)
+								return
+							}
+							tracks, ok := selectedTracks((*nodeValue)(p.Data))
+							if !ok || !tracks.Video || in.AudioURL != "" && (!tracks.Audio || !tracks.ExternalAudio) {
+								e.fail(contract.Media)
+								return
+							}
+							e.mu.Lock()
+							e.tracks = tracks
+							e.mu.Unlock()
+						} else {
+							e.update(ev.Reply, p, &paused)
+						}
 					}
 				}
 			}

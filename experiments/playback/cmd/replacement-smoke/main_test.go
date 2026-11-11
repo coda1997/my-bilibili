@@ -11,9 +11,9 @@ import (
 )
 
 func TestUnknownStagePrecedesAnyArtifactAccess(t *testing.T) {
-	for _, name := range []string{"", "full", "preview", "capabilities", "SURFACE"} {
+	for _, name := range []string{"", "full", "preview", "CAPABILITIES", "SURFACE"} {
 		r := report{Stage: name}
-		if err := run(context.Background(), "/absent-app", "/absent-out", "/absent-fixtures", "/absent-manifest", &r); err == nil || err.Error() != "only the surface stage is implemented; broader capabilities require gate-one review" {
+		if err := run(context.Background(), "/absent-app", "/absent-out", "/absent-fixtures", "/absent-manifest", &r); err == nil || err.Error() != "unknown replacement stage: choose surface or capabilities" {
 			t.Fatal(name, err)
 		}
 	}

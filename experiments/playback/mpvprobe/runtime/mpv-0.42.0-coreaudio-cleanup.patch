@@ -1,0 +1,199 @@
+--- a/audio/out/ao_coreaudio.c
++++ b/audio/out/ao_coreaudio.c
+@@ -21,6 +21,7 @@
+ #include "ao.h"
+ #include "internal.h"
+ #include "audio/format.h"
++#include "osdep/threads.h"
+ #include "osdep/timer.h"
+ #include "options/m_option.h"
+ #include "common/msg.h"
+@@ -32,7 +33,7 @@
+ // The timeout for stopping the audio unit after being reset. This allows the
+ // device to sleep after playback paused. The duration is chosen to match the
+ // behavior of AVFoundation.
+-#define IDLE_TIME 7 * NSEC_PER_SEC
++#define IDLE_TIME MP_TIME_S_TO_NS(7)
+ 
+ struct priv {
+     // This must be put in the front
+@@ -48,9 +49,15 @@
+ 
+     bool change_physical_format;
+ 
+-    // Block that is executed after `IDLE_TIME` to stop audio output unit.
+-    dispatch_block_t idle_work;
+-    dispatch_queue_t queue;
++    // Teardown joins this worker before libmpv may be unloaded. A canceled
++    // dispatch_after block can retain a descriptor in the image until its
++    // original deadline, even after the audio unit has been destroyed.
++    mp_thread idle_thread;
++    bool idle_thread_created;
++    bool idle_thread_stop;
++    mp_mutex idle_mutex;
++    mp_cond idle_cond;
++    int64_t idle_deadline;
+ 
+     int hotplug_cb_registration_times;
+ };
+@@ -142,6 +149,7 @@
+ static bool register_hotplug_cb(struct ao *ao);
+ static void unregister_hotplug_cb(struct ao *ao);
+ static void uninit(struct ao *ao);
++static MP_THREAD_VOID idle_worker(void *arg);
+ 
+ static bool reinit_device(struct ao *ao) {
+     struct priv *p = ao->priv;
+@@ -186,8 +194,11 @@
+     reinit_latency(ao);
+     ao->device_buffer = av_rescale(p->hw_latency_ns, ao->samplerate, 1000000000) * 2;
+ 
+-    p->queue = dispatch_queue_create("io.mpv.coreaudio_stop_during_idle",
+-                                     DISPATCH_QUEUE_SERIAL);
++    if (mp_thread_create(&p->idle_thread, idle_worker, ao)) {
++        MP_ERR(ao, "unable to create idle timer thread\n");
++        goto coreaudio_error;
++    }
++    p->idle_thread_created = true;
+ 
+     return CONTROL_OK;
+ 
+@@ -385,35 +396,32 @@
+     CHECK_CA_WARN("can't stop audio unit");
+ }
+ 
+-static void cancel_and_release_idle_work(struct priv *p)
+-{
+-    if (!p->idle_work)
+-        return;
+-
+-    dispatch_block_cancel(p->idle_work);
+-    Block_release(p->idle_work);
+-    p->idle_work = NULL;
+-}
+-
+-static void stop_after_idle_time(struct ao *ao)
+-{
+-    struct priv *p = ao->priv;
+-
+-    cancel_and_release_idle_work(p);
+-
+-    p->idle_work = dispatch_block_create(0, ^{
+-        MP_VERBOSE(ao, "Stopping audio unit due to idle timeout\n");
+-        stop(ao);
+-    });
+-
+-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, IDLE_TIME),
+-                   p->queue, p->idle_work);
+-}
+-
+-static void _reset(void *_ao)
+-{
+-    struct ao *ao = (struct ao *)_ao;
+-    struct priv *p = ao->priv;
++static MP_THREAD_VOID idle_worker(void *arg)
++{
++    struct ao *ao = arg;
++    struct priv *p = ao->priv;
++    mp_thread_set_name("ao/coreaudio-idle");
++    mp_mutex_lock(&p->idle_mutex);
++    while (!p->idle_thread_stop) {
++        if (!p->idle_deadline) {
++            mp_cond_wait(&p->idle_cond, &p->idle_mutex);
++        } else if (mp_time_ns() < p->idle_deadline) {
++            mp_cond_timedwait_until(&p->idle_cond, &p->idle_mutex,
++                                    p->idle_deadline);
++        } else {
++            p->idle_deadline = 0;
++            MP_VERBOSE(ao, "Stopping audio unit due to idle timeout\n");
++            stop(ao);
++        }
++    }
++    mp_mutex_unlock(&p->idle_mutex);
++    MP_THREAD_RETURN();
++}
++
++static void reset(struct ao *ao)
++{
++    struct priv *p = ao->priv;
++    mp_mutex_lock(&p->idle_mutex);
+     OSStatus err = AudioUnitReset(p->audio_unit, kAudioUnitScope_Global, 0);
+     CHECK_CA_WARN("can't reset audio unit");
+ 
+@@ -423,45 +431,37 @@
+     // restarting the audio unit takes a noticeable amount of time when a
+     // wireless audio device is being used. Instead the audio unit is stopped
+     // after a delay if it remains idle.
+-    stop_after_idle_time(ao);
+-}
+-
+-static void reset(struct ao *ao)
+-{
+-    struct priv *p = ao->priv;
+-    // Must dispatch to serialize reset, start and stop operations.
+-    dispatch_sync_f(p->queue, ao, &_reset);
+-}
+-
+-static void _start(void *_ao)
+-{
+-    struct ao *ao = (struct ao *)_ao;
+-    struct priv *p = ao->priv;
+-
+-    if (p->idle_work)
+-        dispatch_block_cancel(p->idle_work);
++    p->idle_deadline = mp_time_ns() + IDLE_TIME;
++    mp_cond_signal(&p->idle_cond);
++    mp_mutex_unlock(&p->idle_mutex);
++}
++
++static void start(struct ao *ao)
++{
++    struct priv *p = ao->priv;
++    mp_mutex_lock(&p->idle_mutex);
++    p->idle_deadline = 0;
++    mp_cond_signal(&p->idle_cond);
+ 
+     OSStatus err = AudioOutputUnitStart(p->audio_unit);
+     CHECK_CA_WARN("can't start audio unit");
+-}
+-
+-static void start(struct ao *ao)
+-{
+-    struct priv *p = ao->priv;
+-    // Must dispatch to serialize reset, start and stop operations.
+-    dispatch_sync_f(p->queue, ao, &_start);
++    mp_mutex_unlock(&p->idle_mutex);
+ }
+ 
+ static void uninit(struct ao *ao)
+ {
+     struct priv *p = ao->priv;
+ 
+-    if (p->queue) {
+-        dispatch_sync(p->queue, ^{
+-            cancel_and_release_idle_work(p);
+-        });
+-        dispatch_release(p->queue);
+-    }
++    if (p->idle_thread_created) {
++        mp_mutex_lock(&p->idle_mutex);
++        p->idle_thread_stop = true;
++        mp_cond_signal(&p->idle_cond);
++        mp_mutex_unlock(&p->idle_mutex);
++        mp_thread_join(p->idle_thread);
++        p->idle_thread_created = false;
++    }
++    mp_cond_destroy(&p->idle_cond);
++    mp_mutex_destroy(&p->idle_mutex);
+ 
+     if (p->audio_unit) {
+         AudioOutputUnitStop(p->audio_unit);
+@@ -588,6 +588,8 @@
+     .list_devs      = ca_get_device_list,
+     .priv_size      = sizeof(struct priv),
+     .priv_defaults  = &(const struct priv){
++        .idle_mutex = MP_STATIC_MUTEX_INITIALIZER,
++        .idle_cond = MP_STATIC_COND_INITIALIZER,
+         .sem = (struct coreaudio_cb_sem){
+             .mutex = MP_STATIC_MUTEX_INITIALIZER,
+             .cond = MP_STATIC_COND_INITIALIZER,

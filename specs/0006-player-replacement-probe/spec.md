@@ -1,11 +1,55 @@
 # Bounded libmpv replacement-player probe
 
 Spec ID: `0006-player-replacement-probe`
-Status: proposed runtime-build amendment, 2026-11-11; not reviewed or adopted.
-The original contract was independently approved and RPL-001 was authorized.
-The owner requested investigation/repair of the runtime-preflight blocker.
-This draft permits only the build correction defined below after independent
-architecture review and a new freeze. Reviewer dispatch is not yet authorized.
+Status: owner-authorized CoreAudio cleanup repair, 2026-11-11.
+The original contract and runtime-build correction were independently approved;
+RPL-001 passed independent review in run `20261111T131708Z-4c1d81985a69`.
+RPL-002 implementation is present; its independent review remains pending.
+
+## Owner-authorized CoreAudio cleanup repair
+
+On 2026-11-11 the owner requested fixing the cleanup failure after review
+CA-CLEANUP-001 reproduced SIGSEGV after Close with zero adapter counters.
+This authorizes a bounded local runtime repair in RPL-002 and a fresh frozen
+run. Preserve the existing lifetime contract: fully quiesce native work before
+per-session library unload, keep CoreAudio enabled, and retain the external
+200ms cancellation bound. No process-lifetime mapping or early Close is added.
+
+In addition to the existing build-only helper patch, permit a separately
+maintained `mpv-0.42.0-coreaudio-cleanup.patch` changing only
+`audio/out/ao_coreaudio.c` at the pinned source. Replace the unjoinable delayed
+dispatch block with one owned timer worker using mpv's existing thread/mutex/
+condition primitives. Preserve the seven-second idle-stop delay, serialize
+reset/start/idle-stop, cancel the pending timer on start, and signal/join the
+worker during teardown before releasing its state or unloading libmpv.
+Handle initialization failure without joining an unstarted worker. No other
+audio behavior, binding/API, dependency pin, plain contract or UI change is
+included. This is owner implementation authority, not independent review.
+
+Keep the old runtime and every failure. Apply both patches to a fresh verified
+source extraction and use a new build/install prefix with the existing strict
+build options. Retain source/patch/build/dependency provenance and loader/API
+preflight. Add explicit opt-in Go native regressions that keep each subprocess
+alive beyond the original delayed cleanup after close, including paused,
+playing, timer-expiry/resume and repeated pause/resume/session lifetimes.
+Ordinary Go checks must remain independent of native runtime availability.
+After these pass, run one complete capabilities stage with unchanged oracles
+and bounds, preserving its outcome. Independent review of the final repair and
+finding closure remains separate; no delegation or remote action is authorized.
+
+## Owner-authorized cancellation amendment
+
+On 2026-11-11, after run `20261111T133906Z-38eafa873059` failed external
+loading-cancel observation at 100.455083ms against 100ms, the owner explicitly
+requested increasing the limit to 200ms. This supersedes only the replacement
+probe's external loading and playing cancellation bound. It includes action
+receipt through observed Closed/Canceled with no owned engine. Complete disposal,
+zero-resource assertions and every other deadline remain unchanged. Preserve
+the earlier failure under its original contract; it is not retroactively a pass.
+Freeze this amendment in a new run before validating the amended candidate.
+The owner authorizes that continuation; this is not independent review or M1
+acceptance. Historical architecture-review and assignment packets remain records
+of their own candidates. The original controller/player/legacy smoke stay unchanged.
 
 ## User scenario and goal
 
@@ -32,7 +76,7 @@ capability is a hypothesis; it does not count as a native result.
   are explicitly named replacement probes; selecting the old app never loads
   libmpv. No silent fallback or default-player change.
 - No full shell, P0/M2, service/account access, remote publication, any upstream
-  patch except the exact CoreAudio source-list correction below, custom decoder, transcoder, media proxy, JavaScript application layer,
+  patch except the CoreAudio source-list and cleanup corrections described here, custom decoder, transcoder, media proxy, JavaScript application layer,
   generic plugin/player framework, GPU integration or packaging/signing.
 - Runtime preparation remains opt-in, limited to the authorized local build
   described below. Before native work, supply the library with provenance, dependency and
@@ -84,8 +128,8 @@ Only after successful build/provenance/loader checks may the original surface
 gate run. Preserve its first outcome and all original picture, timing, complete
 Close and zero-resource assertions. A native gate failure still ends the probe;
 RPL-002 still requires separately authorized independent exact-candidate review.
-This amendment permits no contract, UI, smoke-oracle, deadline or default-engine
-change, and does not establish physical audio or production playback support.
+The build correction itself permits no contract, UI, smoke-oracle, deadline or default-engine
+change (the separate owner cancellation amendment above changes only that bound), and does not establish physical audio or production playback support.
 
 ## Boundaries and lifetime contract
 
@@ -147,7 +191,7 @@ The upstream API documents blocking destruction. **Timely teardown is an open
 feasibility question**, not solved by choosing asynchronous load commands.
 Before broader work, an externally supervised first-gate executable must show
 picture plus switch/cancel/window-close cleanup while the controlled server is
-delaying a response. Preserve the original externally observed 100ms cancel
+delaying a response. Use the owner-authorized externally observed 200ms cancel
 bound, including receipt of the cancel action through the closed/no-owned-engine
 snapshot. A stalled close is a failed gate. The driver may reap only its owned
 app after its deadline; forced cleanup is recorded as failure, never graceful
@@ -155,7 +199,7 @@ disposal. Do not return an early fake closed snapshot to meet the bound.
 
 Gate-one failure ends the probe with rejection/needs-human evidence. Do not add
 process isolation, change `Close` semantics, permit overlapping cores, loosen
-deadlines or start broader controls/header/track work to evade it. Any such
+deadlines beyond the explicit owner amendment or start broader controls/header/track work to evade it. Any such
 design change needs a separate scope, architecture review and new frozen run.
 An independent reviewer must assess the exact gate-one evidence before task
 RPL-002 starts; this packet does not authorize dispatch.
@@ -196,7 +240,7 @@ must run without libmpv installed. Runtime availability is currently not-tested.
 The first-gate app displays a captured synthetic local/HTTP picture inside the
 mygo window through the proposed render path. During an observed delayed HTTP
 request, UI actions still respond, switch cannot revive the old generation after
-the 3s delay, and loading cancellation is externally observed within 100ms with
+the 3s delay, and loading cancellation is externally observed within 200ms with
 no owned engine. Close/quit releases render/core/callback/worker resources.
 Failure rejects the candidate at gate one; configuration readbacks alone fail.
 
@@ -207,7 +251,7 @@ Play advances at least 300ms within 2s; after 200ms pause settling, drift is no
 more than 150ms across 500ms; paused seek to 3s reaches within 500ms of target
 within 2s. Sampled sliders, presets, explicit retry, playing cancellation and
 generation/closed-command behavior retain their existing deterministic and
-native expectations. Report rate/volume configuration separately from actual
+native expectations, with external playing cancellation observed within 200ms. Report rate/volume configuration separately from actual
 speed, speaker output and synchronization.
 
 ### RPL-AC-04
@@ -259,6 +303,18 @@ CoreAudio stays enabled; graphics/Cocoa/Swift remain disabled. Preserve all
 before/after artifacts and record native playback, physical sound and timely
 disposal separately; a successful loader is not a native-surface pass.
 
+### RPL-AC-09
+
+The bounded CoreAudio cleanup patch preserves the seven-second idle-stop and
+resume behavior and joins its native timer worker before core teardown returns.
+The old runtime fails the isolated close-and-survive regression; the new exact
+runtime survives beyond the old delay after paused/playing close, repeated
+pause/resume/session use and expiry/resume. Preserve initialization-failure
+cleanup and complete per-session unload. Keep the 200ms cancellation bound,
+strict native build, loader/dependency provenance, ordinary race checks and
+the complete capabilities stage. Report any subsequent stage failure honestly;
+native regression success alone does not accept all RPL-002 capabilities.
+
 ## Verification matrix
 
 Proposed future commands, not commands run during planning:
@@ -266,12 +322,13 @@ Proposed future commands, not commands run during planning:
 | AC | Procedure | Environment | Required evidence |
 | --- | --- | --- | --- |
 | RPL-AC-08 | Exact patch/source verification; unpatched/patched strict link; absolute-path loader, all required symbols and API 2.6; loaded dependency inventory | macOS arm64, no core/media in preflight | Full commands and retained failures, patch/source/build hashes, config/source list, preflight log and library manifests |
+| RPL-AC-09 | Opt-in `nativecleanup` tests, fresh strict runtime build/preflight, full race check and one capabilities invocation | macOS arm64, generated fixtures, explicit runtime path | Failing old-runtime regression, delayed-survival and control assertions, exact runtime/source hashes, unchanged-bound complete-stage outcome |
 | RPL-AC-01 | ABI/loader failure tests; manifest validation; ordinary full race check without native library loading | Headless macOS; Windows later | Source/API and binary/dependency manifests; safe failure and check logs |
 | RPL-AC-02 | Explicit replacement driver `-stage surface`; capture owned window; delayed switch/cancel/quit probes | Exposed macOS, generated fixtures, approved runtime | Per-probe external timings, native frame captures, resource counters, exit/server/socket cleanup; exact gate-one review |
 | RPL-AC-03 | Adapter/controller/UI regression tests and replacement driver `-stage capabilities` | macOS first | Native positions/timestamps and captures; slider/retry evidence; separate configuration-only cells |
 | RPL-AC-04 | Header list/copy/isolation tests and protected combined/separate native routes | Loopback fixtures | Server match counts by stream and generation, no-header denial, actual native play/seek/disposal |
 | RPL-AC-05 | Track selection and missing-audio tests; separate-stream native control probe; later audio/sync observation | macOS; Windows and calibrated sync method unavailable | Both route counts, selected track evidence, positions/picture, audio/sync cells honestly not-tested where unavailable |
-| RPL-AC-06 | Fake native interleavings/cleanup regressions; delayed/negative native probes | Headless and exposed macOS | Error categories, ownership/worker quiescence, 100ms cancel timing; full failing evidence preserved |
+| RPL-AC-06 | Fake native interleavings/cleanup regressions; delayed/negative native probes | Headless and exposed macOS | Error categories, ownership/worker quiescence, 200ms cancel timing; full failing evidence preserved |
 | RPL-AC-07 | `go run ./cmd/dev check --race`; exact source freeze and independent architecture/code/evidence reviews | Current checkout; each later OS separately | Candidate-bound logs, independent dispositions and durable report |
 
 The new driver rejects unknown stages before app/runtime/fixture access. Surface

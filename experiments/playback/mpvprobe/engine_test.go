@@ -28,6 +28,12 @@ func fake() *fakeNative {
 	f := &fakeNative{events: make(chan *event, 300), sent: make(chan uint64, 40), rendered: make(chan struct{}, 20)}
 	f.a = &nativeAPI{
 		create: func() uintptr { return 1 }, option: func(uintptr, string, string) int32 { return 0 },
+		optionNode: func(uintptr, string, int32, unsafe.Pointer) int32 { return 0 },
+		getProperty: func(_ uintptr, _ string, _ int32, p unsafe.Pointer) int32 {
+			*(*nodeValue)(p) = nodeValue{Format: 7}
+			return -1
+		},
+		freeNode:   func(unsafe.Pointer) {},
 		initialize: func(uintptr) int32 { return 0 }, observe: func(uintptr, uint64, string, int32) int32 { return 0 },
 		command: func(_ uintptr, id uint64, _ unsafe.Pointer) int32 {
 			f.sent <- id
@@ -104,7 +110,7 @@ func TestABIAndLoaderSafeRejection(t *testing.T) {
 	}
 	called := false
 	o := Opener{loader: func(string) (*nativeAPI, error) { called = true; return nil, errors.New("must not load") }}
-	for _, in := range []contract.Input{{}, {FilePath: "synthetic", Headers: map[string]string{"X-Test": "value"}}, {URL: "http://127.0.0.1/video", AudioURL: "http://127.0.0.1/audio"}} {
+	for _, in := range []contract.Input{{}, {FilePath: "synthetic", Headers: map[string]string{"X-Test": "value"}}, {URL: "https://example.invalid/video"}} {
 		if _, err := o.Open(context.Background(), in); err == nil {
 			t.Fatal("invalid/unsupported input accepted")
 		}
@@ -112,6 +118,21 @@ func TestABIAndLoaderSafeRejection(t *testing.T) {
 	if called {
 		t.Fatal("native loader invoked for rejected input")
 	}
+}
+
+func TestTransportInputAcceptedWithoutDroppingFields(t *testing.T) {
+	f := fake()
+	entered, release := make(chan struct{}), make(chan struct{})
+	in := contract.Input{URL: "http://127.0.0.1/video", AudioURL: "http://127.0.0.1/audio", Headers: map[string]string{"X-Test": "one,two"}}
+	e, err := (Opener{loader: func(string) (*nativeAPI, error) { close(entered); <-release; return f.a, nil }}).Open(context.Background(), in)
+	if err != nil {
+		t.Fatalf("valid transport input rejected: %v", err)
+	}
+	<-entered
+	// Mutating caller-owned metadata after Open must not race native setup.
+	in.Headers["X-Test"] = "changed"
+	close(release)
+	defer e.Close()
 }
 
 func TestOpenIsAsyncAndCloseWaitsForRealDisposal(t *testing.T) {

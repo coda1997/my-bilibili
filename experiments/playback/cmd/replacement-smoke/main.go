@@ -21,6 +21,10 @@ import (
 	"my-bilibili/experiments/playback/mpvprobe"
 )
 
+// Owner-authorized replacement-probe observation bound (2026-11-11).
+// Includes the cancel action and externally observed closed/no-owned state.
+const cancelObservationLimit = 200 * time.Millisecond
+
 type check struct {
 	Name     string    `json:"name"`
 	Result   string    `json:"result"`
@@ -37,6 +41,7 @@ type report struct {
 	ServerStats    *fixturehttp.Stats `json:"server_stats,omitempty"`
 	ForcedCleanup  bool               `json:"forced_cleanup"`
 	RuntimeBlocked bool               `json:"runtime_blocked"`
+	Automation     automationTrace    `json:"automation"`
 }
 type artifact struct{ Path, SHA256 string }
 type runtimeManifest struct {
@@ -47,8 +52,8 @@ type runtimeManifest struct {
 }
 
 func stage(name string) error {
-	if name != "surface" {
-		return errors.New("only the surface stage is implemented; broader capabilities require gate-one review")
+	if name != "surface" && name != "capabilities" {
+		return errors.New("unknown replacement stage: choose surface or capabilities")
 	}
 	return nil
 }
@@ -92,7 +97,7 @@ func verifyRuntime(path string) (runtimeManifest, string, error) {
 }
 
 func main() {
-	selected := flag.String("stage", "surface", "explicit native stage: surface")
+	selected := flag.String("stage", "surface", "explicit native stage: surface or capabilities (requires gate-one approval)")
 	app := flag.String("app", "", "owned e2e replacement app")
 	out := flag.String("out", "", "fresh private evidence directory")
 	fixtures := flag.String("fixtures", "experiments/playback/testdata", "generated fixture directory")
@@ -119,7 +124,7 @@ func main() {
 		if r.RuntimeBlocked {
 			result = "not-tested"
 		}
-		r.Checks = append(r.Checks, check{Name: "surface-stage", Result: result, Detail: err.Error()})
+		r.Checks = append(r.Checks, check{Name: r.Stage + "-stage", Result: result, Detail: err.Error()})
 	}
 	b, _ := json.MarshalIndent(r, "", "  ")
 	writeErr := os.WriteFile(filepath.Join(*out, "result.json"), append(b, '\n'), 0600)
@@ -148,7 +153,11 @@ func run(ctx context.Context, app, dir, fixtures, manifest string, r *report) (e
 	}
 	h := sha256.Sum256(b)
 	r.AppSHA256 = hex.EncodeToString(h[:])
-	srv, err := fixturehttp.Start(ctx, fixtures, 3*time.Second)
+	startServer := fixturehttp.Start
+	if r.Stage == "capabilities" {
+		startServer = fixturehttp.StartProbe
+	}
+	srv, err := startServer(ctx, fixtures, 3*time.Second)
 	if err != nil {
 		return errors.New("fixture server preparation failed")
 	}
@@ -183,6 +192,22 @@ func run(ctx context.Context, app, dir, fixtures, manifest string, r *report) (e
 	go func() { done <- cmd.Wait() }()
 	defer func() {
 		if done != nil {
+			// A closed transport may mean the app already exited. Do not label
+			// an observed early exit as a successful forced reap or disposal.
+			select {
+			case exitErr := <-done:
+				code := 0
+				if exitErr != nil {
+					code = -1
+					var status *exec.ExitError
+					if errors.As(exitErr, &status) {
+						code = status.ExitCode()
+					}
+				}
+				r.Checks = append(r.Checks, check{Name: "unexpected-app-exit", Result: "fail", Detail: fmt.Sprintf("owned app exited before cleanup; exit code %d; no graceful disposal assertion", code)})
+				return
+			default:
+			}
 			r.ForcedCleanup = true
 			_ = cmd.Process.Kill()
 			select {
@@ -207,6 +232,7 @@ func run(ctx context.Context, app, dir, fixtures, manifest string, r *report) (e
 	}
 	defer conn.Close()
 	c := newClient(conn)
+	c.trace = &r.Automation
 	var windows struct {
 		Windows []struct {
 			ID    int    `json:"id"`
@@ -222,6 +248,14 @@ func run(ctx context.Context, app, dir, fixtures, manifest string, r *report) (e
 	c.window = windows.Windows[0].ID
 	if err = c.surface(ctx, dir, r, srv); err != nil {
 		return err
+	}
+	if r.Stage == "capabilities" {
+		if err = c.capabilities(ctx, dir, r, srv); err != nil {
+			return err
+		}
+		if _, err = c.loading(ctx, srv); err != nil {
+			return err
+		}
 	}
 	if err = c.act(ctx, "quit"); err != nil {
 		return err
@@ -287,13 +321,13 @@ func (c *client) surface(ctx context.Context, dir string, r *report, srv *fixtur
 	if err = c.act(ctx, "cancel"); err != nil {
 		return err
 	}
-	s, err = c.until(ctx, 100*time.Millisecond, func(s observed) bool {
+	s, err = c.until(ctx, cancelObservationLimit, func(s observed) bool {
 		return s.Generation == active.Generation && s.State == contract.Closed && s.Error == contract.Canceled && !s.Owned
 	})
 	elapsed := time.Since(start)
-	if err != nil || elapsed > 100*time.Millisecond {
-		record(r, "loading-cancel", "fail", fmt.Sprintf("external observation took %s (100ms bound)", elapsed), s)
-		return errors.New("loading cancel observation exceeds 100ms")
+	if err != nil || elapsed > cancelObservationLimit {
+		record(r, "loading-cancel", "fail", fmt.Sprintf("external observation took %s (%s bound)", elapsed, cancelObservationLimit), s)
+		return errors.New("loading cancel observation exceeds 200ms")
 	}
 	resources, err := c.resources(ctx)
 	if err != nil || resources != (mpvprobe.Resources{}) {
