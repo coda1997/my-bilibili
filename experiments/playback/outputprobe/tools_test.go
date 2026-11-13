@@ -2,9 +2,12 @@ package outputprobe
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +18,20 @@ func TestToolChild(t *testing.T) {
 		return
 	}
 	mode := os.Args[len(os.Args)-1]
+	if stream, count, ok := strings.Cut(mode, ":"); ok && (stream == "output-probe-stdout" || stream == "output-probe-stderr") {
+		n, err := strconv.Atoi(count)
+		if err != nil || n < 0 || n > 1<<20 {
+			os.Exit(8)
+		}
+		out := os.Stdout
+		if stream == "output-probe-stderr" {
+			out = os.Stderr
+		}
+		if _, err := out.Write([]byte(strings.Repeat("x", n))); err != nil {
+			os.Exit(9)
+		}
+		os.Exit(0)
+	}
 	switch mode {
 	case "output-probe-child-block":
 		time.Sleep(10 * time.Second)
@@ -32,20 +49,73 @@ func TestToolChild(t *testing.T) {
 func TestToolCancellationOutputAndFailure(t *testing.T) {
 	for _, mode := range []string{"block", "flood", "fail"} {
 		t.Run(mode, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			deadline := 5 * time.Second
+			if mode == "block" {
+				deadline = 100 * time.Millisecond
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), deadline)
 			defer cancel()
 			start := time.Now()
-			_, _, err := runTool(ctx, os.Args[0], []string{"-test.run=^TestToolChild$", "--", "output-probe-child-" + mode}, 4096)
-			if err == nil {
-				t.Fatal("failure hidden")
+			stdout, stderr, err := runTool(ctx, os.Args[0], []string{"-test.run=^TestToolChild$", "--", "output-probe-child-" + mode}, 4096)
+			switch mode {
+			case "block":
+				if !errors.Is(err, context.DeadlineExceeded) {
+					t.Fatalf("caller deadline lost: %v", err)
+				}
+			case "flood":
+				if err == nil || err.Error() != "tool output limit exceeded" || len(stdout) > 4096 || len(stderr) > 64<<10 {
+					t.Fatalf("output limit not enforced: stdout=%d stderr=%d err=%v", len(stdout), len(stderr), err)
+				}
+			case "fail":
+				var exit *exec.ExitError
+				if !errors.As(err, &exit) || exit.ExitCode() != 7 || stderr != "controlled tool failure\n" {
+					t.Fatalf("tool failure lost: stderr=%q err=%v", stderr, err)
+				}
 			}
 			if time.Since(start) > 2*time.Second {
 				t.Fatal("child not reaped within bounded deadline")
 			}
 		})
 	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, _, err := runTool(ctx, os.Args[0], []string{"-test.run=^TestToolChild$", "--", "output-probe-child-block"}, 4096); !errors.Is(err, context.Canceled) {
+		t.Fatalf("caller cancellation lost: %v", err)
+	}
 	if _, _, err := runTool(context.Background(), filepath.Join(t.TempDir(), "absent"), nil, 100); err == nil {
 		t.Fatal("missing tool accepted")
+	}
+}
+
+func TestToolOutputBoundaries(t *testing.T) {
+	for _, stream := range []string{"stdout", "stderr"} {
+		limit := 4096
+		if stream == "stderr" {
+			limit = 64 << 10
+		}
+		for _, count := range []int{limit - 1, limit, limit + 1} {
+			t.Run(fmt.Sprintf("%s/%d", stream, count), func(t *testing.T) {
+				// Separate the output bound from a caller timeout, including the
+				// race runtime's normal child-exit delay.
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				stdout, stderr, err := runTool(ctx, os.Args[0], []string{"-test.run=^TestToolChild$", "--", fmt.Sprintf("output-probe-%s:%d", stream, count)}, 4096)
+				captured, other := stdout, []byte(stderr)
+				if stream == "stderr" {
+					captured, other = other, captured
+				}
+				if len(captured) > limit || len(other) != 0 {
+					t.Fatalf("capture exceeded limit or crossed streams: captured=%d limit=%d other=%d err=%v", len(captured), limit, len(other), err)
+				}
+				if count > limit {
+					if err == nil || err.Error() != "tool output limit exceeded" {
+						t.Fatalf("overflow not reported: captured=%d err=%v", len(captured), err)
+					}
+				} else if err != nil || string(captured) != strings.Repeat("x", count) {
+					t.Fatalf("bounded output changed: captured=%d want=%d err=%v", len(captured), count, err)
+				}
+			})
+		}
 	}
 }
 func TestDestinationProtection(t *testing.T) {

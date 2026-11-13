@@ -28,19 +28,19 @@ type ToolCommand struct {
 	Error       string   `json:"error,omitempty"`
 }
 type boundedBuffer struct {
-	bytes.Buffer
+	buffer   bytes.Buffer // Named field keeps io.Copy from bypassing Write via ReadFrom.
 	limit    int
 	cancel   context.CancelFunc
 	overflow bool
 }
 
 func (b *boundedBuffer) Write(p []byte) (int, error) {
-	if len(p) > b.limit-b.Len() {
+	if len(p) > b.limit-b.buffer.Len() {
 		b.overflow = true
 		b.cancel()
 		return 0, errors.New("tool output limit exceeded")
 	}
-	return b.Buffer.Write(p)
+	return b.buffer.Write(p)
 }
 func runTool(ctx context.Context, tool string, args []string, limit int) ([]byte, string, error) {
 	child, cancel := context.WithTimeout(ctx, 60*time.Second)
@@ -53,12 +53,12 @@ func runTool(ctx context.Context, tool string, args []string, limit int) ([]byte
 	cmd.WaitDelay = time.Second
 	err := cmd.Run()
 	if stdout.overflow || stderr.overflow {
-		return stdout.Bytes(), stderr.String(), errors.New("tool output limit exceeded")
+		return stdout.buffer.Bytes(), stderr.buffer.String(), errors.New("tool output limit exceeded")
 	}
 	if child.Err() != nil {
-		return stdout.Bytes(), stderr.String(), child.Err()
+		return stdout.buffer.Bytes(), stderr.buffer.String(), child.Err()
 	}
-	return stdout.Bytes(), stderr.String(), err
+	return stdout.buffer.Bytes(), stderr.buffer.String(), err
 }
 func identifyTool(ctx context.Context, name string) (ToolIdentity, error) {
 	path, err := exec.LookPath(name)

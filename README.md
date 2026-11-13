@@ -58,7 +58,8 @@ retained. This does not measure physical sync/rate.
 
 ## Start here
 
-- [Current handoff: M1 publication and CI portability repair](reports/0026-target-test-portability.md)
+- [Current handoff: PR tooling guard repairs](reports/0027-playback-tooling-guards.md)
+- [M1 publication and CI portability repair](reports/0026-target-test-portability.md)
 - [M1 completed and accepted](reports/0025-m1-acceptance.md)
 - [Default libmpv implementation and evidence](reports/0024-default-libmpv.md)
 - [Default playback decision](docs/adr/0008-default-libmpv.md)
