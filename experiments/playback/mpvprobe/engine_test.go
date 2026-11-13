@@ -326,40 +326,93 @@ func TestFailureIsNotPublishedUntilNativeDisposalCompletes(t *testing.T) {
 }
 
 func TestDisplayedPixelsAreNotRecycledAndDrawDoesNotWait(t *testing.T) {
+	// NewTester eagerly invokes the callback. Keep Draw disabled until the
+	// test can place every draw of the held render inside its timed boundary.
+	var drawEngine contract.Engine
+	tt := gui.NewTester(func(c *gui.Context) {
+		if drawEngine != nil {
+			Draw(c, drawEngine)
+		}
+	}, 640, 360)
+	assertDrawReturns := func(unblock func(), message string) {
+		t.Helper()
+		finished := make(chan struct{})
+		go func() { tt.Frame(); close(finished) }()
+		select {
+		case <-finished:
+		case <-time.After(100 * time.Millisecond):
+			// The assertion has failed. Unblock and join the UI work before
+			// engine cleanup; this is cleanup time, not an extended draw bound.
+			unblock()
+			select {
+			case <-finished:
+			case <-time.After(time.Second):
+				t.Error("draw work did not finish after releasing test barrier")
+			}
+			t.Fatal(message)
+		}
+	}
 	f := fake()
+	entered, release := make(chan struct{}), make(chan struct{})
+	releaseRender := sync.OnceFunc(func() { close(release) })
+	render, first := f.a.render, true
+	f.a.render = func(handle uintptr, params unsafe.Pointer) int32 {
+		result := render(handle, params)
+		if first {
+			first = false
+			close(entered)
+			<-release
+		}
+		return result
+	}
 	e := openFake(t, f)
+	drawEngine = e
+	// Registered after engine cleanup so the barrier opens before Close even
+	// when an assertion fails while the fake native render is held.
+	t.Cleanup(releaseRender)
 	select {
-	case <-f.rendered:
+	case <-entered:
 	case <-time.After(time.Second):
 		t.Fatal("no frame")
 	}
-	tt := gui.NewTester(func(c *gui.Context) { Draw(c, e) }, 640, 360)
-	tt.Frame()
-	e.framesMu.Lock()
-	front := e.front
-	if e.frames[front].Pix[3] != 255 {
-		t.Fatal("rgb0 garbage treated as alpha")
+	assertDrawReturns(releaseRender, "Draw waited for incomplete first render")
+	if e.bitmap != nil {
+		t.Fatal("Draw published incomplete first render")
 	}
-	e.frames[front].Pix[0] = 77
-	e.framesMu.Unlock()
+	releaseRender()
+	// A render-entry signal precedes alpha normalization and publication.
+	// Draw may legitimately miss a busy render mutex; await actual promotion.
+	await(t, func() bool { tt.Frame(); return e.bitmap != nil })
+	var front int
+	func() {
+		e.framesMu.Lock()
+		defer e.framesMu.Unlock()
+		front = e.front
+		if e.frames[front].Pix[3] != 255 {
+			t.Fatal("rgb0 garbage treated as alpha")
+		}
+		e.frames[front].Pix[0] = 77
+		// Only a render begun after this retained-buffer mark can establish
+		// that a subsequent native frame does not recycle the displayed pixels.
+		for len(f.rendered) > 0 {
+			<-f.rendered
+		}
+	}()
 	select {
 	case <-f.rendered:
 	case <-time.After(time.Second):
 		t.Fatal("no next frame")
 	}
-	e.framesMu.Lock()
-	if e.frames[front].Pix[0] != 77 {
-		t.Fatal("renderer overwrote retained display buffer")
-	}
-	// Simulate a renderer waiting inside native code while owning its target.
-	finished := make(chan struct{})
-	go func() { tt.Frame(); close(finished) }()
-	select {
-	case <-finished:
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("Draw waited for render mutex")
-	}
-	e.framesMu.Unlock()
+	func() {
+		e.framesMu.Lock()
+		unlock := sync.OnceFunc(e.framesMu.Unlock)
+		defer unlock()
+		if e.frames[front].Pix[0] != 77 {
+			t.Fatal("renderer overwrote retained display buffer")
+		}
+		// Simulate a renderer waiting inside native code while owning its target.
+		assertDrawReturns(unlock, "Draw waited for render mutex")
+	}()
 	if unsafe.Pointer(&e.frames[0].Pix[0]) == unsafe.Pointer(&e.frames[1].Pix[0]) || e.frames[0].Rect != image.Rect(0, 0, width, height) {
 		t.Fatal("bad frame ownership")
 	}

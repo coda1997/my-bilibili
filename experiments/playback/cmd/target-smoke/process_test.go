@@ -21,8 +21,9 @@ import (
 )
 
 func TestChildEnvironmentAndFixedArguments(t *testing.T) {
-	env := childEnvironment([]string{"HOME=/safe/home", "TMPDIR=/safe/tmp", "PATH=/malicious", "MYGO_AUTOMATION=/foreign", "HTTP_PROXY=https://SECRET", "HTTPS_PROXY=https://SECRET", "ALL_PROXY=https://SECRET", "http_proxy=https://SECRET", "https_proxy=https://SECRET", "all_proxy=https://SECRET", "NO_PROXY=SECRET", "no_proxy=SECRET", "FTP_PROXY=SECRET", "DYLD_INSERT_LIBRARIES=SECRET", "DYLD_PRINT_LIBRARIES=1", "LD_PRELOAD=SECRET", "MPV_HOME=SECRET", "SSL_CERT_FILE=SECRET", "SSH_AUTH_SOCK=SECRET", "AWS_SECRET_ACCESS_KEY=SECRET", "GODEBUG=SECRET", "__CF_USER_TEXT_ENCODING=0x1:0:0", "HOME=/duplicate"}, "/owned/socket")
-	expected := []string{"PATH=/usr/bin:/bin:/usr/sbin:/sbin", "HOME=/safe/home", "TMPDIR=/safe/tmp", "__CF_USER_TEXT_ENCODING=0x1:0:0", "MYGO_AUTOMATION=/owned/socket"}
+	home, temp := filepath.Join(t.TempDir(), "home"), filepath.Join(t.TempDir(), "tmp")
+	env := childEnvironment([]string{"HOME=" + home, "TMPDIR=" + temp, "PATH=/malicious", "MYGO_AUTOMATION=/foreign", "HTTP_PROXY=https://SECRET", "HTTPS_PROXY=https://SECRET", "ALL_PROXY=https://SECRET", "http_proxy=https://SECRET", "https_proxy=https://SECRET", "all_proxy=https://SECRET", "NO_PROXY=SECRET", "no_proxy=SECRET", "FTP_PROXY=SECRET", "DYLD_INSERT_LIBRARIES=SECRET", "DYLD_PRINT_LIBRARIES=1", "LD_PRELOAD=SECRET", "MPV_HOME=SECRET", "SSL_CERT_FILE=SECRET", "SSH_AUTH_SOCK=SECRET", "AWS_SECRET_ACCESS_KEY=SECRET", "GODEBUG=SECRET", "__CF_USER_TEXT_ENCODING=0x1:0:0", "HOME=" + filepath.Join(t.TempDir(), "duplicate")}, "/owned/socket")
+	expected := []string{"PATH=/usr/bin:/bin:/usr/sbin:/sbin", "HOME=" + home, "TMPDIR=" + temp, "__CF_USER_TEXT_ENCODING=0x1:0:0", "MYGO_AUTOMATION=/owned/socket"}
 	if !reflect.DeepEqual(env, expected) {
 		t.Fatalf("environment policy mismatch: %v", env)
 	}
@@ -74,7 +75,11 @@ func TestSyntheticOwnedChild(t *testing.T) {
 			}
 			if req.Method == "act" && req.Params.Key == "quit" {
 				if mode == "hang" {
-					select {}
+					// A timer keeps this synthetic child alive even when no goroutine can
+					// otherwise make progress; the supervisor must kill and reap it.
+					for {
+						time.Sleep(time.Hour)
+					}
 				}
 				_, _ = fmt.Fprintf(conn, "{\"id\":%d,\"result\":{}}\n", req.ID)
 				conn.Close()
@@ -174,10 +179,11 @@ func TestConnectCancellation(t *testing.T) {
 	}
 }
 func TestInvalidDescriptorStopsBeforeSpawnAndRedacts(t *testing.T) {
+	absent := filepath.Join(t.TempDir(), "absent")
 	for _, data := range []string{`{"video_url":"SECRET_RAW_LOCATOR"}`, strings.Repeat("SECRET_RAW_LOCATOR", 3000)} {
 		out := filepath.Join(t.TempDir(), "result")
 		var stdout, stderr bytes.Buffer
-		code := command(context.Background(), []string{"-app", "/does/not/exist", "-runtime", "/does/not/exist", "-out", out}, io.NopCloser(strings.NewReader(data)), &stdout, &stderr)
+		code := command(context.Background(), []string{"-app", absent, "-runtime", absent, "-out", out}, io.NopCloser(strings.NewReader(data)), &stdout, &stderr)
 		if code != 1 {
 			t.Fatalf("code=%d", code)
 		}
@@ -248,8 +254,9 @@ func (r *unreadableInput) Read([]byte) (int, error) {
 }
 func (r *unreadableInput) Close() error { return nil }
 func TestCLIRejectsRelativeAndExistingOutputBeforeInput(t *testing.T) {
+	owned := t.TempDir()
 	for _, relative := range []string{"app", "runtime", "out"} {
-		args := []string{"-app", "/owned/app", "-runtime", "/owned/runtime", "-out", filepath.Join(t.TempDir(), "new")}
+		args := []string{"-app", filepath.Join(owned, "app"), "-runtime", filepath.Join(owned, "runtime"), "-out", filepath.Join(t.TempDir(), "new")}
 		for i := 0; i < len(args); i += 2 {
 			if args[i] == "-"+relative {
 				args[i+1] = "relative"
@@ -264,7 +271,7 @@ func TestCLIRejectsRelativeAndExistingOutputBeforeInput(t *testing.T) {
 	dir := t.TempDir()
 	input := new(unreadableInput)
 	var out, err bytes.Buffer
-	if code := command(context.Background(), []string{"-app", "/owned/app", "-runtime", "/owned/runtime", "-out", dir}, input, &out, &err); code != 1 || input.called {
+	if code := command(context.Background(), []string{"-app", filepath.Join(owned, "app"), "-runtime", filepath.Join(owned, "runtime"), "-out", dir}, input, &out, &err); code != 1 || input.called {
 		t.Fatalf("existing result code=%d input=%v", code, input.called)
 	}
 }

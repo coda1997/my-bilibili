@@ -58,7 +58,8 @@ retained. This does not measure physical sync/rate.
 
 ## Start here
 
-- [Current handoff: M1 completed and accepted](reports/0025-m1-acceptance.md)
+- [Current handoff: M1 publication and CI portability repair](reports/0026-target-test-portability.md)
+- [M1 completed and accepted](reports/0025-m1-acceptance.md)
 - [Default libmpv implementation and evidence](reports/0024-default-libmpv.md)
 - [Default playback decision](docs/adr/0008-default-libmpv.md)
 - [Previous M1 handoff: target PASS and adapter recommendation](reports/0021-target-access-method.md#post-repair-target-continuation-2026-11-13)

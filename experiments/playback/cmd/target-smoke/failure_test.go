@@ -140,7 +140,7 @@ func TestFailureEvidenceKeepsEarlierValidSamples(t *testing.T) {
 	if f == nil || f.Phase != "ready" || f.LastSnapshot == nil || f.LastResources == nil {
 		t.Fatalf("lost prior sample: %+v", f)
 	}
-	if f.LastSnapshot.Phase != "initial-snapshot" || f.LastSnapshot.Value != original || f.LastResources.Phase != "initial-snapshot" || f.LastResources.Value != (mpvprobe.Resources{}) || f.LastSnapshot.Elapsed >= f.Elapsed {
+	if f.LastSnapshot.Phase != "initial-snapshot" || f.LastSnapshot.Value != original || f.LastResources.Phase != "initial-snapshot" || f.LastResources.Value != (mpvprobe.Resources{}) || f.LastSnapshot.Elapsed > f.Elapsed {
 		t.Fatalf("stale sample redated/overwritten: %+v", f)
 	}
 }
@@ -188,5 +188,35 @@ func TestFailureEvidencePrimarySurvivesForcedCleanup(t *testing.T) {
 	}
 	if cleanup.LastSnapshot == nil || cleanup.LastSnapshot.Elapsed != primary.LastSnapshot.Elapsed || cleanup.LastSnapshot.Phase != primary.LastSnapshot.Phase {
 		t.Fatal("cleanup relabeled stale state")
+	}
+}
+
+// Distinct fixed sample times test preservation without assuming the platform
+// clock advances between adjacent RPC observations and the resulting failure.
+func TestFailureEvidencePreservesSeededProvenance(t *testing.T) {
+	original := observed{Snapshot: contract.Snapshot{State: contract.Idle, Rate: 1, Volume: 1}}
+	resources := mpvprobe.Resources{Cores: 1, Renderers: 1, Workers: 2}
+	r := &report{
+		started:       time.Now().Add(-time.Second),
+		lastSnapshot:  &sample[observed]{phaseInitialSnapshot, 17 * time.Millisecond, original},
+		lastResources: &sample[mpvprobe.Resources]{phaseInitialSnapshot, 23 * time.Millisecond, resources},
+	}
+	r.setPhase(phaseReady)
+	r.observe([]node{{Label: `snapshot {"state":"ready"}`}, {Label: `resources {"Cores":0}`}})
+	r.sessionFailed(contract.Media)
+	r.setPhase(phaseCleanupExit)
+	r.observe([]node{{Label: "snapshot null"}, {Label: "resources null"}})
+	r.CleanupFailure = r.failure(contract.Timeout)
+	primary, cleanup := failures(t, r)
+	for _, f := range []*decodedFailure{primary, cleanup} {
+		if f == nil || f.LastSnapshot == nil || f.LastResources == nil {
+			t.Fatalf("lost seeded provenance: %+v", f)
+		}
+		if f.LastSnapshot.Value != original || f.LastSnapshot.Phase != "initial-snapshot" || f.LastSnapshot.Elapsed != 17*time.Millisecond || f.LastResources.Value != resources || f.LastResources.Phase != "initial-snapshot" || f.LastResources.Elapsed != 23*time.Millisecond {
+			t.Fatalf("seeded provenance changed: %+v %+v", f.LastSnapshot, f.LastResources)
+		}
+	}
+	if primary.Phase != "ready" || primary.Code != contract.Media || cleanup.Phase != "cleanup-exit" || cleanup.Code != contract.Timeout {
+		t.Fatalf("failure attribution changed: %+v %+v", primary, cleanup)
 	}
 }

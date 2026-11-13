@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "spec_id": "0013-target-test-portability",
+  "tasks": [
+    {
+      "id": "PORT-001",
+      "title": "Repair platform and scheduling assumptions in playback tests and finish publication",
+      "depends_on": [],
+      "write_paths": [
+        "experiments/playback/cmd/target-smoke/process_test.go",
+        "experiments/playback/cmd/target-smoke/failure_test.go",
+        "experiments/playback/mpvprobe/engine_test.go",
+        "README.md",
+        "reports/0026-target-test-portability.md"
+      ],
+      "acceptance": [
+        "PORT-AC-01",
+        "PORT-AC-02",
+        "PORT-AC-03"
+      ],
+      "checks": [
+        "Preserved Windows failing CI and production-source equality",
+        "Repeated targeted target-smoke and displayed-buffer race tests with no new skips",
+        "go run ./cmd/dev check --race",
+        "Independent exact test-only candidate and documentation review",
+        "Exact new head/merge three-OS CI and published PR readback"
+      ]
+    }
+  ]
+}
