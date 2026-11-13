@@ -24,5 +24,6 @@ evidence, limitations, and the next action. Workers use their own scratch and
 return logs; only the controller publishes to its run. Follow the workflow's
 bounded repair policy when an independent reviewer requests changes.
 
-Self-checking is not independent approval. This skill does not grant delegation,
+Self-checking is not independent approval. Use the repository's standing
+delegation authority for scoped sub-agent work. This skill does not grant
 commit/push/PR authority, policy adoption, or permission to start another task.

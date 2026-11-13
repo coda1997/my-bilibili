@@ -1,5 +1,10 @@
 # Desktop client P0
 
+> Owner platform amendment, 2026-11-12: [ADR 0005](../../docs/adr/0005-platform-priority.md).
+> macOS is required; Windows is P2 / nice-to-have and does not block M1, M2
+> or P0. Windows remains `not-tested` until exercised. Historical reviews
+> describe their frozen candidates; this amendment changes only platform priority.
+
 Spec ID: `0004-client-p0`
 Status: product-priority draft, updated with owner direction on 2026-11-10.
 Login and danmaku are P0, not follow-up features. The detailed behavior and
@@ -15,8 +20,8 @@ and research inputs, not frozen contracts or runtime evidence.
 ## User scenario and goal
 
 A desktop user signs in, finds a video, selects a part, watches with danmaku,
-and later resumes from local history. Deliver this complete loop on macOS and
-Windows with maintained application/UI code in Go.
+and later resumes from local history. Deliver this complete loop on macOS
+with maintained application/UI code in Go. Windows is optional P2.
 
 P0 is complete only when login, discovery, details, playback, read-only danmaku,
 and local resume work together. An intermediate fixture demo is not P0 delivery.
@@ -44,12 +49,13 @@ Login does not implicitly include the personal-content features above.
 
 ### Milestone gates and parallel delivery
 
-M0 is accepted; M1 is not started. The existing
+M0 is accepted; M1 macOS evaluation is in progress and not accepted. The
 [M1 contract](../0002-playback-spike/spec.md) and
-[stage-zero gates](../../docs/stage-zero.md) remain unchanged.
+[stage-zero gates](../../docs/stage-zero.md) apply with the owner platform
+amendment above. See the [current handoff](../../reports/0018-platform-priority.md).
 
 1. Select and independently review M1 separately. Obtain safe fixtures and
-   actual macOS/Windows runtimes. Resolve native UI/playback feasibility before
+   an actual macOS runtime; Windows is optional P2. Resolve native UI/playback feasibility before
    starting product implementation. Do not infer native behavior from builds.
 2. Before freezing this contract, resolve sign-in/session and danmaku access
    feasibility, and validate a native overlay/timebase seam with the selected
@@ -67,7 +73,7 @@ M0 is accepted; M1 is not started. The existing
 5. After M2 exit evidence and owner authorization to expand, `P0-005` through
    `P0-009` can run in parallel using the frozen ports and controlled fakes.
    Real cross-feature behavior is verified at `P0-010`, not inferred from fakes.
-6. Final integration, independent review, and both target-OS runtime checks
+6. Final integration, independent review, and required macOS runtime checks
    are required before proposing P0 acceptance. No task/run outcome grants it.
 
 The graph expresses prerequisites, not automatic scheduling or delegation
@@ -148,7 +154,7 @@ into business modules. Feature tests accompany their owned implementation.
 ### P0-AC-01
 
 Before implementation dispatch, M1 has an independently reviewed disposition
-and actual target-OS evidence; login/danmaku feasibility and concrete shared
+and actual macOS evidence; login/danmaku feasibility and concrete shared
 contracts are reviewed. Before expansion beyond the fixture slice, M2 has its
 required evidence and disposition. Missing prerequisites remain blockers.
 
@@ -160,7 +166,7 @@ overwrite the selected video; loading, missing content and failure are visible.
 
 ### P0-AC-03
 
-Given approved media fixtures on each target OS, the player supports play/pause,
+Given approved media fixtures on macOS, the player supports play/pause,
 seek, volume, fullscreen, speed and part switching. Switching/closing cancels
 obsolete work and releases resources without stale playback or callbacks.
 
@@ -189,7 +195,7 @@ Permission/expiry/unsupported-source failures are distinct and never bypassed.
 
 Given controlled timed danmaku, entries render with correct Chinese text and
 remain synchronized through pause, resume, seek, speed/fullscreen and part
-changes on both target OSes. Visibility, opacity, size and speed are adjustable.
+changes on macOS. Visibility, opacity, size and speed are adjustable.
 Loading/error/corrupt-data cases do not break playback; stale responses and
 duplicate retry results do not leak into the current part or exceed set bounds.
 
@@ -211,7 +217,9 @@ outcomes. No credentials or private media enter tests, logs or reports.
 
 The exact final candidate has passing repository checks and independent
 risk-based review, plus native preview-package and end-to-end evidence on
-macOS and Windows. Each capability/OS is marked pass/fail/not-tested. A missing
+macOS. Windows is optional P2 and does not block P0 or the M2 preview slice.
+Each capability/OS is marked pass/fail/not-tested; Windows stays not-tested
+until exercised. A missing
 required native check blocks acceptance; compilation or earlier CI is not a
 substitute. Preview packages are not signed public releases.
 
@@ -225,15 +233,15 @@ records only sanitized observations, not live login payloads or signed URLs.
 | AC | Required verification | Fixture / environment | Evidence |
 | --- | --- | --- | --- |
 | P0-AC-01 | Inspect M1, feasibility and frozen-contract decisions; inspect M2 exit before expansion | Review packets and exact candidate identities | Reviewer dispositions and owner decisions |
-| P0-AC-02 | Catalog detail/presenter tests including late completion | Controlled metadata; both native UIs | Tests and observed part selection |
-| P0-AC-03 | Player state/lifetime tests and native control smoke | Authorized media, macOS and Windows | Controls, cancellation and cleanup matrix |
-| P0-AC-04 | Account lifecycle, fake-clock/credential-store tests; real sign-in/restart/sign-out smoke | Synthetic unit flows; authorized native session per OS | Redacted state transitions, no login payloads |
+| P0-AC-02 | Catalog detail/presenter tests including late completion | Controlled metadata; the native macOS UI | Tests and observed part selection |
+| P0-AC-03 | Player state/lifetime tests and native control smoke | Authorized media, macOS | Controls, cancellation and cleanup matrix |
+| P0-AC-04 | Account lifecycle, fake-clock/credential-store tests; real sign-in/restart/sign-out smoke | Synthetic unit flows; authorized native macOS session | Redacted state transitions, no login payloads |
 | P0-AC-05 | Catalog/service-adapter parsing, pagination, input validation and stale-query tests; service smoke | Sanitized metadata plus authorized service access | Tests and observed discovery flow |
 | P0-AC-06 | Media-resolution adapter tests, expired-session/permission cases, native stream/quality smoke | Sanitized responses and authorized target media | Per-source/quality/OS capability results |
 | P0-AC-07 | Deterministic danmaku scheduling/limits tests; native overlay, Chinese text and fullscreen smoke | Synthetic timed entries and authorized target flow | Timebase assertions and sanitized visual results |
 | P0-AC-08 | Progress/restart/clamping/delete/corruption/write-failure tests | Temporary local files and fake player events | Persistence/recovery assertions |
 | P0-AC-09 | Cross-feature tests plus native scenario walkthrough | Controlled error cases; authorized native flows | Full-loop and account-switch/close outcomes |
-| P0-AC-10 | `go run ./cmd/dev check`; `--race` where supported; independent review and package smoke | Exact candidate, both target OS runtimes | Candidate-bound logs, review and package locators |
+| P0-AC-10 | `go run ./cmd/dev check`; `--race` where supported; independent review and package smoke | Exact candidate, macOS runtime | Candidate-bound logs, review and package locators |
 
 ## Risks, rollback, and open decisions
 

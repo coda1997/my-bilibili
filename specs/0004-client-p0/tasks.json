@@ -24,7 +24,7 @@
       "depends_on": ["P0-001"],
       "write_paths": ["internal/playback", "internal/adapters/player", "internal/ui/playback"],
       "acceptance": ["P0-AC-03"],
-      "checks": ["Test playback controls, events, cancellation, stale opens and cleanup through controlled adapters", "Exercise controls and the overlay/timebase seam on actual macOS and Windows runtimes", "go run ./cmd/dev check; --race where supported"]
+      "checks": ["Test playback controls, events, cancellation, stale opens and cleanup through controlled adapters", "Exercise controls and the overlay/timebase seam on an actual macOS runtime; Windows is optional P2", "go run ./cmd/dev check; --race where supported"]
     },
     {
       "id": "P0-004",
@@ -32,7 +32,7 @@
       "depends_on": ["P0-002", "P0-003"],
       "write_paths": ["cmd/my-bilibili", "cmd/package-preview", "internal/app", "internal/ui/shell", "integration/m2", "packaging/preview", "reports/0004-client-p0-m2.md"],
       "acceptance": ["P0-AC-01", "P0-AC-02", "P0-AC-03", "P0-AC-10"],
-      "checks": ["Run fixture detail-to-playback integration tests and native preview smoke on both target OSes", "Identify the exact candidate and obtain separately authorized independent reviews; record M2 repair/escalation and milestone evidence without self-approval", "go run ./cmd/dev check; --race where supported", "Do not expand until M2 exit evidence and owner authorization exist; this slice does not establish final P0-AC-10"]
+      "checks": ["Run fixture detail-to-playback integration tests and native preview smoke on macOS; Windows is optional P2", "Identify the exact candidate and obtain separately authorized independent reviews; record M2 repair/escalation and milestone evidence without self-approval", "go run ./cmd/dev check; --race where supported", "Do not expand until M2 exit evidence and owner authorization exist; this slice does not establish final P0-AC-10"]
     },
     {
       "id": "P0-005",
@@ -40,7 +40,7 @@
       "depends_on": ["P0-004"],
       "write_paths": ["internal/account", "internal/adapters/bilibili/account", "internal/adapters/credentials", "internal/ui/account"],
       "acceptance": ["P0-AC-04"],
-      "checks": ["Test successful/expired/canceled/failed login, restart restoration, storage failures and late completion after sign-out using controlled fakes", "Exercise authorized sign-in, protected storage, expiry and sign-out on both native OSes without retaining login payloads", "go run ./cmd/dev check; --race where supported"]
+      "checks": ["Test successful/expired/canceled/failed login, restart restoration, storage failures and late completion after sign-out using controlled fakes", "Exercise authorized sign-in, protected storage, expiry and sign-out on macOS without retaining login payloads; Windows is optional P2", "go run ./cmd/dev check; --race where supported"]
     },
     {
       "id": "P0-006",
@@ -56,7 +56,7 @@
       "depends_on": ["P0-004"],
       "write_paths": ["internal/playback", "internal/adapters/player", "internal/adapters/bilibili/playback", "internal/ui/playback"],
       "acceptance": ["P0-AC-03", "P0-AC-06"],
-      "checks": ["Test media response conversion, required metadata, track handling, quality changes, permission/expiry errors and resource cleanup", "Use controlled account/catalog seams while other features develop; exercise authorized target media on both OSes", "go run ./cmd/dev check; --race where supported"]
+      "checks": ["Test media response conversion, required metadata, track handling, quality changes, permission/expiry errors and resource cleanup", "Use controlled account/catalog seams while other features develop; exercise authorized target media on macOS; Windows is optional P2", "go run ./cmd/dev check; --race where supported"]
     },
     {
       "id": "P0-008",
@@ -64,7 +64,7 @@
       "depends_on": ["P0-004"],
       "write_paths": ["internal/danmaku", "internal/adapters/bilibili/danmaku", "internal/ui/danmaku"],
       "acceptance": ["P0-AC-07"],
-      "checks": ["Test pause/seek/speed/part changes, retry deduplication, stale results, malformed data and resource caps using a fake playback timebase", "Exercise Chinese text, fullscreen, settings and bounded overlays on both native OSes; shared renderer changes require a reviewed graph revision", "go run ./cmd/dev check; --race where supported"]
+      "checks": ["Test pause/seek/speed/part changes, retry deduplication, stale results, malformed data and resource caps using a fake playback timebase", "Exercise Chinese text, fullscreen, settings and bounded overlays on macOS; Windows is optional P2; shared renderer changes require a reviewed graph revision", "go run ./cmd/dev check; --race where supported"]
     },
     {
       "id": "P0-009",
@@ -80,7 +80,7 @@
       "depends_on": ["P0-005", "P0-006", "P0-007", "P0-008", "P0-009"],
       "write_paths": ["cmd/my-bilibili", "cmd/package-preview", "internal/app", "internal/ui/shell", "integration/p0", "packaging/preview", "reports/0004-client-p0.md"],
       "acceptance": ["P0-AC-04", "P0-AC-05", "P0-AC-06", "P0-AC-07", "P0-AC-08", "P0-AC-09", "P0-AC-10"],
-      "checks": ["Test the complete loop, shared timebase/overlay composition, session propagation, sign-out/expiry, rapid switching, restart and close behavior", "Run native end-to-end and preview-package smoke on macOS and Windows; missing required capabilities remain not-tested and block acceptance", "go run ./cmd/dev check; --race where supported", "Preserve the exact candidate identity and obtain separately authorized independent correctness/security/native reviews; report actual results and remaining blockers"]
+      "checks": ["Test the complete loop, shared timebase/overlay composition, session propagation, sign-out/expiry, rapid switching, restart and close behavior", "Run native end-to-end and preview-package smoke on macOS; Windows is optional P2 and nonblocking; missing required macOS capabilities remain not-tested and block acceptance", "go run ./cmd/dev check; --race where supported", "Preserve the exact candidate identity and obtain separately authorized independent correctness/security/native reviews; report actual results and remaining blockers"]
     }
   ]
 }

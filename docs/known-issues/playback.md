@@ -1,8 +1,15 @@
 # Known Playback Issues
 
-All issues below are **open** as of 2026-11-11. The owner selected temporary
-mygo use, not a repair or final acceptance; see [ADR 0004](../adr/0004-provisional-mygo-playback.md).
-The new fixture preview does not waive the original M1 requirements.
+The four PLAY-KNOWN issues below remain **open for the legacy mygo adapter**.
+On 2026-11-13 the owner selected libmpv as the default under
+[ADR 0008](../adr/0008-default-libmpv.md). The old player is explicitly available
+as `cmd/mygo-native`; its defects are preserved, not repaired by the switch.
+The original temporary selection is recorded in
+[ADR 0004](../adr/0004-provisional-mygo-playback.md).
+The new fixture preview does not waive M1 requirements. The owner separately
+changed platform priority on 2026-11-12 in
+[ADR 0005](../adr/0005-platform-priority.md): replacement exits below require
+macOS evidence; Windows is deferred P2 and nonblocking. This closes no issue.
 
 ## Affected Candidate And Evidence
 
@@ -25,7 +32,8 @@ The new fixture preview does not waive the original M1 requirements.
 - Impact: opening slow media can block rendering, automation and user input;
   cancellation and the 10s controller deadline cannot execute while the UI
   thread is inside the native call. No responsive-cancel guarantee for this pin.
-- Reproduce: build the e2e native app and run the default full smoke. After
+- Reproduce: build the e2e `cmd/mygo-native` app and run `cmd/smoke` with
+  its default full suite. After
   local/HTTP playback, open the controlled 3s delayed fixture. The retained
   strict run fails `delayed loading before switch: automation response absent,
   oversized or timed out`. The app needs forced cleanup on this failure.
@@ -38,7 +46,7 @@ The new fixture preview does not waive the original M1 requirements.
   move public native calls to a worker or relax the full smoke deadlines.
 - Replacement exit: delayed-load input remains responsive, switching prevents
   late restoration, cancel is externally observed within the original bound,
-  and active app/engine/socket/server cleanup passes on both target OSes.
+  and active app/engine/socket/server cleanup passes on macOS.
 
 ## PLAY-KNOWN-002: Native Error Cache Depends On Surface Advance
 
@@ -60,7 +68,7 @@ The new fixture preview does not waive the original M1 requirements.
   Media relabeling. This preserves current behavior, not a fix for issue001.
 - Replacement exit: timely sanitized native Media errors with disposal on
   controlled protected/failure routes, independently of picture availability,
-  alongside responsive loading and normal rendered playback on both OSes.
+  alongside responsive loading and normal rendered playback on macOS.
 
 ## PLAY-KNOWN-003: Required Request Headers Unsupported
 
@@ -76,7 +84,7 @@ The new fixture preview does not waive the original M1 requirements.
   remains Unsupported. No credential logging, forwarding proxy or header loss.
 - Replacement exit: required synthetic headers actually reach the owned server
   and native playback/seek/cancel/cleanup pass; separately authorized target
-  access is then verified on both OSes without exposing secrets.
+  access is then verified on macOS without exposing secrets.
 
 ## PLAY-KNOWN-004: Separate Audio Track Unsupported
 
@@ -90,14 +98,54 @@ The new fixture preview does not waive the original M1 requirements.
   historical M1 cells; current adapter and pinned upstream public API.
 - Workaround limits: combined generated fixture only; retry preserves the
   audio URL. No silent audio drop, remux/proxy or new engine in this increment.
-- Replacement exit: both streams consumed, native synchronized picture/audio,
-  seek, rate, cancellation and cleanup verified on both OSes with authorized
-  target media; physical audio/A-V sync require evidence beyond config readback.
+- Replacement exit: both streams consumed with native picture and audible audio,
+  seek, rate controls, cancellation and cleanup verified on macOS with authorized
+  target media. Audibility requires evidence beyond config readback. Calibrated
+  physical sync/rate measurements are outside M1 scope under
+  [ADR 0006](../adr/0006-m1-measurement-scope.md); no synchronized-output claim
+  follows from native state alone.
 
 ## Other Unverified Gates
 
-Windows, real IME, physical audio, actual playback-rate/A-V-sync measurements,
-authorized Bilibili access, packaging/signing and changed-candidate CI remain
-not-tested. The explicit preview suite may pass while full/M1 remains failed.
-Replacing the playback component is future owner-selected work, not authorized
-by documenting these issues or by a preview result.
+Windows remains not-tested as optional P2, not an M1/M2/P0 blocker.
+Real IME, packaging/signing and changed-candidate CI remain not-tested. Actual
+native Bilibili compatibility now has a passing, independently reviewed bounded
+result for the selected anonymous source/rendition. The first target refresh
+stopped before native playback under its historical origin policy. A later diagnostic observed
+a changed video CDN host. The owner removed all target host/port restrictions on
+2026-11-13 under [ADR 0007](../adr/0007-target-host-policy.md); this is no longer
+a current gate. See the [current target handoff](../../reports/0021-target-access-method.md#post-repair-target-continuation-2026-11-13). Combined/separate fixture audibility has scoped,
+independently reviewed owner attestations in [report 0016](../../reports/0016-output-verification.md).
+Calibrated physical playback-rate/A-V-sync measurements were never performed;
+ADR 0006 removes them from M1 without a mandatory later check. The original mygo
+strict suite remains failed despite its passing preview suite. Current M1
+technical evaluation is complete; the owner selected libmpv as the default.
+The switch is recorded in [the current handoff](../../reports/0024-default-libmpv.md).
+Formal owner M1 milestone acceptance remains pending.
+
+
+## TGT-V2-001: Scoped target blocker closed; original failure preserved
+
+The first version-2 invocation on 2026-11-13 passed scoped metadata admission,
+but the shared readiness/picture deadline expired before any capability PASS.
+Quit was acknowledged by the RPC transport, then required forced kill/reap.
+The saved trace cannot distinguish Loading from Ready without visible picture;
+root cause is unknown. Further controls/cancellation were not reached in that
+invocation. A later locked-desktop observation does not prove its cause.
+No host restriction or runtime change is inferred.
+
+The independently reviewed post-repair invocation at 01:58 UTC on 2026-11-13
+passes picture, selected tracks, controls, 87.7575ms playing cancellation and
+graceful exit without force. The original reviewer closes TGT-V2-001 as the
+current scoped capability/cleanup acceptance blocker. This does not reclassify
+the original FAIL or establish a causal repair. Target loading cancellation
+remains not-tested in this single-open session, with fixture coverage separate.
+
+TGT-V2-002, missing failure state/resources/phase, is independently closed. The
+bounded driver-only repair under spec 0010 retains validated samples and separates
+primary from cleanup failures; passing offline evidence and exact review are linked in
+[report 0023](../../reports/0023-target-failure-evidence.md). That diagnostic repair
+alone did not close TGT-V2-001. The later scoped target result and final independent
+adapter recommendation are in the target handoff. The owner subsequently
+selected libmpv as the default; formal M1 milestone acceptance remains pending. Any future native attempt needs a distinct bounded
+assignment and independent readiness disposition.

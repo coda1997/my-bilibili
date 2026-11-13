@@ -242,8 +242,8 @@ func run(ctx context.Context, app, dir, fixtures, manifest string, r *report) (e
 	if err = c.call(ctx, "windows", nil, &windows); err != nil {
 		return err
 	}
-	if len(windows.Windows) != 1 || windows.Windows[0].Title != "Replacement Playback Probe" {
-		return errors.New("owned replacement window not found")
+	if len(windows.Windows) != 1 || (windows.Windows[0].Title != "Replacement Playback Probe" && windows.Windows[0].Title != "M1 Playback Lab / libmpv") {
+		return errors.New("owned libmpv window not found")
 	}
 	c.window = windows.Windows[0].ID
 	if err = c.surface(ctx, dir, r, srv); err != nil {

@@ -1,5 +1,10 @@
 # Bounded libmpv replacement-player probe
 
+> Owner platform amendment, 2026-11-12: [ADR 0005](../../docs/adr/0005-platform-priority.md).
+> macOS is required; Windows is P2 / nice-to-have and does not block M1, M2
+> or P0. Windows remains `not-tested` until exercised. Historical reviews
+> describe their frozen candidates; this amendment changes only platform priority.
+
 Spec ID: `0006-player-replacement-probe`
 Status: owner-authorized CoreAudio cleanup repair, 2026-11-11.
 The original contract and runtime-build correction were independently approved;
@@ -69,8 +74,8 @@ capability is a hypothesis; it does not count as a native result.
   `b0841e8c4d156b8403dc1876c4cbd9011eb583f3`, client API 2.6. Source rationale
   and evidence limits are in [research.md](research.md). This is a fixed probe
   reference, not a claim that it is the latest or a selected production engine.
-- Serial, macOS-first, synthetic local/loopback fixtures only. Windows remains
-  required for final M1 and not-tested until an actual runtime is arranged.
+- Serial, macOS, synthetic local/loopback fixtures only. Windows is optional
+  P2, not required for final M1, and remains not-tested until actually exercised.
 - Preserve the current mygo pin, provisional preview, default/full smoke,
   historical contracts/reports and closed runs. The new executable and driver
   are explicitly named replacement probes; selecting the old app never loads
@@ -269,11 +274,14 @@ No header text is logged. The default legacy server behavior remains compatible.
 For video-only plus audio-only generated inputs, observe both server paths,
 selected external audio/video tracks and native picture/progression/seek/rate/
 cancel/cleanup. Audio fetch or a selected-track flag alone is insufficient to
-claim audible synchronized playback: physical audio and measured A/V sync have
-separate pass/fail/not-tested cells. A missing/failing audio source fails the
-presentation, rather than silently continuing video. Full separate-track
-capability cannot pass until audio output and sync have been observed using an
-authorized method; current fixtures alone provide no calibrated sync oracle.
+claim audible playback: physical audio needs an authorized observation, such as
+an identified human attestation. A missing/failing audio source fails the
+presentation, rather than silently continuing video. Under the owner decision in
+[ADR 0006](../../docs/adr/0006-m1-measurement-scope.md), calibrated physical A/V
+sync and display/speaker output-rate measurements are outside M1 scope. They
+were never performed and remain not-tested, with no mandatory later check.
+Native tracks, controls and audibility do not establish measured synchronization
+or physical speed; those claims must not be inferred.
 
 ### RPL-AC-06
 
@@ -327,7 +335,7 @@ Proposed future commands, not commands run during planning:
 | RPL-AC-02 | Explicit replacement driver `-stage surface`; capture owned window; delayed switch/cancel/quit probes | Exposed macOS, generated fixtures, approved runtime | Per-probe external timings, native frame captures, resource counters, exit/server/socket cleanup; exact gate-one review |
 | RPL-AC-03 | Adapter/controller/UI regression tests and replacement driver `-stage capabilities` | macOS first | Native positions/timestamps and captures; slider/retry evidence; separate configuration-only cells |
 | RPL-AC-04 | Header list/copy/isolation tests and protected combined/separate native routes | Loopback fixtures | Server match counts by stream and generation, no-header denial, actual native play/seek/disposal |
-| RPL-AC-05 | Track selection and missing-audio tests; separate-stream native control probe; later audio/sync observation | macOS; Windows and calibrated sync method unavailable | Both route counts, selected track evidence, positions/picture, audio/sync cells honestly not-tested where unavailable |
+| RPL-AC-05 | Track selection and missing-audio tests; separate-stream native controls; authorized audibility observation | macOS; Windows optional P2 | Both route counts, selected tracks, positions/picture and audibility; calibrated physical sync/rate never measured and outside M1 scope under ADR 0006 |
 | RPL-AC-06 | Fake native interleavings/cleanup regressions; delayed/negative native probes | Headless and exposed macOS | Error categories, ownership/worker quiescence, 200ms cancel timing; full failing evidence preserved |
 | RPL-AC-07 | `go run ./cmd/dev check --race`; exact source freeze and independent architecture/code/evidence reviews | Current checkout; each later OS separately | Candidate-bound logs, independent dispositions and durable report |
 
@@ -356,8 +364,10 @@ change ordinary checks, workflow policy or CI to depend on a native library.
    frame rate; a future GPU renderer would require a separately reviewed scope.
 4. Binary licensing depends on actual build inputs. Distribution is out of
    scope; runtime provenance still must identify its build/dependencies.
-5. Windows runtime, real target media and calibrated audio/sync evidence are
-   unavailable. Record them as not-tested, retaining original M1 requirements.
+5. Authorized real target-media validation remains required for M1. Calibrated
+   physical sync/rate measurements were never performed and are outside scope
+   under ADR 0006, with no mandatory later check. Windows is optional P2 under
+   ADR 0005. Record all unavailable evidence as not-tested, never inferred PASS.
 
 Rollback is to keep using the unchanged provisional app and remove only the
 new probe files/module-metadata promotion if later authorized. Preserve evidence

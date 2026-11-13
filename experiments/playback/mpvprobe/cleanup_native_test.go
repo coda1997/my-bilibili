@@ -30,7 +30,7 @@ func TestNativeCoreAudioCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, scenario := range []string{"paused-close", "playing-close", "pause-resume", "idle-expiry", "reopen"} {
+	for _, scenario := range []string{"paused-close", "playing-close", "playing-cancel", "pause-resume", "idle-expiry", "reopen"} {
 		t.Run(scenario, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
 			defer cancel()
@@ -52,11 +52,13 @@ func nativeCleanupScenario(t *testing.T, library, scenario string) {
 		t.Fatal(err)
 	}
 	cycles := 1
-	if scenario == "reopen" {
+	if scenario == "reopen" || scenario == "playing-close" {
 		cycles = 3
 	}
 	for cycle := 0; cycle < cycles; cycle++ {
-		e, err := (Opener{Library: library}).Open(context.Background(), contract.Input{FilePath: fixture})
+		ctx, cancel := context.WithCancel(context.Background())
+		t.Cleanup(cancel)
+		e, err := (Opener{Library: library}).Open(ctx, contract.Input{FilePath: fixture})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -73,7 +75,7 @@ func nativeCleanupScenario(t *testing.T, library, scenario string) {
 		}
 		switch scenario {
 		case "paused-close", "reopen":
-		case "playing-close":
+		case "playing-close", "playing-cancel":
 			play()
 		case "pause-resume":
 			for n := 0; n < 4; n++ {
@@ -92,10 +94,17 @@ func nativeCleanupScenario(t *testing.T, library, scenario string) {
 			t.Fatal("unknown native cleanup scenario")
 		}
 		started := time.Now()
+		if scenario == "playing-cancel" {
+			cancel()
+			<-e.(*engine).done // Include the complete cancellation/join in timing.
+		}
 		if err := e.Close(); err != nil {
 			t.Fatal(err)
 		}
 		elapsed := time.Since(started)
+		if e.(*engine).failure != contract.NoError {
+			t.Error("shutdown used its failure path:", e.(*engine).failure)
+		}
 		t.Logf("cycle=%d close=%s owned=%+v", cycle, elapsed, Owned())
 		if elapsed > 200*time.Millisecond {
 			t.Errorf("Close exceeded the 200ms cancellation budget: %s", elapsed)

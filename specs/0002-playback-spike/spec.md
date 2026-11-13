@@ -1,14 +1,19 @@
 # Native UI and playback spike
 
+> Owner platform amendment, 2026-11-12: [ADR 0005](../../docs/adr/0005-platform-priority.md).
+> macOS is required; Windows is P2 / nice-to-have and does not block M1, M2
+> or P0. Windows remains `not-tested` until exercised. Historical reviews
+> describe their frozen candidates; this amendment changes only platform priority.
+
 Spec ID: `0002-playback-spike`
 Status: selected by the owner on 2026-11-10 for a macOS-first experiment;
 this refined contract still requires independent architecture review before
-freeze and implementation. Windows execution is deferred, not waived.
+freeze and implementation. Windows execution is now optional P2.
 
 ## Goal
 
 Decide whether native mygo UI and its player can support the first desktop
-playback slice on macOS and Windows, without building the full application.
+playback slice on macOS, with Windows deferred P2, without building the full application.
 
 ## Non-goals
 
@@ -18,10 +23,10 @@ media library, entitlement bypass, public release, or general player framework.
 ## Preconditions
 
 Select and pin the evaluated mygo revision. Obtain authorized, sanitized media
-fixtures. The owner explicitly authorized doing the macOS phase first on
-2026-11-10 and will arrange Windows access on 2026-11-11. Windows capability
-cells remain not-tested and final M1 acceptance still requires both OSes.
-This sequencing decision does not remove a platform or lower final acceptance.
+fixtures. The owner authorized doing the macOS phase first on 2026-11-10.
+On 2026-11-12 the owner made Windows optional P2, superseding the earlier
+Windows-access plan and dual-platform acceptance requirement. Windows capability
+cells remain not-tested; required macOS and target-access evidence still gates M1.
 
 The owner separately authorized independent review and delegated responsibility
 for this bounded experiment. No commit, push, publication, policy change, full
@@ -208,7 +213,7 @@ provenance, and supported test cases. Do not store authenticated URLs or cookies
 
 ### PLAY-AC-02
 
-A minimal native Go UI starts on both target OSes. Verify Chinese text and
+A minimal native Go UI starts on macOS, the required target OS. Verify Chinese text and
 input, loading/error states, and a test-observable playback command. For the
 selected macOS phase, preserve native-window evidence plus headless control
 tests; explicitly distinguish injected text from real IME coverage.
@@ -217,7 +222,8 @@ tests; explicitly distinguish injected text from real IME coverage.
 
 Test target stream access, required request metadata, separate tracks when
 applicable, seek, switching, cancellation, late results, and cleanup. Record
-pass/fail/not-tested for each capability on each OS, with evidence.
+pass/fail/not-tested for each capability on macOS, with evidence; retain
+Windows as optional P2 / not-tested until separately exercised.
 The macOS phase covers generated local/HTTP media, protected-route failure,
 unsupported header/separate-track handling, controls, cancellation, stale
 generations and teardown. It does not establish real Bilibili compatibility.
@@ -228,8 +234,9 @@ An independently reviewed decision accepts the player adapter, selects a
 different implementation behind the same boundary, or rejects the proposed
 stack with a specific reason. Do not infer platform support from compilation.
 The intermediate macOS report may recommend the next probe or identify a
-blocking gap, but cannot accept the final adapter or complete M1 while Windows
-and required target-access evidence are missing.
+blocking gap, but cannot accept the final adapter or complete M1 while
+required macOS capability and target-access evidence are missing. Missing
+Windows evidence does not block acceptance.
 
 ## Verification matrix
 

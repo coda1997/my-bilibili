@@ -1,23 +1,241 @@
 # Explicit M1 commands
 
+## Default libmpv playback
+
+On 2026-11-13 the owner selected libmpv as the default playback backend, retaining
+mygo for UI. `cmd/native` now composes the reviewed libmpv adapter; the previous
+system-media launcher is explicitly `cmd/mygo-native`. See
+[ADR 0008](../../../docs/adr/0008-default-libmpv.md) and
+[the current handoff](../../../reports/0024-default-libmpv.md).
+
+Run from the repository root with the pinned Go toolchain. Supply the verified
+mpv v0.42.0 / API 2.6 runtime with the reviewed CoreAudio cleanup patch; its
+provenance and installation prerequisites are in
+[the runtime guide](../mpvprobe/runtime/README.md). The runtime is ignored and
+absent from fresh clones. There is no automatic download, discovery or fallback.
+For this checkout's reviewed runtime, the local-fixture command is:
+
+```sh
+export GOTOOLCHAIN=local GOWORK=off
+go run ./experiments/playback/cmd/native \
+  -library "$PWD/.agent/runtime/mpv-0.42.0/coreaudio-cleanup-r1/prefix/lib/libmpv.2.dylib"
+```
+
+Use the absolute verified library path for your checkout. `-library` is required;
+missing/relative/nonregular paths fail before a window is created. The loader
+reports Unsupported for an incompatible library, with no switch to mygo media.
+No HTTP server is needed for the local fixture. Select **Local fixture**, then
+**Play**; inputs initially load paused. An optional `-http-base` must be an owned
+loopback HTTP origin, without credentials, path or query; one trailing slash is
+accepted. It enables the existing combined/header/separate-track fixture controls.
+This command does not accept target descriptors or request Bilibili metadata.
+
+For automated default-app verification, use the libmpv capability driver:
+
+```sh
+mkdir -p .agent/m1
+go build -tags e2e -o .agent/m1/native ./experiments/playback/cmd/native
+go run ./experiments/playback/cmd/replacement-smoke \
+  -stage capabilities -app .agent/m1/native \
+  -runtime "$PWD/.agent/runtime/mpv-0.42.0/coreaudio-cleanup-r1/runtime-manifest.json" \
+  -out "$PWD/.agent/m1/default-capabilities-r1"
+```
+
+Choose a fresh `-out` directory. The driver validates runtime artifact hashes,
+starts its owned fixture server, supplies `-library`/`-http-base`, checks the
+default libmpv window and retains the existing controls, header/separate-track,
+200ms cancellation and graceful-cleanup assertions. Keep the desktop exposed
+and do not operate controls during the run. `cmd/smoke` is the legacy mygo
+oracle; use it only with `cmd/mygo-native`. The normal build has no automation
+plugin. The separate `replacement-native` and `target-native` commands remain
+available for their explicitly assigned diagnostics.
+
+## Target playback host-policy amendment
+
+[ADR 0007](../../../docs/adr/0007-target-host-policy.md) removes the target media
+origin policy. All valid HTTPS hosts and ports are allowed, including IP literals
+and localhost. Source/rendition, grant, public headers, TLS verification, expiry
+and teardown requirements remain. Descriptor version 2 omits `origins`; old
+version-1 input and old helper/app/driver binaries are not interchangeable.
+
+The updated helper source is in ignored
+`.agent/worker-scratch/target-refresh-unrestricted/`; its default makes no request.
+It shares `targetprobe.ValidateMediaURL` with both target binaries. Rebuild all
+three from the exact reviewed candidate, for example into a fresh ignored directory
+whose parent already exists:
+
+```sh
+go build -tags e2e -o .agent/m1/target-native-v2 ./experiments/playback/cmd/target-native
+go build -o .agent/m1/target-smoke-v2 ./experiments/playback/cmd/target-smoke
+go build -o .agent/m1/target-refresh-v2 ./.agent/worker-scratch/target-refresh-unrestricted
+```
+
+The ignored helper is local evidence, absent from fresh clones; recover its exact
+reviewed source from the current run rather than reusing the historical helper.
+No command above launches native media or requests metadata. Actual TGT-003
+execution still needs a separately recorded bounded session assignment and exact
+binary/runtime pins. A new CDN host requires no additional policy review.
+See [the current handoff](../../../reports/0021-target-access-method.md#post-repair-target-continuation-2026-11-13). Earlier
+stopped observations and their origin-specific policies remain historical evidence.
+
+The first version-2 invocation failed before its ready-picture capability and
+needed forced cleanup. Its allowance is consumed. The driver-only evidence repair
+adds `session_failure` and `cleanup_failure` to normalized result JSON, with fixed
+phases and optional last validated snapshot/resource samples. Each sample has its
+own phase and relative time; it does not describe later cleanup unless sampled
+then. Missing samples remain unknown. Unknown fields, raw trees/native output,
+locators and target frames are never retained. Existing actions and deadlines
+are unchanged. Rebuild target-smoke for this repair and record its new hash;
+the helper and target-native remain unchanged. A future target attempt needs an
+unlocked desktop and a new separately reviewed bounded assignment. The later
+post-repair invocation at 01:58 UTC on 2026-11-13 passes eight target capability/
+cleanup checks, including playing cancellation at 87.7575ms and graceful exit
+without force. Target loading cancellation remains not-tested in that single-open
+session. Independent outcome and final adapter reviews support owner M1 acceptance;
+the original failure remains preserved with unknown cause.
+
+## Paired-event output preparation (OUT-001 / OUT-002)
+
+These commands prepare synthetic physical-output verification under
+[0007](../../../specs/0007-output-verification/spec.md). They do not measure
+physical sound, synchronization or rate by themselves, and do not accept M1.
+Use the current handoff for independent review status before a native session.
+The original fixture directory and original smoke oracles remain unchanged.
+Under [ADR 0006](../../../docs/adr/0006-m1-measurement-scope.md), calibrated
+physical sync/rate measurements are outside M1 scope with no mandatory later
+check. They were never performed; the tools below remain optional.
+
+With separately available FFmpeg/ffprobe, generate into a **new** ignored
+directory whose parent already exists:
+
+```sh
+go run ./experiments/playback/cmd/output-fixtures \
+  -out .agent/m1/output-fixtures-r1 \
+  -ffmpeg /opt/homebrew/bin/ffmpeg -ffprobe /opt/homebrew/bin/ffprobe
+```
+
+Generation records exact tools, media, recipe, decoded timestamps and acoustic
+ID evidence in `timing.json`, plus the compatible server `manifest.json`.
+Validation compares actual decoded combined and separate tracks and preserves
+failed staging artifacts. Existing destinations are rejected. The generator's
+one-frame pair bound validates fixtures; it is not a player-sync tolerance.
+The digital amplitude is moderate, but does not guarantee speaker loudness.
+Choose a comfortable system volume manually; no command changes it.
+
+Build the unchanged replacement app and retain its exact candidate/build and
+SHA-256 evidence. The observation launcher requires **absolute paths** and
+expected hashes from that reviewed evidence; it checks the runtime manifest
+and every listed library/dependency, both fixture manifests, and media bytes:
+
+```sh
+go build -o .agent/m1/output-native ./experiments/playback/cmd/replacement-native
+go run ./experiments/playback/cmd/output-observe \
+  -app /absolute/path/to/output-native -app-sha256 EXPECTED_APP_SHA256 \
+  -runtime /absolute/path/to/runtime-manifest.json -runtime-sha256 EXPECTED_RUNTIME_SHA256 \
+  -fixtures /absolute/path/to/output-fixtures-r1 -timing-sha256 EXPECTED_TIMING_SHA256 \
+  -out .agent/m1/combined-steady-1x-r1 \
+  -source combined -segment steady -rate 1 -duration 180s
+```
+
+This opens one supplied app with one owned loopback server. Use the app's
+**HTTP fixture** control for combined media or **Separate tracks** for separate
+media, then select the rate manually. **A selected source loads paused: press
+Play to start it.** The Play row is below the source, seek, volume and speed
+controls; scroll down if it is outside the window. Confirm that the native
+position advances after Play. The synthetic picture has brief event flashes
+with a static background between events, so continuous motion is not expected.
+Launcher labels describe the intended session; they neither operate controls
+nor prove which source/rate actually played. Close the app window normally
+before the deadline. The default limit
+is 180 seconds, maximum 600. Interruption/deadline retains partial evidence;
+app cleanup is bounded to three seconds, including forced reaping if needed,
+and server shutdown to three seconds. Forced cleanup is a failed session.
+Process exit alone proves neither zero native ownership nor 200ms cancellation.
+Do not run the old pixel-color or full-capabilities oracle on these fixtures.
+
+Every fresh evidence directory retains `session.json` and a bounded `app.log`.
+All physical and unobserved configuration cells start `not-tested`. Never edit
+the original session record to turn a configuration label into an observation.
+After the session, keep a separate `observations.json` (or signed human note)
+bound to its exact session-file SHA-256, with this structure:
+
+```json
+{
+  "session_sha256": "EXACT_SESSION_FILE_SHA256",
+  "observer": "identified human or named instrument",
+  "observed_at": "actual ISO-8601 time",
+  "source": "combined or separate, actually selected",
+  "segment": "steady or post-seek; actual start/end and seek target",
+  "selected_rate": 1,
+  "rate_readback": null,
+  "video_streams": null,
+  "audio_streams": null,
+  "statement": "actual observation, or explicitly not observed",
+  "evidence": "authorized local record and its hash, if any"
+}
+```
+
+Fill each field only from the actual identified session; retain `null` for
+unknown readbacks/counts. Record separate statements if observers differ.
+A human's explicit statement that the Mac speakers produced the expected tones
+is scoped audibility evidence only. The agent cannot attest that it heard them.
+Do not prefill a successful observation or equate HTTP request counts with
+selected native streams. A positive human statement needs its own review.
+
+For each of combined and separate media, retain steady **1x, 0.5x and 2x**
+segments plus a **1x post-seek** segment (for example seek to 2s). Each measured
+segment needs at least four correctly identified visual/audio event pairs.
+Restart the eight-second fixture as needed, keeping each continuous segment
+distinct. Record startup/transient intervals and all failures separately;
+never drop points or join across seeks/rate changes to improve a result.
+
+The following physical capture procedure is optional reference material, not an
+M1 requirement or a mandatory later check under
+[ADR 0006](../../../docs/adr/0006-m1-measurement-scope.md). These measurements
+were never performed. Any future voluntary physical capture needs separate
+explicit device/session authorization. The
+launcher never activates a microphone, camera, screen or system-audio recorder.
+An external device must observe display and speakers together, with actual
+capture timestamps, acoustic placement, an independent A/V calibration reference
+and bounded uncertainty. Qualify acoustic IDs in the same capture mode using
+reference-only and known-ID controls, or document independent identification.
+An unsupported/missing-fundamental recording cannot supply accepted audio IDs
+merely because its frequency ratio resembles one.
+
+Keep raw synthetic recordings outside Git. Retain the capture/device/mode and
+calibration provenance, session and fixture hashes, all event IDs/onsets with
+uncertainty, segment boundaries, rejected observations and actual visual/audio
+rate windows. Positive offset means audio arrives after picture. Report raw
+capture offset `O`, independent capture skew `C`, physical offset `S=O-C`,
+decoded fixture offset `D`, visual-time mapping `g` (at least four events),
+fixture contribution `F=g(audioPTS)-g(videoPTS)` and residual `R=S-F` separately.
+The mapping comes from physical visual events, not selected/native rate;
+report audio rate independently. Use the interval-valued analysis helpers in
+`outputprobe`; see its README and the spec for input/provenance requirements.
+Missing calibration or a valid mapping leaves derived results inconclusive.
+No numerical physical player-sync/rate PASS tolerance has been approved.
+
+## Explicit legacy mygo preview and smoke stages
+
 Run from the repository root with the pinned Go version and normal testing
 prerequisites. These commands do not access a real account or target service.
 Ordinary `go test` uses fakes, headless UI and loopback fixtures, not a GUI,
 native decoder, FFmpeg or external network. Initial module download requires
 network access; fixtures are checked into this experiment with their hashes.
 
-The opt-in libmpv replacement surface gate uses separate commands below. The
-commands in this first section continue to select the provisional mygo player.
+The commands in this section explicitly select the legacy mygo player, whose
+limitations and historical failures remain unchanged. Default libmpv commands
+are at the top of this guide.
 
 ```sh
 export GOTOOLCHAIN=local GOWORK=off
 go run ./cmd/dev check --race
 mkdir -p .agent/m1
-go build -tags e2e -o .agent/m1/native ./experiments/playback/cmd/native
-# Default is still the strict full suite (currently fails delayed loading).
-go run ./experiments/playback/cmd/smoke -app .agent/m1/native
+go build -tags e2e -o .agent/m1/mygo-native ./experiments/playback/cmd/mygo-native
+# This legacy driver defaults to the strict full suite (fails delayed loading).
+go run ./experiments/playback/cmd/smoke -app .agent/m1/mygo-native
 # Explicit bounded fixture preview; NOT a full/M1 acceptance result.
-go run ./experiments/playback/cmd/smoke -suite preview -app .agent/m1/native
+go run ./experiments/playback/cmd/smoke -suite preview -app .agent/m1/mygo-native
 ```
 
 The smoke prints a fresh evidence directory; `-out` may name a new directory
@@ -56,8 +274,9 @@ An exposed-window run asserts the synthetic rendered colors, positive duration,
 playhead advance, paused stability, seek tolerance, generation isolation and
 owned close/teardown. Volume/rate readback is configuration only. Real IME,
 physical audio, actual playback speed, A/V sync and real Bilibili compatibility
-need separate evidence. Windows must be run on Windows; cross-builds do not
-count. Missing header/separate-track support is a failed capability even when
+need separate evidence. Windows is optional P2 under
+[ADR 0005](../../../docs/adr/0005-platform-priority.md); any future Windows
+support claim needs actual Windows execution, not cross-builds. Missing header/separate-track support is a failed capability even when
 its safe unsupported rejection passes.
 
 The adapter permits mygo's initial play to obtain a first native picture, then
@@ -69,7 +288,7 @@ current provisional report. It does not repair slow-load responsiveness.
 For a manual local-file window, without the test-only automation plugin:
 
 ```sh
-go run ./experiments/playback/cmd/native
+go run ./experiments/playback/cmd/mygo-native
 ```
 
 Normal builds do not import the automation plugin. The smoke itself serves only
@@ -79,10 +298,29 @@ explicit offline fixture generator only; see `../testdata/README.md`.
 
 ## Replacement probe (RPL-001 and RPL-002)
 
-This separate macOS arm64 experiment uses pinned mpv v0.42.0 client API 2.6,
+Current result, 2026-11-12: the explicit external-audio selection repair passes
+the first complete macOS fixture capability invocation with 41 passing
+assertions and two explicitly not-tested categories. Separate-track playback,
+external playing cancellation (71.583667ms), missing-audio failure and graceful
+window/socket/server cleanup now pass, with no forced cleanup. The repair
+enables `autoload-files` only for explicit `AudioURL`; `audio-file-auto`,
+`sub-auto` and `cover-art-auto` remain disabled, preventing companion discovery.
+Independent selection-repair review now passes with 41 fresh fixture assertions.
+A subsequent scoped target-media invocation and final independent adapter assessment
+pass; the owner then selected libmpv as the default. Formal owner M1 milestone
+acceptance remains pending.
+Combined/separate fixture audibility has independently reviewed owner attestations.
+Calibrated physical sync/rate measurements were never performed and are outside
+M1 scope with no mandatory later check under ADR 0006. Windows remains optional
+P2. See the [current handoff](../../../reports/0021-target-access-method.md#post-repair-target-continuation-2026-11-13).
+The build/cleanup failures and pending decisions described in older execution
+sections below remain historical records of their own candidates.
+
+This macOS arm64 adapter, now also used by the default command, uses pinned
+mpv v0.42.0 client API 2.6,
 the existing purego v0.11.1 pin and mygo's public bitmap API. It polls native
 events on a control owner and software rendering on a render owner, using two
-640x360 buffers at up to 30Hz. Ordinary tests and the provisional app never
+640x360 buffers at up to 30Hz. Ordinary tests and the explicit legacy app never
 load this library. Other native targets return Unsupported.
 
 Supply an authorized, provenance-verified local runtime before running. There
@@ -134,10 +372,15 @@ rejection/needs-human report; do not retry into a passing result or relax
 teardown semantics. Passing gate-one evidence needs separately authorized
 independent review before RPL-002. Controls, required headers, separate audio,
 physical audio, measured sync, Windows and real service access are not accepted
-by this surface stage. The default preview and historical M1 gaps remain.
+by this surface stage. Later capability evidence and default selection have
+their own records; the original mygo failures remain.
 
 
-### Explicit capability stage (RPL-002)
+### Historical capability-stage execution (RPL-002)
+
+The dated outcomes below describe their original candidates. For current default
+selection and checks, start at the top of this guide and report 0024. The retained
+`replacement-native` command still supports this diagnostic capability stage.
 
 Implementation status on 2026-11-11: code and deterministic checks are present,
 but native validation is **incomplete / needs-human**. Historical run
@@ -267,9 +510,11 @@ suites remain unchanged.
 Server evidence contains only fixed per-file match/request/allow/deny counts;
 no request metadata, native error body or media locator is recorded. Keep the
 first capability outcome and failures. Exit zero means the implemented probe
-assertions passed, not final M1 or full separate-track acceptance: physical
-speaker output, measured A/V sync and actual playback speed have separate
-not-tested cells. Selected/fetched audio alone never passes RPL-AC-05. Windows,
-real-service access, IME, packaging/signing and candidate CI still need their
+assertions passed, not final M1 or full separate-track acceptance. Audibility
+needs its own evidence; scoped owner attestations are recorded in report 0016.
+Measured physical A/V sync and display/speaker playback speed remain not-tested,
+outside M1 scope under ADR 0006, with no mandatory later check.
+Selected/fetched audio alone never passes RPL-AC-05. Windows
+is deferred P2; real-service access, IME, packaging/signing and candidate CI need their
 own evidence. Final exact-candidate independent review and RPL-003 remain
 separate work.

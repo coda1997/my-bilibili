@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "spec_id": "0011-default-libmpv",
+  "tasks": [
+    {
+      "id": "DMP-001",
+      "title": "Select libmpv in the default playback launcher and verify the switch",
+      "depends_on": [],
+      "write_paths": [
+        "experiments/playback/cmd/native",
+        "experiments/playback/cmd/mygo-native",
+        "experiments/playback/cmd/replacement-smoke/main.go",
+        "README.md",
+        "docs/architecture.md",
+        "docs/stage-zero.md",
+        "docs/testing.md",
+        "docs/known-issues/playback.md",
+        "docs/adr/0002-go-ui-and-playback-boundary.md",
+        "docs/adr/0004-provisional-mygo-playback.md",
+        "docs/adr/0008-default-libmpv.md",
+        "experiments/playback/cmd/README.md",
+        "reports/0024-default-libmpv.md"
+      ],
+      "acceptance": ["DMP-AC-01", "DMP-AC-02", "DMP-AC-03"],
+      "checks": [
+        "Offline default launcher setup regression tests; legacy source identity and build",
+        "go run ./cmd/dev check --race",
+        "One macOS native default-app capability invocation using unchanged fixtures, reviewed runtime and original deadlines; preserve first outcome",
+        "Exact candidate independent code/native-evidence review and scoped documentation/link audit"
+      ]
+    }
+  ]
+}

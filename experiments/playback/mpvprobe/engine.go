@@ -2,9 +2,11 @@ package mpvprobe
 
 import (
 	"context"
+	"errors"
 	"image"
 	"maps"
 	"math"
+	"net/url"
 	"runtime"
 	"strconv"
 	"sync"
@@ -27,15 +29,24 @@ func Owned() Resources { return Resources{cores.Load(), renderers.Load(), worker
 
 type Opener struct {
 	Library string
+	Policy  contract.InputPolicy
 	loader  func(string) (*nativeAPI, error)
 }
 
 func (o Opener) Open(ctx context.Context, in contract.Input) (contract.Engine, error) {
-	if ctx == nil || in.Validate() != nil {
+	in.Headers = maps.Clone(in.Headers)
+	if ctx == nil {
 		return nil, contract.Invalid
 	}
+	validate := in.Validate
+	if o.Policy != nil {
+		validate = func() error { return o.Policy.Validate(in) }
+	}
+	if err := validate(); err != nil {
+		return nil, safePolicyError(err)
+	}
 	if ctx.Err() != nil {
-		return nil, contract.Canceled
+		return nil, contextError(ctx)
 	}
 	in.Headers = maps.Clone(in.Headers)
 	loader := o.loader
@@ -139,12 +150,20 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 	}()
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
+	if ctx.Err() != nil {
+		e.fail(contextError(ctx))
+		return
+	}
 	a, err := loader(path)
 	if err != nil {
 		e.fail(contract.Unsupported)
 		return
 	}
 	defer a.unload()
+	if ctx.Err() != nil {
+		e.fail(contextError(ctx))
+		return
+	}
 	core := a.create()
 	if core == 0 {
 		e.fail(contract.Media)
@@ -153,12 +172,12 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 	cores.Add(1)
 	defer func() { a.destroy(core); cores.Add(-1) }()
 	// No user config, scripts, companion media discovery, player IPC or native
-	// output window. All values are explicit and this build is fixture-only.
+	// output window. Remote sessions require an explicit policy at both boundaries.
 	for _, option := range [][2]string{{"config", "no"}, {"load-scripts", "no"}, {"ytdl", "no"},
 		{"audio-file-auto", "no"}, {"sub-auto", "no"}, {"cover-art-auto", "no"},
 		{"autoload-files", "no"}, {"input-default-bindings", "no"}, {"input-vo-keyboard", "no"},
 		{"load-unsafe-playlists", "no"}, {"access-references", "no"}, {"demuxer-lavf-format", "mov"},
-		{"terminal", "no"}, {"msg-level", "all=no"}, {"vo", "libmpv"}, {"hwdec", "no"},
+		{"terminal", "no"}, {"msg-level", "all=no"}, {"vo", "libmpv"}, {"hwdec", "no"}, {"force-window", "no"},
 		{"pause", "yes"}, {"idle", "yes"}, {"keep-open", "yes"}, {"network-timeout", "3"},
 		{"osd-level", "0"}} {
 		result := a.option(core, option[0], option[1])
@@ -170,6 +189,14 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 			e.fail(contract.Media)
 			return
 		}
+	}
+	if ctx.Err() != nil {
+		e.fail(contextError(ctx))
+		return
+	}
+	if usesHTTPS(in) && a.option(core, "tls-verify", "yes") < 0 {
+		e.fail(contract.Unsupported)
+		return
 	}
 	if !a.transport(core, in) || a.initialize(core) < 0 {
 		e.fail(contract.Media)
@@ -188,15 +215,28 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 	renderStop, renderDone := make(chan struct{}), make(chan struct{})
 	created := make(chan bool, 1)
 	go e.renderLoop(a, core, renderStop, renderDone, created)
+	renderCreated := <-created
 	defer func() {
-		// Async quit must be sent before freeing the surface; the control owner
-		// never waits in a synchronous command while the render owner needs it.
-		_ = a.send(core, 0, []string{"quit"})
+		e.mu.Lock()
+		e.closed = true
+		e.mu.Unlock()
+		// Keep the render owner servicing frames while vid=no destroys the VO.
+		// Sending quit alone does not acknowledge that native video has stopped.
+		if renderCreated && !a.stopVideo(core) {
+			e.fail(contract.Media)
+		}
+		if a.send(core, 0, []string{"quit"}) < 0 {
+			e.fail(contract.Media)
+		}
 		close(renderStop)
 		<-renderDone
 	}()
-	if !<-created {
+	if !renderCreated {
 		e.fail(contract.Media)
+		return
+	}
+	if ctx.Err() != nil {
+		e.fail(contextError(ctx))
 		return
 	}
 	source := in.URL
@@ -214,6 +254,9 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 	for {
 		select {
 		case <-ctx.Done():
+			if usesHTTPS(in) {
+				e.fail(contextError(ctx))
+			}
 			return
 		case <-e.stop:
 			return
@@ -345,5 +388,57 @@ func (e *engine) update(id uint64, p property, paused *bool) {
 		case 5:
 			e.s.Rate = value
 		}
+	}
+}
+
+// Match the policy parser's case-insensitive scheme handling. Parsing here is
+// only for classification; both private locator strings remain byte-for-byte intact.
+func usesHTTPS(in contract.Input) bool {
+	for _, raw := range []string{in.URL, in.AudioURL} {
+		if u, err := url.Parse(raw); err == nil && u.Scheme == "https" {
+			return true
+		}
+	}
+	return false
+}
+
+func safePolicyError(err error) contract.ErrorCode {
+	var code contract.ErrorCode
+	if errors.As(err, &code) {
+		switch code {
+		case contract.Invalid, contract.Unsupported, contract.Canceled, contract.Timeout, contract.Media, contract.IsClosed:
+			return code
+		}
+	}
+	return contract.Invalid
+}
+func contextError(ctx context.Context) contract.ErrorCode {
+	if ctx.Err() == context.DeadlineExceeded {
+		return contract.Timeout
+	}
+	return contract.Canceled
+}
+
+// DrawTarget shares the existing buffer/lifetime protocol but labels the actual
+// target correctly. It is UI-thread-only and never records a frame.
+func DrawTarget(c *gui.Context, plain contract.Engine) {
+	e, ok := plain.(*engine)
+	if !ok {
+		return
+	}
+	if e.framesMu.TryLock() {
+		if e.pending {
+			e.front = 1 - e.front
+			if e.bitmap == nil {
+				e.bitmap = gui.NewBitmap(e.frames[e.front])
+			} else {
+				e.bitmap.Update(e.frames[e.front])
+			}
+			e.pending = false
+		}
+		e.framesMu.Unlock()
+	}
+	if e.bitmap != nil {
+		gui.Image(c.Key("target-video"), e.bitmap).Width(width).Height(height).Fit(gui.Contain).Label("Authorized target video")
 	}
 }

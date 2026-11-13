@@ -1,5 +1,19 @@
 # ADR 0004: Provisional mygo playback, replaceable at the adapter
 
+> Superseded default selection, 2026-11-13: [ADR 0008](0008-default-libmpv.md)
+> selects libmpv as the default. The former mygo launcher is now explicitly
+> `cmd/mygo-native`; this dated temporary-use decision and its failures remain
+> historical evidence. Formal M1 acceptance remains pending.
+
+> Subsequent measurement-scope decision: [ADR 0006](0006-m1-measurement-scope.md)
+> removes calibrated physical sync/rate measurements from M1 with no mandatory
+> later check. They were never performed; the dated evidence below is unchanged.
+
+> Platform amendment, 2026-11-12: [ADR 0005](0005-platform-priority.md)
+> supersedes the Windows acceptance requirement below. macOS is required;
+> Windows is P2 / nice-to-have, nonblocking for M1, M2 and P0. The dated
+> decision and evidence below remain historical; other requirements still apply.
+
 - Date: 2026-11-11
 - Status: owner-selected temporary use; not final M1/player acceptance
 - Scope: `specs/0005-provisional-playback/`, existing synthetic macOS preview

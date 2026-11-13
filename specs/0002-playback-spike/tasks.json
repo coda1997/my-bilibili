@@ -12,11 +12,11 @@
     },
     {
       "id": "PLAY-002",
-      "title": "Exercise the native Go UI on both target platforms",
+      "title": "Exercise the native Go UI on required macOS; defer Windows as P2",
       "depends_on": ["PLAY-001"],
       "write_paths": ["go.mod", "go.sum", "experiments/playback/ui", "experiments/playback/cmd"],
       "acceptance": ["PLAY-AC-02"],
-      "checks": ["Test Chinese text insertion, observable commands and loading/error presentation without a native media dependency", "Run the actual minimal UI on macOS and preserve only app-window evidence; Windows remains not-tested until separately available", "go run ./cmd/dev check --race"]
+      "checks": ["Test Chinese text insertion, observable commands and loading/error presentation without a native media dependency", "Run the actual minimal UI on macOS and preserve only app-window evidence; Windows is optional P2 and remains not-tested until separately available", "go run ./cmd/dev check --race"]
     },
     {
       "id": "PLAY-003",
@@ -32,7 +32,7 @@
       "depends_on": ["PLAY-003"],
       "write_paths": ["reports/0002-playback-macos.md", "reports/0002-playback-spike.md", "docs/adr/0004-playback-decision.md", "README.md", "docs/stage-zero.md"],
       "acceptance": ["PLAY-AC-04"],
-      "checks": ["Obtain authorized independent architecture review before contract freeze and implementation", "Identify the exact candidate and obtain independent correctness/resource/native-evidence review; the author cannot approve it", "Publish a sanitized partial macOS capability matrix and next action without marking Windows, real service access or final M1 complete", "go run ./cmd/dev check --race; do not change CI/check/workflow policy"]
+      "checks": ["Obtain authorized independent architecture review before contract freeze and implementation", "Identify the exact candidate and obtain independent correctness/resource/native-evidence review; the author cannot approve it", "Publish a sanitized partial macOS capability matrix and next action without claiming untested Windows support or real service access; Windows is optional P2, while missing required macOS/target evidence still blocks final M1", "go run ./cmd/dev check --race; do not change CI/check/workflow policy"]
     }
   ]
 }

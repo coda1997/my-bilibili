@@ -188,6 +188,75 @@ func TestMissingAudioFailsAndDisposesBeforeTerminalState(t *testing.T) {
 	}
 }
 
+func TestExplicitExternalAudioSelectionKeepsDiscoveryDisabled(t *testing.T) {
+	for _, separate := range []bool{false, true} {
+		name := "combined"
+		if separate {
+			name = "separate"
+		}
+		t.Run(name, func(t *testing.T) {
+			f := fake()
+			options := map[string]string{}
+			f.a.option = func(_ uintptr, name, value string) int32 {
+				options[name] = value
+				return 0
+			}
+			selected := trackNode(true, true, separate)
+			unselected := trackNode(true, true, true)
+			unselected.nodes[1][1].Value = 0
+			f.a.getProperty = func(_ uintptr, _ string, _ int32, p unsafe.Pointer) int32 {
+				tracks := selected
+				// Pinned mpv select_default_track skips every external track
+				// when autoload-files is off, including explicit audio-files.
+				if separate && options["autoload-files"] == "no" {
+					tracks = unselected
+				}
+				*(*nodeValue)(p) = tracks.root
+				return 0
+			}
+			in := contract.Input{URL: "http://127.0.0.1/video"}
+			if separate {
+				in.AudioURL = "http://127.0.0.1/audio"
+			}
+			plain, err := (Opener{loader: func(string) (*nativeAPI, error) { return f.a, nil }}).Open(context.Background(), in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			e := plain.(*engine)
+			defer e.Close()
+			select {
+			case <-f.sent:
+			case <-time.After(time.Second):
+				t.Fatal("load not sent")
+			}
+			duration := float64(8)
+			p := property{Format: 5, Data: unsafe.Pointer(&duration)}
+			f.events <- &event{ID: 5, Reply: 1}
+			f.events <- &event{ID: 8}
+			f.events <- &event{ID: 22, Reply: 2, Data: unsafe.Pointer(&p)}
+			await(t, func() bool { return e.Snapshot().State != contract.Loading })
+			if s := e.Snapshot(); s.State != contract.Ready || Inspect(e) != (Tracks{true, true, separate}) {
+				t.Errorf("explicit input did not become ready: %+v tracks=%+v", s, Inspect(e))
+			}
+			_ = e.Close()
+			for _, key := range []string{"audio-file-auto", "sub-auto", "cover-art-auto"} {
+				if options[key] != "no" {
+					t.Errorf("companion discovery enabled: %s", key)
+				}
+			}
+			if !separate && options["autoload-files"] != "no" {
+				t.Error("session without external audio changed its selection policy")
+			}
+			if Owned() != (Resources{}) {
+				t.Fatal("ownership retained")
+			}
+			runtime.KeepAlive(selected)
+			runtime.KeepAlive(unselected)
+			runtime.KeepAlive(p)
+		})
+	}
+}
+
 func TestEventLossAndBudgetOverflowDispose(t *testing.T) {
 	for _, id := range []int32{24, 1, 22} {
 		t.Run(string(rune('a'+id)), func(t *testing.T) {
@@ -250,25 +319,40 @@ func TestLaterExternalAudioLossFailsWithoutRetainingNativePayload(t *testing.T) 
 }
 
 func TestTransportConfigurationFailureDisposes(t *testing.T) {
-	f := fake()
-	f.a.optionNode = func(uintptr, string, int32, unsafe.Pointer) int32 { return -1 }
-	plain, err := (Opener{loader: func(string) (*nativeAPI, error) { return f.a, nil }}).Open(context.Background(), contract.Input{URL: "http://127.0.0.1/video", Headers: map[string]string{"X-Test": "one,two"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	e := plain.(*engine)
-	defer e.Close()
-	select {
-	case <-e.done:
-	case <-time.After(time.Second):
-		t.Fatal("option failure did not dispose")
-	}
-	if e.Snapshot().Error != contract.Media || Owned() != (Resources{}) {
-		t.Fatal(e.Snapshot(), Owned())
-	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if !reflect.DeepEqual(f.order, []string{"destroy", "unload"}) {
-		t.Fatal(f.order)
+	for _, option := range []string{"http-header-fields", "audio-files", "autoload-files"} {
+		t.Run(option, func(t *testing.T) {
+			f := fake()
+			f.a.optionNode = func(_ uintptr, name string, _ int32, _ unsafe.Pointer) int32 {
+				if name == option {
+					return -1
+				}
+				return 0
+			}
+			f.a.option = func(_ uintptr, name, value string) int32 {
+				if name == option && value == "yes" {
+					return -1
+				}
+				return 0
+			}
+			plain, err := (Opener{loader: func(string) (*nativeAPI, error) { return f.a, nil }}).Open(context.Background(), contract.Input{URL: "http://127.0.0.1/video", AudioURL: "http://127.0.0.1/audio", Headers: map[string]string{"X-Test": "one,two"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			e := plain.(*engine)
+			defer e.Close()
+			select {
+			case <-e.done:
+			case <-time.After(time.Second):
+				t.Fatal("option failure did not dispose")
+			}
+			if e.Snapshot().Error != contract.Media || Owned() != (Resources{}) {
+				t.Fatal(e.Snapshot(), Owned())
+			}
+			f.mu.Lock()
+			defer f.mu.Unlock()
+			if !reflect.DeepEqual(f.order, []string{"destroy", "unload"}) {
+				t.Fatal(f.order)
+			}
+		})
 	}
 }

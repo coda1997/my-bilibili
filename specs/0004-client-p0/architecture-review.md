@@ -1,5 +1,13 @@
 # Assignment: architecture-review / desktop client P0
 
+> Current scope amendment, 2026-11-12: [ADR 0005](../../docs/adr/0005-platform-priority.md)
+> supersedes Windows requirements in this unissued 2026-11-10 packet: macOS
+> runtime/preview evidence is required; Windows is optional P2 and nonblocking.
+> Standing native delegation authority is now recorded in `AGENTS.md`. Before
+> dispatch, replace the historical identity/environment below with an exact
+> current candidate and assignment. This packet remains unissued; the detailed
+> P0 architecture is not approved by the platform amendment.
+
 ## Identity and authority
 
 - Role: proposed independent architecture/security/native-UI reviewer.

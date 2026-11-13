@@ -1,5 +1,10 @@
 # Provisional mygo playback preview
 
+> Owner platform amendment, 2026-11-12: [ADR 0005](../../docs/adr/0005-platform-priority.md).
+> macOS is required; Windows is P2 / nice-to-have and does not block M1, M2
+> or P0. Windows remains `not-tested` until exercised. Historical reviews
+> describe their frozen candidates; this amendment changes only platform priority.
+
 Spec ID: `0005-provisional-playback`
 Status: selected by the owner on 2026-11-11; proposed contract awaiting
 independent architecture review before freeze and implementation.
@@ -13,8 +18,8 @@ pretending the blocked M1 media contract has passed.
 
 This is a bounded continuation of the playback experiment, not the full desktop
 shell, an M2/P0 start, or final approval of the mygo playback stack. Preserve the
-old M1 specification, failures, reports and closed runs unchanged. The owner's
-temporary-use decision does not waive Windows, target access, headers, separate
+historical M1 evidence, failures, reports and closed runs unchanged. The owner's
+temporary-use decision does not waive target access, headers, separate
 tracks, responsive loading or native failure evidence for final M1/P0 acceptance.
 
 ## Scope and non-goals
@@ -138,7 +143,8 @@ do not expose a false cancellation guarantee, and preserve the stricter M1
 failure. Restrict this increment to the controlled fixture preview. Later
 replacement must satisfy the unchanged plain contract and required target
 headers/separate streams, native errors, responsiveness, seek and cleanup on
-both OSes. Selection/implementation of that replacement remains future work.
+macOS. Windows is optional P2 under ADR 0005. The bounded replacement probe
+is tracked separately in [0006](../0006-player-replacement-probe/spec.md).
 
 Rolling back this increment restores only its owned UI/driver/docs changes,
 never preexisting user work or closed evidence. Single-module Go boundaries

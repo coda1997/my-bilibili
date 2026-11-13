@@ -35,11 +35,24 @@ func fake() *fakeNative {
 		},
 		freeNode:   func(unsafe.Pointer) {},
 		initialize: func(uintptr) int32 { return 0 }, observe: func(uintptr, uint64, string, int32) int32 { return 0 },
-		command: func(_ uintptr, id uint64, _ unsafe.Pointer) int32 {
+		command: func(_ uintptr, id uint64, p unsafe.Pointer) int32 {
+			args := commandArgs(p)
+			if len(args) == 3 && args[0] == "set" && args[1] == "vid" && args[2] == "no" {
+				f.events <- &event{ID: 5, Reply: id}
+				return 0
+			}
 			f.sent <- id
 			return 0
 		},
-		wait: func(uintptr, float64) unsafe.Pointer {
+		wait: func(_ uintptr, timeout float64) unsafe.Pointer {
+			if timeout > 0 {
+				select {
+				case ev := <-f.events:
+					return unsafe.Pointer(ev)
+				case <-time.After(time.Duration(timeout * float64(time.Second))):
+					return unsafe.Pointer(&f.empty)
+				}
+			}
 			select {
 			case ev := <-f.events:
 				return unsafe.Pointer(ev)

@@ -72,7 +72,16 @@ func (a *nativeAPI) transport(core uintptr, in contract.Input) bool {
 	if len(fields) > 0 && a.stringList(core, "http-header-fields", fields) < 0 {
 		return false
 	}
-	return in.AudioURL == "" || a.stringList(core, "audio-files", []string{in.AudioURL}) >= 0
+	if in.AudioURL == "" {
+		return true
+	}
+	// autoload-files=no also prevents selection of explicitly supplied tracks
+	// in the pinned mpv. Permit selection for this required audio input; the
+	// audio-file-auto, sub-auto and cover-art-auto options remain "no", so
+	// companion-file discovery stays disabled. Missing audio still fails the
+	// selected-track checks after loading instead of falling back to video only.
+	return a.stringList(core, "audio-files", []string{in.AudioURL}) >= 0 &&
+		a.option(core, "autoload-files", "yes") >= 0
 }
 
 // Tracks is sanitized selected-track evidence, not proof of audible/synced output.

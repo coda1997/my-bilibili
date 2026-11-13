@@ -42,6 +42,7 @@ func (e *engine) renderLoop(a *nativeAPI, core uintptr, stop <-chan struct{}, do
 	// callback slots and retained per-session callback state entirely.
 	ticker := time.NewTicker(time.Second / 30)
 	defer ticker.Stop()
+	discard := false
 	for {
 		select {
 		case <-stop:
@@ -49,6 +50,17 @@ func (e *engine) renderLoop(a *nativeAPI, core uintptr, stop <-chan struct{}, do
 		case <-ticker.C:
 		}
 		if a.renderUpdate(render)&1 == 0 {
+			continue
+		}
+		if discard {
+			// A failed target must not strand the VO during control-side teardown.
+			// The public skip parameter consumes the frame without using pixels.
+			skip, block := int32(1), int32(0)
+			params := []renderParam{{Kind: 13, Data: unsafe.Pointer(&skip)}, {Kind: 12, Data: unsafe.Pointer(&block)}, {}}
+			if a.render(render, unsafe.Pointer(&params[0])) < 0 {
+				e.fail(contract.Media)
+			}
+			runtime.KeepAlive(params)
 			continue
 		}
 		e.framesMu.Lock()
@@ -64,7 +76,8 @@ func (e *engine) renderLoop(a *nativeAPI, core uintptr, stop <-chan struct{}, do
 		if result < 0 {
 			e.framesMu.Unlock()
 			e.fail(contract.Media)
-			return
+			discard = true
+			continue
 		}
 		// rgb0's fourth byte is unspecified; mygo RGBA needs opaque alpha.
 		for i := 3; i < len(target.Pix); i += 4 {

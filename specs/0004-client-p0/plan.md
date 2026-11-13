@@ -5,6 +5,13 @@ Status: proposed plan; source inspection and document preparation only.
 Product scope includes login and read-only danmaku. Neither implementation nor
 delegation is started by this document. The existing M1/M2 gates still apply.
 
+Platform/status amendment, 2026-11-12: macOS is required; Windows is optional
+P2 and nonblocking for M1/M2/P0 under
+[ADR 0005](../../docs/adr/0005-platform-priority.md). M1 is now in progress;
+see the [current handoff](../../reports/0020-m1-measurement-scope.md). The detailed
+P0 contract remains a draft. The verification section below records the original
+2026-11-10 planning snapshot, not current M1 state or delegation authority.
+
 ## Reading order and outputs
 
 1. [Product scope and acceptance](spec.md).
@@ -23,14 +30,14 @@ run recording. No account, catalog, player, danmaku or desktop shell exists.
 | --- | --- | --- | --- |
 | 1 | Record P0 scope, features, dependencies, verification and candidate Go boundaries | Owner product discussion; detailed contract still proposed | Draft written |
 | 2 | Inspect primary GitHub sources; map login/search/details/media/danmaku; record revisions, licenses and maintenance limitations | Distinguish source evidence from working endpoints and permissions | Initial reference inspection done; no Bilibili requests |
-| 3 | Resolve environment and authorized native fixtures | Pinned Go available, actual macOS/Windows runtimes and safe fixture provenance; no implicit installations | Go 1.27.3 installed with Homebrew on owner request; Windows access and fixtures remain unresolved |
-| 4 | Separately select/review and execute the existing serial M1 spike | Exact evaluated UI/player revision and per-OS runtime capability evidence; independent adapter decision | Not started |
+| 3 | Resolve environment and authorized native fixtures | Pinned Go available, an actual macOS runtime and safe fixture provenance; no implicit installations | Go 1.27.3 installed with Homebrew on owner request; macOS synthetic fixtures available; authorized target fixtures remain unresolved; Windows deferred P2 |
+| 4 | Separately select/review and execute the existing serial M1 spike | Exact evaluated UI/player revision and macOS runtime capability evidence; independent adapter decision | In progress; fixture review passes, audibility attestations reviewed; target evidence and final acceptance remain; calibrated physical sync/rate outside M1 under ADR 0006 |
 | 5 | Separately scope/review P0 access and overlay feasibility | Permitted login/session/search/media/danmaku path, protected storage and timebase/fullscreen seam; no bypass or silent feature removal | Not started; needs bounded assignment |
 | 6 | Set concrete ports, state machines, supported input/media formats, timeout/cap values and pinned dependencies | Independent architecture/security/native review; then authorized contract freeze | Architecture proposal ready for discussion, not approval |
 | 7 | Execute `P0-001`, then details `P0-002` and fixture player `P0-003` in parallel when authorized | Non-overlapping ownership, controllable fakes, checks, exact source identities | Not started |
 | 8 | Integrate the small M2 slice in `P0-004` | Independent review, bounded repair/escalation evidence, native previews and milestone disposition per stage zero | Not started |
 | 9 | After expansion authorization, execute `P0-005` through `P0-009` in parallel | Feature-local behavior/tests; fake seams do not establish real cross-feature success | Not started |
-| 10 | Integrate in `P0-010`, review the exact candidate and verify complete native P0 | Both target OSes, native previews, complete AC evidence, owner acceptance; no public release implied | Not started |
+| 10 | Integrate in `P0-010`, review the exact candidate and verify complete native P0 | Required macOS runtime, native previews; Windows optional P2, complete AC evidence, owner acceptance; no public release implied | Not started |
 
 Steps 4 and 5 are distinct: this plan does not silently expand the existing M1
 contract or authorize experimental code under a documentation request. A

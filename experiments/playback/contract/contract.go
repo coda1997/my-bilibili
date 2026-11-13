@@ -3,6 +3,7 @@ package contract
 
 import (
 	"context"
+	"maps"
 	"math"
 	"net"
 	"net/url"
@@ -164,6 +165,9 @@ type Engine interface {
 	Close() error
 }
 
+// InputPolicy is an explicit opt-in validator. Nil retains fixture-only validation.
+type InputPolicy interface{ Validate(Input) error }
+
 type Opener interface {
 	Open(context.Context, Input) (Engine, error)
 }
@@ -173,6 +177,7 @@ const PollInterval = 50 * time.Millisecond
 // Controller is confined to its caller's UI thread. It never creates goroutines.
 type Controller struct {
 	opener   Opener
+	policy   InputPolicy
 	now      func() time.Time
 	engine   Engine
 	ctx      context.Context
@@ -183,10 +188,14 @@ type Controller struct {
 }
 
 func New(opener Opener, now func() time.Time) *Controller {
+	return NewWithPolicy(opener, now, nil)
+}
+
+func NewWithPolicy(opener Opener, now func() time.Time, policy InputPolicy) *Controller {
 	if now == nil {
 		now = time.Now
 	}
-	return &Controller{opener: opener, now: now, s: Snapshot{State: Idle, Rate: 1, Volume: 1}}
+	return &Controller{opener: opener, policy: policy, now: now, s: Snapshot{State: Idle, Rate: 1, Volume: 1}}
 }
 
 func safe(err error) ErrorCode {
@@ -218,8 +227,13 @@ func (c *Controller) stop(state State, code ErrorCode) {
 }
 
 func (c *Controller) Open(ctx context.Context, in Input) error {
-	if err := in.Validate(); err != nil {
-		return err
+	in.Headers = maps.Clone(in.Headers)
+	validate := in.Validate
+	if c.policy != nil {
+		validate = func() error { return c.policy.Validate(in) }
+	}
+	if err := validate(); err != nil {
+		return safe(err)
 	}
 	if ctx == nil {
 		return Invalid
@@ -228,6 +242,10 @@ func (c *Controller) Open(ctx context.Context, in Input) error {
 	c.s = Snapshot{Generation: c.s.Generation + 1, State: Loading, Rate: 1, Volume: 1}
 	c.ctx, c.cancel = context.WithCancel(ctx)
 	if c.ctx.Err() != nil {
+		if c.policy != nil && c.ctx.Err() == context.DeadlineExceeded {
+			c.stop(Failed, Timeout)
+			return Timeout
+		}
 		c.stop(Closed, Canceled)
 		return Canceled
 	}
@@ -235,14 +253,8 @@ func (c *Controller) Open(ctx context.Context, in Input) error {
 		c.stop(Failed, Unsupported)
 		return Unsupported
 	}
-	// Copy caller-owned metadata so a replacement cannot alter an old input.
-	if in.Headers != nil {
-		h := make(map[string]string, len(in.Headers))
-		for k, v := range in.Headers {
-			h[k] = v
-		}
-		in.Headers = h
-	}
+	// Give the opener its own copy, separate even from validator-owned metadata.
+	in.Headers = maps.Clone(in.Headers)
 	e, err := c.opener.Open(c.ctx, in)
 	if err != nil || e == nil {
 		if e != nil {
@@ -263,6 +275,10 @@ func (c *Controller) Tick() {
 		return
 	}
 	if c.ctx.Err() != nil {
+		if c.policy != nil && c.ctx.Err() == context.DeadlineExceeded {
+			c.stop(Failed, Timeout)
+			return
+		}
 		c.stop(Closed, Canceled)
 		return
 	}
