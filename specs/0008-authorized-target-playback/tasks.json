@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "spec_id": "0008-authorized-target-playback",
+  "tasks": [
+    {
+      "id": "TGT-001",
+      "title": "Establish the anonymous grant and pinned native transport feasibility",
+      "depends_on": [],
+      "write_paths": [
+        "reports/0019-authorized-target-playback.md",
+        "reports/0021-target-access-method.md"
+      ],
+      "acceptance": [
+        "TGT-AC-01"
+      ],
+      "checks": [
+        "Start only after independent architecture review, bounded assignment and new frozen run; use normal authorized anonymous browsing without cookies, bypass or alternate routes",
+        "For the ordinary-public amendment, independently review access-method.md and freeze a new bounded assignment; pass offline classifier/redaction tests before the fixed view-then-playback observation pair; preserve the two earlier UNKNOWN outcomes",
+        "Inspect the actual permitted response for the selected source/part/rendition using the reviewed method; distinguish preview/full/unknown and stop on restriction or ambiguous permission",
+        "Review exact native TLS certificate, redirect, public-header and container/codec behavior; perform bounded controlled runtime checks without changing the runtime or accessing target media natively",
+        "Record all-host HTTPS acceptance and native redirect/source-trust limits under ADR0007; do not require per-host approval; obtain independent gate review before TGT-002; failed or unknown inputs leave dependent tasks unstarted",
+        "go run ./cmd/dev check --race"
+      ]
+    },
+    {
+      "id": "TGT-002",
+      "title": "Implement the paired opt-in input policy and bounded target probe",
+      "depends_on": [
+        "TGT-001"
+      ],
+      "write_paths": [
+        "experiments/playback/contract/contract.go",
+        "experiments/playback/contract/policy_test.go",
+        "experiments/playback/mpvprobe/engine.go",
+        "experiments/playback/mpvprobe/transport.go",
+        "experiments/playback/mpvprobe/target_policy_test.go",
+        "experiments/playback/targetprobe",
+        "experiments/playback/cmd/target-native",
+        "experiments/playback/cmd/target-smoke"
+      ],
+      "acceptance": [
+        "TGT-AC-02",
+        "TGT-AC-03"
+      ],
+      "checks": [
+        "Require independent TGT-001 grant/transport feasibility approval and exact shared-contract freeze; no code on unresolved access/TLS/format assumptions",
+        "Test strict bounded transient descriptors, permission/HTTPS-syntax/expiry, public-only headers, redaction and input copying at both controller and opener; existing fixture defaults/tests stay unchanged",
+        "Test grant/expiry/deadline enforcement, stale completion, loading/playing cancellation, complete ownership disposal, explicit fresh-input retry and failed process cleanup",
+        "Use a dedicated minimal target UI rather than changing fixture ui.View; no source URL in argv/environment/RPC/logs and no media capture",
+        "go run ./cmd/dev check --race"
+      ]
+    },
+    {
+      "id": "TGT-003",
+      "title": "Review the candidate and collect one permitted target playback result",
+      "depends_on": [
+        "TGT-002"
+      ],
+      "write_paths": [
+        "reports/0019-authorized-target-playback.md",
+        "reports/0021-target-access-method.md"
+      ],
+      "acceptance": [
+        "TGT-AC-04",
+        "TGT-AC-05"
+      ],
+      "checks": [
+        "Obtain independent exact-candidate transport/code/resource approval before the native target session; run affected unchanged fixture/native regression checks",
+        "Validate a fresh privately supplied descriptor for the actual granted anonymous source; run one bounded native invocation and preserve its first complete outcome, including restrictions/expiry",
+        "Record preview/full grant and per-capability results, public metadata/separate tracks where supplied, controls, 200ms cancellation and graceful cleanup without recording target media or locators",
+        "Do not assert broad full target access from preview, physical sync/rate from native state, M1 acceptance or default-player selection; retain Windows optional P2",
+        "go run ./cmd/dev check --race; obtain independent evidence disposition and preserve exact source/runtime identities"
+      ]
+    }
+  ]
+}

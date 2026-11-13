@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "spec_id": "0005-provisional-playback",
+  "tasks": [
+    {
+      "id": "PREV-001",
+      "title": "Record temporary mygo use and known playback limitations",
+      "depends_on": [],
+      "write_paths": ["docs/adr/0004-provisional-mygo-playback.md", "docs/known-issues/playback.md"],
+      "acceptance": ["PREV-AC-01"],
+      "checks": ["Review owner decision and four stable known issue IDs against preserved M1 evidence; do not waive final M1", "go run ./cmd/dev check --race"]
+    },
+    {
+      "id": "PREV-002",
+      "title": "Add bounded transport controls and explicit retry to the existing native preview",
+      "depends_on": ["PREV-001"],
+      "write_paths": ["experiments/playback/ui", "experiments/playback/cmd/native/main.go"],
+      "acceptance": ["PREV-AC-02", "PREV-AC-03"],
+      "checks": ["Headless sampled-state, slider, rate, disabled-control and no-command-feedback tests", "Headless retry generation, copied-input, invalid and unsupported metadata/audio, failure recovery and disposal tests", "go run ./cmd/dev check --race"]
+    },
+    {
+      "id": "PREV-003",
+      "title": "Verify a separately labelled preview without weakening the full native smoke",
+      "depends_on": ["PREV-002"],
+      "write_paths": ["experiments/playback/cmd/smoke", "experiments/playback/cmd/README.md"],
+      "acceptance": ["PREV-AC-04"],
+      "checks": ["Test suite selection and report labelling; full remains default and unknown suites fail before app launch", "Run explicit macOS preview for native picture/controls/retry and graceful cleanup; run full smoke and preserve its known failure", "go run ./cmd/dev check --race"]
+    },
+    {
+      "id": "PREV-004",
+      "title": "Independently review and hand off the provisional preview",
+      "depends_on": ["PREV-003"],
+      "write_paths": ["reports/0005-provisional-playback.md", "README.md", "docs/stage-zero.md", "docs/architecture.md"],
+      "acceptance": ["PREV-AC-05"],
+      "checks": ["Record exact source/suite evidence, independent architecture/code dispositions and known remaining gates", "Confirm old M1 inputs/reports/closed runs and workflow/check/CI policy unchanged; no final adapter or M1 approval", "go run ./cmd/dev check --race"]
+    }
+  ]
+}

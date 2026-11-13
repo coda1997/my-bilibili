@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "spec_id": "0014-playback-tooling-guards",
+  "tasks": [
+    {
+      "id": "GUARD-001",
+      "title": "Repair resource observations and bounded subprocess capture",
+      "depends_on": [],
+      "write_paths": [
+        "experiments/playback/cmd/replacement-smoke/resources.go",
+        "experiments/playback/cmd/replacement-smoke/resources_test.go",
+        "experiments/playback/outputprobe/tools.go",
+        "experiments/playback/outputprobe/tools_test.go"
+      ],
+      "acceptance": ["GUARD-AC-01", "GUARD-AC-02"],
+      "checks": [
+        "Preserve baseline regression failures for both Copilot findings",
+        "go test -race -count=1 ./experiments/playback/cmd/replacement-smoke ./experiments/playback/outputprobe"
+      ]
+    },
+    {
+      "id": "GUARD-002",
+      "title": "Verify independently and update the existing PR handoff",
+      "depends_on": ["GUARD-001"],
+      "write_paths": ["README.md", "reports/0027-playback-tooling-guards.md"],
+      "acceptance": ["GUARD-AC-03"],
+      "checks": [
+        "go run ./cmd/dev check --race",
+        "Independent exact-candidate verification of both original findings",
+        "Exact head/tested-merge three-OS CI and final PR readback"
+      ]
+    }
+  ]
+}

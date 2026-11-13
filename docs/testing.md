@@ -65,8 +65,14 @@ cookies, authenticated media URLs, or external network access.
 | Unit/package tests | Deterministic behavior and regression cases | Run command, candidate identity and result |
 | CLI/integration tests | Real process/filesystem interactions where exercised | Runtime OS, fixtures and observed behavior |
 | Cross-compilation | Source compiles for a target | Does not establish native execution |
-| Native UI/media smoke | Target OS behavior, input, playback and cleanup | Authorized fixtures and an actual OS runtime; M1 is not implemented yet |
+| Native UI/media smoke | Target OS behavior, input, playback and cleanup | Authorized fixtures and actual OS evidence for the exact candidate; M1 was accepted by the owner on 2026-11-13; see [acceptance](../reports/0025-m1-acceptance.md) |
 | Packaging/release | Installable artifact and promotion behavior | Separate packaging/smoke/signing policy; not implemented yet |
+
+Under [ADR 0005](adr/0005-platform-priority.md), macOS is the required product
+runtime for M1, M2 and P0. Windows is optional P2: missing Windows native or
+package evidence does not block those milestones and stays `not-tested`, never
+PASS or a support claim. Existing Linux/macOS/Windows Go CI checks still apply;
+tooling compatibility does not establish native product support.
 
 Map ACs to tests or named manual checks in the spec. Record `pass`, `fail`, or
 `not-tested` per required OS/capability. Coverage percentages describe tests;
@@ -79,6 +85,59 @@ When the skill-creator tooling is available, also run its bundled
 `scripts/quick_validate.py <skill-directory>` on each changed skill. Record the
 tool path/version and any unavailable validation; this external authoring
 check is not a Python runtime requirement for the Go project.
+
+## Default playback verification
+
+The default playback launcher now selects libmpv under
+[ADR 0008](adr/0008-default-libmpv.md). Its offline setup tests validate explicit
+runtime paths, local-only startup and loopback-origin inputs without loading a
+library. Native default-app validation builds `cmd/native` with `-tags e2e` and
+uses `cmd/replacement-smoke -stage capabilities` with the verified runtime
+manifest. The old `cmd/smoke` full/preview suites apply only to `cmd/mygo-native`.
+See [the command guide](../experiments/playback/cmd/README.md#default-libmpv-playback)
+and [default-switch evidence](../reports/0024-default-libmpv.md). Default selection
+does not make the fixture launcher a target URL player.
+
+## Target host-policy regression
+
+Under [ADR 0007](adr/0007-target-host-policy.md), all valid HTTPS media hosts and
+ports are allowed in the opt-in target path. Offline regressions cover new hosts,
+localhost/IP literals, different video/audio hosts, port and URL syntax, version-2
+descriptor compatibility, private metadata and immutable source input. Default
+constructors remain fixture-only. The copied refresh helper uses the same URL
+validator and tests its synthetic output against the real target parser.
+See [report 0022](../reports/0022-target-host-removal.md) for its source location,
+exact evidence and rebuild requirements. These tests make no target requests
+and do not establish native Bilibili playback. Prior 41-assertion native results
+remain evidence for their recorded candidate; a changed candidate needs its own
+relevant native checks before a later target session.
+
+## Target failure evidence
+
+The first version-2 target invocation failed its readiness/picture gate and
+required forced cleanup; its original result is preserved. The driver now records
+separate primary and cleanup failures with fixed phases and optional complete,
+validated state/resource samples from existing RPC trees. Samples retain their
+original phase and relative time; unavailable/malformed state is omitted, never
+reported as Idle or zero ownership. No extra RPC/action, native output, locator,
+media capture or deadline change is introduced.
+
+Offline regressions exercise loading, hidden-ready and picture-pending timeouts,
+missing/partial/null/duplicate/hostile data, stale sample provenance and a primary
+failure followed by forced reap of an owned synthetic child. These tests make no
+service request and cannot close the native target failure. See
+[spec 0010](../specs/0010-target-failure-evidence/spec.md) and
+[the current handoff](../reports/0021-target-access-method.md#post-repair-target-continuation-2026-11-13). Further native
+validation requires an unlocked desktop, exact rebuilt driver pins and a newly
+recorded bounded assignment; the earlier invocation cannot be retried under its
+consumed allowance. The separately reviewed 2026-11-13 01:58 UTC attempt passes
+eight target capability/cleanup checks, including visible picture/selected tracks,
+progression, pause, seek, native volume/rate configuration, 87.7575ms playing
+cancellation and graceful exit without force. Target loading cancellation remains
+not-tested in that one-open session; current fixture coverage is separate. This
+result has independent evidence approval and supports the final scoped adapter
+recommendation; it does not imply full-duration viewing, target audibility,
+physical calibration, changed-candidate CI or owner M1 acceptance.
 
 ## Recorded checks
 

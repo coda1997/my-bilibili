@@ -40,8 +40,9 @@ inside every skill. Assign roles with `docs/templates/assignment.md`.
   problems; do not silently weaken acceptance criteria or checks.
 - Freeze shared contracts before splitting implementation. Record the base
   revision and exact candidate identity; a dirty flag plus HEAD is not a snapshot.
-- Do not spawn sub-agents unless the user or a task's explicit authorization
-  asks for delegation. Describing the future workflow is not authorization.
+- Use native sub-agents at your discretion for work within the user's task.
+  The owner grants standing delegation authority; no per-dispatch permission
+  is needed. Keep assignments scoped and preserve reviewer independence.
 - Do not claim independent review when the implementation author performed it.
 - Do not claim a playback, platform, packaging, or CI check that was not run.
 - Preserve existing user work. Do not commit, push, publish, or change remote

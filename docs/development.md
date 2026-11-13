@@ -19,7 +19,8 @@ scoped changes; a request to edit leaves the read-only route.
    unexpected changes rather than resetting it.
 3. Identify the selected spec, tasks, role, write paths, and explicit authority.
    If boundaries or a blocking decision are missing, return a planning question
-   or proposed contract; do not invent permission to implement or dispatch.
+   or proposed contract; do not invent permission to implement. Native sub-agent
+   dispatch within the requested task uses the owner's standing authorization.
 4. Inspect the controller's local run if available. A clone/worktree need not
    contain `.agent/`; recover conclusions from the handoff and request missing
    evidence when necessary. Do not copy private account data between worktrees.
@@ -69,9 +70,9 @@ finding/reproduction and the changed candidate. If the original reviewer cannot
 continue, follow the [proposed succession procedure](workflow.md#reviewer-succession-proposed-clarification),
 including explicit human designation; do not silently substitute a reviewer.
 Select review dimensions from actual risk (correctness, architecture, security,
-native platform/UI), not an
-automatic fixed number of agents. Without delegation authorization, prepare
-the packet and ask; do not fabricate an independent result.
+native platform/UI), not an automatic fixed number of agents. Prepare the packet
+and dispatch native sub-agents under the owner's standing authorization; no
+per-dispatch permission is needed. Do not fabricate an independent result.
 
 The controller may save a sanitized assignment under its run's `evidence/`
 and attach it with `run note` before dispatch. Published packets are immutable;

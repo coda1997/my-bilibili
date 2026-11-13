@@ -11,8 +11,8 @@ Use the canonical [workflow](../../../docs/workflow.md),
 handoff linked by [README](../../../README.md), not the author's desired verdict.
 
 Confirm reviewer identity and independence from implementation. If you authored
-the change, provide a packet for a separate authorized reviewer; do not call
-self-review independent or dispatch an agent without delegation authority.
+the change, provide a packet for a separate reviewer and use the repository's
+standing delegation authority to dispatch it. Do not call self-review independent.
 
 Choose the assigned mode:
 

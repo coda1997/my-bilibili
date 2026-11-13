@@ -1,5 +1,14 @@
 # ADR 0002: Prefer native Go UI; validate playback before commitment
 
+> Default adapter selection, 2026-11-13: [ADR 0008](0008-default-libmpv.md)
+> selects libmpv for playback and retains mygo for UI. The original proposal
+> and research below are historical; M1 was accepted by the owner on 2026-11-13.
+
+> Platform amendment, 2026-11-12: [ADR 0005](0005-platform-priority.md)
+> supersedes the Windows acceptance requirement below. macOS is required;
+> Windows is P2 / nice-to-have, nonblocking for M1, M2 and P0. The dated
+> decision and evidence below remain historical; other requirements still apply.
+
 Date: 2026-11-10
 Status: proposed; playback capability has not been validated locally.
 

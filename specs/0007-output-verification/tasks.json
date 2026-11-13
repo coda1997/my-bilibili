@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "spec_id": "0007-output-verification",
+  "tasks": [
+    {
+      "id": "OUT-001",
+      "title": "Generate and verify isolated paired-event fixtures",
+      "depends_on": [],
+      "write_paths": ["experiments/playback/outputprobe", "experiments/playback/cmd/output-fixtures"],
+      "acceptance": ["OUT-AC-01", "OUT-AC-03"],
+      "checks": ["Start only after independent architecture review, implementation authorization and a new frozen run", "Test acoustic IDs against partial/post-seek capture, missing/duplicate/unknown pulses, offsets beyond one period and pitch-preserved/scaled 0.5x/1x/2x records; actual decoded combined/separate fixtures must pass the same ID decoder", "Test rational event recipe, decoded onset validation, signed media-to-capture correction at 0.5x/1x/2x, interval uncertainty, unequal stream rates/drift, missing calibration/mapping, invalid destinations and bounded child cancellation", "Explicitly generate in a new ignored output directory with verified tools; preserve old fixture identities", "go run ./cmd/dev check --race"]
+    },
+    {
+      "id": "OUT-002",
+      "title": "Prepare a bounded observation session and capture procedure",
+      "depends_on": ["OUT-001"],
+      "write_paths": ["experiments/playback/cmd/output-observe", "experiments/playback/cmd/README.md"],
+      "acceptance": ["OUT-AC-02", "OUT-AC-03"],
+      "checks": ["Reuse the unchanged fixture server and supplied replacement app; verify candidate, runtime and new fixture identities", "Test normal exit, interruption, expired deadline, failed spawn and server cleanup with controlled child processes; forced cleanup is failure", "Document human audibility and the retained optional externally calibrated capture procedure (not an M1 or mandatory later gate under ADR 0006); do not start a recorder or assert physical results without authorized evidence", "go run ./cmd/dev check --race"]
+    },
+    {
+      "id": "OUT-003",
+      "title": "Record independent preparation review and any authorized observations",
+      "depends_on": ["OUT-002"],
+      "write_paths": ["reports/0016-output-verification.md", "README.md", "docs/stage-zero.md"],
+      "acceptance": ["OUT-AC-04"],
+      "checks": ["Obtain separately authorized independent exact-candidate method/code review; author checks are not approval", "Record physical sync/rate measurements as never performed, not-tested and outside M1 scope with no mandatory later check under ADR 0006; retain platform cells and distinguish preparation from physical evidence", "Preserve first failures, raw observations, uncertainty and retained acceptance criteria; removed physical measurements do not become PASS; no M1 or production adapter decision", "go run ./cmd/dev check --race"]
+    }
+  ]
+}

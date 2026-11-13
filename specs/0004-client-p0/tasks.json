@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "spec_id": "0004-client-p0",
+  "tasks": [
+    {
+      "id": "P0-001",
+      "title": "Implement reviewed boundary types and shared test/UI/transport foundations after prerequisite approval",
+      "depends_on": [],
+      "write_paths": ["go.mod", "go.sum", "internal/account/contract.go", "internal/catalog/contract.go", "internal/playback/contract.go", "internal/danmaku/contract.go", "internal/history/contract.go", "internal/architecture", "internal/testfixture", "internal/ui/shared", "internal/adapters/bilibili/transport"],
+      "acceptance": ["P0-AC-01"],
+      "checks": ["Verify reviewed M1 and sign-in/danmaku feasibility, exact frozen contracts, and implementation authorization before starting", "Add and run product-import boundary and fixture tests; go run ./cmd/dev check; boundary changes require new review and frozen inputs"]
+    },
+    {
+      "id": "P0-002",
+      "title": "Deliver fixture-backed video details and part selection with tests",
+      "depends_on": ["P0-001"],
+      "write_paths": ["internal/catalog", "internal/ui/catalog"],
+      "acceptance": ["P0-AC-02"],
+      "checks": ["Test metadata/part selection, empty/error states, cancellation and late results", "go run ./cmd/dev check"]
+    },
+    {
+      "id": "P0-003",
+      "title": "Deliver the approved fixture player, controls, timebase and lifecycle with tests",
+      "depends_on": ["P0-001"],
+      "write_paths": ["internal/playback", "internal/adapters/player", "internal/ui/playback"],
+      "acceptance": ["P0-AC-03"],
+      "checks": ["Test playback controls, events, cancellation, stale opens and cleanup through controlled adapters", "Exercise controls and the overlay/timebase seam on an actual macOS runtime; Windows is optional P2", "go run ./cmd/dev check; --race where supported"]
+    },
+    {
+      "id": "P0-004",
+      "title": "Integrate the small M2 fixture loop and collect independently reviewed milestone evidence",
+      "depends_on": ["P0-002", "P0-003"],
+      "write_paths": ["cmd/my-bilibili", "cmd/package-preview", "internal/app", "internal/ui/shell", "integration/m2", "packaging/preview", "reports/0004-client-p0-m2.md"],
+      "acceptance": ["P0-AC-01", "P0-AC-02", "P0-AC-03", "P0-AC-10"],
+      "checks": ["Run fixture detail-to-playback integration tests and native preview smoke on macOS; Windows is optional P2", "Identify the exact candidate and obtain separately authorized independent reviews; record M2 repair/escalation and milestone evidence without self-approval", "go run ./cmd/dev check; --race where supported", "Do not expand until M2 exit evidence and owner authorization exist; this slice does not establish final P0-AC-10"]
+    },
+    {
+      "id": "P0-005",
+      "title": "Deliver login, protected session restoration and safe sign-out with tests",
+      "depends_on": ["P0-004"],
+      "write_paths": ["internal/account", "internal/adapters/bilibili/account", "internal/adapters/credentials", "internal/ui/account"],
+      "acceptance": ["P0-AC-04"],
+      "checks": ["Test successful/expired/canceled/failed login, restart restoration, storage failures and late completion after sign-out using controlled fakes", "Exercise authorized sign-in, protected storage, expiry and sign-out on macOS without retaining login payloads; Windows is optional P2", "go run ./cmd/dev check; --race where supported"]
+    },
+    {
+      "id": "P0-006",
+      "title": "Deliver real-adapter search, direct entry and details with tests",
+      "depends_on": ["P0-004"],
+      "write_paths": ["internal/catalog", "internal/adapters/bilibili/catalog", "internal/ui/catalog"],
+      "acceptance": ["P0-AC-02", "P0-AC-05"],
+      "checks": ["Test supported/invalid input, response conversion, pagination, permissions, retry and stale-query behavior with sanitized fixtures", "Use the frozen session seam for parallel development; verify real account integration at P0-010", "go run ./cmd/dev check"]
+    },
+    {
+      "id": "P0-007",
+      "title": "Deliver session-aware media resolution and available-quality switching with tests",
+      "depends_on": ["P0-004"],
+      "write_paths": ["internal/playback", "internal/adapters/player", "internal/adapters/bilibili/playback", "internal/ui/playback"],
+      "acceptance": ["P0-AC-03", "P0-AC-06"],
+      "checks": ["Test media response conversion, required metadata, track handling, quality changes, permission/expiry errors and resource cleanup", "Use controlled account/catalog seams while other features develop; exercise authorized target media on macOS; Windows is optional P2", "go run ./cmd/dev check; --race where supported"]
+    },
+    {
+      "id": "P0-008",
+      "title": "Deliver read-only synchronized danmaku and its native overlay with tests",
+      "depends_on": ["P0-004"],
+      "write_paths": ["internal/danmaku", "internal/adapters/bilibili/danmaku", "internal/ui/danmaku"],
+      "acceptance": ["P0-AC-07"],
+      "checks": ["Test pause/seek/speed/part changes, retry deduplication, stale results, malformed data and resource caps using a fake playback timebase", "Exercise Chinese text, fullscreen, settings and bounded overlays on macOS; Windows is optional P2; shared renderer changes require a reviewed graph revision", "go run ./cmd/dev check; --race where supported"]
+    },
+    {
+      "id": "P0-009",
+      "title": "Deliver device-local progress, resume and history management with tests",
+      "depends_on": ["P0-004"],
+      "write_paths": ["internal/history", "internal/adapters/localhistory", "internal/ui/history"],
+      "acceptance": ["P0-AC-08"],
+      "checks": ["Test progress updates, restart/part identity, clamping, delete/clear, corruption and write failures using temporary files and fake player events", "Verify that history stores neither credentials nor resolved media URLs", "go run ./cmd/dev check"]
+    },
+    {
+      "id": "P0-010",
+      "title": "Integrate all P0 features and collect exact-candidate review and native delivery evidence",
+      "depends_on": ["P0-005", "P0-006", "P0-007", "P0-008", "P0-009"],
+      "write_paths": ["cmd/my-bilibili", "cmd/package-preview", "internal/app", "internal/ui/shell", "integration/p0", "packaging/preview", "reports/0004-client-p0.md"],
+      "acceptance": ["P0-AC-04", "P0-AC-05", "P0-AC-06", "P0-AC-07", "P0-AC-08", "P0-AC-09", "P0-AC-10"],
+      "checks": ["Test the complete loop, shared timebase/overlay composition, session propagation, sign-out/expiry, rapid switching, restart and close behavior", "Run native end-to-end and preview-package smoke on macOS; Windows is optional P2 and nonblocking; missing required macOS capabilities remain not-tested and block acceptance", "go run ./cmd/dev check; --race where supported", "Preserve the exact candidate identity and obtain separately authorized independent correctness/security/native reviews; report actual results and remaining blockers"]
+    }
+  ]
+}

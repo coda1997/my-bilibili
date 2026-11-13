@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "spec_id": "0009-target-host-removal",
+  "tasks": [
+    {
+      "id": "HOST-001",
+      "title": "Remove target host restrictions and update the continuation",
+      "depends_on": [],
+      "write_paths": ["experiments/playback/targetprobe", "experiments/playback/cmd/README.md", "specs/0008-authorized-target-playback", "README.md", "docs/architecture.md", "docs/stage-zero.md", "docs/testing.md", "docs/known-issues/playback.md", "docs/adr/0007-target-host-policy.md", "reports/0019-authorized-target-playback.md", "reports/0020-m1-measurement-scope.md", "reports/0021-target-access-method.md", "reports/0022-target-host-removal.md"],
+      "acceptance": ["HOST-AC-01", "HOST-AC-02", "HOST-AC-03"],
+      "checks": ["Independent contract review and new frozen run before implementation", "Target policy and copied refresh helper offline race tests, including actual descriptor parser integration and zero-request default", "go run ./cmd/dev check --race", "Build the e2e target-native app and target-smoke driver without launching them", "Audit all current host-policy documentation and relative links; preserve historical evidence", "Independent exact-candidate code and documentation review"]
+    }
+  ]
+}

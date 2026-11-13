@@ -14,7 +14,12 @@ decision grants autonomous or remote-action authority.
 
 Operational entrypoints: [development](development.md), [testing](testing.md),
 [PR/handoff](pull-requests.md), and the [role packet](templates/assignment.md).
-These guides and repo-local skills do not grant delegation or remote authority.
+On 2026-11-12 the owner granted standing authority to use native sub-agents at
+the controller's discretion within the requested task. No per-dispatch approval
+is needed. Keep assignments scoped and reviewers independent. This authority
+does not expand task scope or grant commits, remote actions, managed worktree
+creation or app-managed orchestration. These guides and skills grant no remote
+authority.
 
 The controller is the sole writer to its run directory. Workers operate in
 separate authorized worktrees and return changes and evidence; they do not

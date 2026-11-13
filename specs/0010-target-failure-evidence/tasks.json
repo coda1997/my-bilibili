@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "spec_id": "0010-target-failure-evidence",
+  "tasks": [
+    {
+      "id": "EVD-001",
+      "title": "Preserve safe target failure state and independently review evidence",
+      "depends_on": [],
+      "write_paths": [
+        "experiments/playback/cmd/target-smoke",
+        "README.md",
+        "docs/stage-zero.md",
+        "docs/architecture.md",
+        "docs/testing.md",
+        "docs/known-issues/playback.md",
+        "experiments/playback/cmd/README.md",
+        "reports/0023-target-failure-evidence.md"
+      ],
+      "acceptance": [
+        "EVD-AC-01",
+        "EVD-AC-02",
+        "EVD-AC-03"
+      ],
+      "checks": [
+        "Preserve failing offline regression before repair; targeted race tests with synthetic automation/owned processes only",
+        "go run ./cmd/dev check --race",
+        "Independent exact-candidate review of TGT-V2-002 closure; TGT-V2-001 remains open",
+        "Verify maintained scope, relative links and whitespace; preserve original target evidence and historical reports"
+      ]
+    }
+  ]
+}

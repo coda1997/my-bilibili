@@ -5,7 +5,8 @@
 - Role: lead / architecture-review / implementation / code-review / handoff
 - Controller and assigned agent/context identity:
 - User request and explicitly authorized actions:
-- Delegation authority: not granted unless explicitly stated by the user/task.
+- Delegation authority: owner's standing authorization for scoped native sub-agent
+  work; record any task-specific restriction.
 - Commit/push/PR/merge/release authority: not granted unless explicitly stated.
 - Run ID and prior run/finding references:
 - Checkout/worktree and base revision:

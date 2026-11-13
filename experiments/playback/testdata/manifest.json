@@ -1,0 +1,119 @@
+{
+  "origin": "Original offline synthetic geometry and tone; no third-party media",
+  "ffmpeg": "ffmpeg version 9.0.1 Copyright (c) 2000-2026 the FFmpeg developers",
+  "ffprobe": "ffprobe version 9.0.1 Copyright (c) 2007-2026 the FFmpeg developers",
+  "fixtures": [
+    {
+      "name": "combined.mp4",
+      "sha256": "5d9dd937b18d5b350aab2d17f040a67a0ef49857a22f2d21d4dc3d233f82f943",
+      "bytes": 80203,
+      "ffmpeg_args": [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=0x20c060:s=640x360:r=30:d=8,drawbox=x=80:y=70:w=160:h=120:color=0xf03030:t=fill,drawbox=x=380:y=160:w=180:h=80:color=0x3060f0:t=fill",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=440:sample_rate=48000:duration=8",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-preset",
+        "veryfast",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "64k",
+        "-movflags",
+        "+faststart",
+        "-shortest",
+        "experiments/playback/testdata/combined.mp4"
+      ],
+      "probe": {
+        "streams": [
+          {
+            "codec_name": "h264",
+            "codec_type": "video",
+            "width": 640,
+            "height": 360
+          },
+          {
+            "codec_name": "aac",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "8.000000"
+        }
+      }
+    },
+    {
+      "name": "video.mp4",
+      "sha256": "1d0cef15b9dde8049d67370aa7dfb276eb054c95290f87b5119601109113a74d",
+      "bytes": 9276,
+      "ffmpeg_args": [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        "experiments/playback/testdata/combined.mp4",
+        "-an",
+        "-c:v",
+        "copy",
+        "-movflags",
+        "+faststart",
+        "experiments/playback/testdata/video.mp4"
+      ],
+      "probe": {
+        "streams": [
+          {
+            "codec_name": "h264",
+            "codec_type": "video",
+            "width": 640,
+            "height": 360
+          }
+        ],
+        "format": {
+          "duration": "8.000000"
+        }
+      }
+    },
+    {
+      "name": "audio.m4a",
+      "sha256": "f77a96a989a25a8377f5ecc3a773ab3e8a2e8038b76066c8f823ee2bd8da5049",
+      "bytes": 66752,
+      "ffmpeg_args": [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-i",
+        "experiments/playback/testdata/combined.mp4",
+        "-vn",
+        "-c:a",
+        "copy",
+        "-movflags",
+        "+faststart",
+        "experiments/playback/testdata/audio.m4a"
+      ],
+      "probe": {
+        "streams": [
+          {
+            "codec_name": "aac",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "8.000000"
+        }
+      }
+    }
+  ]
+}
