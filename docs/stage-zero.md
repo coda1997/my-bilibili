@@ -7,7 +7,7 @@ Platform priority, owner decision on 2026-11-12: **macOS is required; Windows
 is P2 / nice-to-have and does not block M1, M2 or P0**. Unavailable Windows
 runtime results remain `not-tested`. Existing three-OS CI stays unchanged.
 See [ADR 0005](adr/0005-platform-priority.md) and the
-[current handoff](../reports/0024-default-libmpv.md).
+[current handoff](../reports/0025-m1-acceptance.md).
 
 Owner measurement-scope decision on 2026-11-12: calibrated physical A/V sync
 and display/speaker rate measurements are removed from M1, with no mandatory
@@ -52,10 +52,11 @@ allowed under [ADR 0007](adr/0007-target-host-policy.md). No origin list,
 historical host comparison or repinning remains. Source/rendition, TLS,
 expiry and native cleanup requirements still apply.
 
-Status: required macOS technical gates satisfied. On 2026-11-13 the owner
+Status: **completed and accepted by the owner on 2026-11-13**; required macOS
+technical gates satisfied. On 2026-11-13 the owner
 selected libmpv as the default behind the existing boundary, retaining mygo UI;
-see [ADR 0008](adr/0008-default-libmpv.md). Formal owner M1 milestone acceptance
-remains pending. This supersedes the owner’s 2026-11-11 provisional mygo choice.
+see [ADR 0008](adr/0008-default-libmpv.md). The owner subsequently accepted M1
+on the same date. This supersedes the owner’s 2026-11-11 provisional mygo choice.
 The independently reviewed default launcher passes 41 macOS fixture assertions,
 with loading/playing cancellation at 103.205542ms/82.0935ms and graceful cleanup;
 see [report 0024](../reports/0024-default-libmpv.md). The following earlier
@@ -156,7 +157,7 @@ at 87.7575ms and graceful exit without force. Target loading cancellation remain
 not-tested in that single-open session. Independent review closes TGT-V2-001 as a
 current acceptance blocker; the original failure and unknown cause are preserved.
 Final independent assessment recommended libmpv; the owner subsequently selected
-it as the default. Formal M1 milestone acceptance remains pending.
+it as the default. The owner subsequently accepted M1 on 2026-11-13.
 
 Exit criteria:
 
@@ -173,7 +174,8 @@ Calibrated physical A/V sync and actual display/speaker playback-rate measuremen
 are outside M1 scope under ADR 0006. They were never performed and remain
 not-tested; their absence does not prevent satisfying these exit criteria.
 
-Do not build the full desktop shell before this uncertainty is resolved.
+The M1 feasibility gate is satisfied. M2 and the full desktop shell still need
+their own scoped planning, contract review and implementation authorization.
 
 ## M2. One complete development loop
 
@@ -209,44 +211,15 @@ signing, notarization, and public releases are deliberately not implemented.
 
 ## Next action
 
-M0 acceptance and policy adoption are complete; see the
-[policy handoff](../reports/0003-policy-adoption.md). Continue M1 from the
-[current target continuation](../reports/0021-target-access-method.md#post-repair-target-continuation-2026-11-13)
-and [measurement scope](../reports/0020-m1-measurement-scope.md).
-The owner confirmed only a Mac is available and granted standing native subagent
-authority; no per-dispatch permission is needed. Windows is deferred P2 and does
-not block M1, M2 or P0; future Windows support still requires actual evidence.
+M0 and M1 are completed and accepted. Continue from the
+[M1 acceptance handoff](../reports/0025-m1-acceptance.md). The next product step
+is separately scoped M2 planning for a small fixture-backed slice using mygo UI
+and the accepted libmpv adapter. M2/P0 and the full shell have not started; M1
+acceptance alone does not freeze their contracts or authorize implementation.
 
-OUT-001/002 preparation now has independent technical approval after original
-reviewer closure of both code findings. OUT-003 records the current matrix and
-remaining inputs. Local race checks, actual fixture generation/decoded audit and
-controlled launcher lifecycle tests pass. Three normal-app observation sessions
-now retain one inconclusive attempt and two positive owner audibility statements;
-all ended partially with graceful cleanup. No physical capture ran. Preserve the
-200ms adapter cancellation bound, complete
-teardown contract, original fixtures and every failed outcome.
-
-The positive combined/separate audibility statements now have scoped independent
-evidence approval; this is not independent hearing or a measured 1× output rate.
-Calibrated sync and actual display/audio rates were never measured. ADR 0006
-removes those requirements and their numerical criteria from M1; no equipment
-or mandatory later measurement is needed.
-The original target-media packet stopped with permission unknown; its results
-remain unchanged. A separately reviewed interpretation method and new bounded
-observation now satisfy TGT-001 for the selected ordinary anonymous rendition.
-The earlier TGT-002 code/resource review and native fixture regressions are
-complete for their recorded candidate. HOST-001 removes host restrictions in
-both descriptor validation and the copied refresh helper. The independently
-reviewed post-repair target invocation now passes picture, tracks, controls,
-87.7575ms playing cancellation and graceful cleanup. No target retry is needed
-for this result. Any future invocation needs its own bounded assignment; preserve
-all UNKNOWN and failed outcomes. No per-host review or origin-policy amendment
-remains. The completed observation pairs permit no further requests by themselves.
-
-Both cleanup findings and the separate-track repair retain their prior
-independent closure/approval, including the 41-assertion macOS fixture stage.
-The owner selected libmpv as the default behind the existing plain playback
-boundary with mygo UI retained; the switch and its checks are in
-[report 0024](../reports/0024-default-libmpv.md). The next milestone action is
-formal owner M1 acceptance. M2/P0 and the full shell remain gated on M1. Do not
-record stage zero as complete until M0 through M3 have actual evidence.
+Preserve the 200ms cancellation bound, complete teardown contract, evidence and
+all historical failures. Any future service/native invocation needs its own
+bounded assignment. Windows remains optional P2/not-tested; calibrated physical
+sync/rate measurements remain unperformed and outside M1, with no mandatory
+later check. Standing native delegation applies within authorized task scope.
+Do not record stage zero as complete until M0 through M3 have actual evidence.

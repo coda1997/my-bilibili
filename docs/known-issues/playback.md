@@ -120,8 +120,8 @@ Calibrated physical playback-rate/A-V-sync measurements were never performed;
 ADR 0006 removes them from M1 without a mandatory later check. The original mygo
 strict suite remains failed despite its passing preview suite. Current M1
 technical evaluation is complete; the owner selected libmpv as the default.
-The switch is recorded in [the current handoff](../../reports/0024-default-libmpv.md).
-Formal owner M1 milestone acceptance remains pending.
+The switch is recorded in [the default-switch handoff](../../reports/0024-default-libmpv.md).
+The owner accepted M1 as completed on 2026-11-13.
 
 
 ## TGT-V2-001: Scoped target blocker closed; original failure preserved
@@ -147,5 +147,5 @@ primary from cleanup failures; passing offline evidence and exact review are lin
 [report 0023](../../reports/0023-target-failure-evidence.md). That diagnostic repair
 alone did not close TGT-V2-001. The later scoped target result and final independent
 adapter recommendation are in the target handoff. The owner subsequently
-selected libmpv as the default; formal M1 milestone acceptance remains pending. Any future native attempt needs a distinct bounded
+selected libmpv as the default; M1 was accepted as completed on 2026-11-13. Any future native attempt needs a distinct bounded
 assignment and independent readiness disposition.

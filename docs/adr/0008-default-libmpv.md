@@ -31,11 +31,11 @@ macOS fixture, cleanup, human fixture-audibility and bounded target evidence;
 see [the previous handoff](../../reports/0021-target-access-method.md#post-repair-target-continuation-2026-11-13).
 The default launcher change has its own contract and verification in
 [spec 0011](../../specs/0011-default-libmpv/spec.md) and
-[the current handoff](../../reports/0024-default-libmpv.md).
+[the default-switch handoff](../../reports/0024-default-libmpv.md).
 
 The old mygo playback defects remain documented for the explicit legacy path.
 Historical failures and reviews retain their original scope. The owner has
-selected the default adapter; formal M1 milestone acceptance remains pending.
+selected the default adapter; M1 was accepted as completed on 2026-11-13.
 This change does not start M2/P0 or a full client shell. Windows remains optional
 P2/not-tested; packaging/signing, real IME and changed-candidate CI remain
 separate work. Calibrated physical measurements remain outside M1 under ADR 0006.

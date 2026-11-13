@@ -1,5 +1,9 @@
 # Assignment: architecture-review / desktop client P0
 
+> Current milestone status, 2026-11-13: M1 completed and accepted by the owner.
+> See [the acceptance handoff](../../reports/0025-m1-acceptance.md).
+> M2/P0 remain unstarted; this does not approve their contracts or start new sessions.
+
 > Current scope amendment, 2026-11-12: [ADR 0005](../../docs/adr/0005-platform-priority.md)
 > supersedes Windows requirements in this unissued 2026-11-10 packet: macOS
 > runtime/preview evidence is required; Windows is optional P2 and nonblocking.

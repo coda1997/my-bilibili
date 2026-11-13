@@ -4,8 +4,8 @@ Status: development foundation (M0) accepted by the owner on 2026-11-10.
 Required macOS M1 technical evaluation is complete. On 2026-11-13 the owner
 selected libmpv as the default behind the existing plain playback boundary,
 retaining mygo UI; see [ADR 0008](adr/0008-default-libmpv.md) and
-[the current handoff](../reports/0024-default-libmpv.md). Formal owner M1
-milestone acceptance remains pending.
+[the current handoff](../reports/0025-m1-acceptance.md). The owner accepted
+M1 as completed on 2026-11-13; M2/P0 remain unstarted.
 The [previous target handoff](../reports/0021-target-access-method.md#post-repair-target-continuation-2026-11-13) records the
 owner-requested removal of target host restrictions. All valid HTTPS media hosts
 and ports are accepted; source/rendition, TLS, expiry and lifecycle checks remain.
@@ -27,8 +27,8 @@ macOS as the required platform; Windows is P2 / nice-to-have, nonblocking for
 M1, M2 and P0 under the owner
 [platform-priority decision](adr/0005-platform-priority.md) of 2026-11-12.
 The application and UI code we maintain should be Go;
-operating-system media facilities are allowed. mygo's native Go UI is the
-preferred candidate, contingent on the playback spike.
+operating-system media facilities are allowed. The accepted M1 decision retains mygo's native Go UI with libmpv playback
+behind the existing plain boundary.
 
 ## Application shape
 
@@ -91,4 +91,4 @@ are inputs to those decisions, not authority to change the rules.
 - [ADR0004: provisional mygo playback](adr/0004-provisional-mygo-playback.md)
   (historical temporary use, superseded by ADR 0008); [legacy playback issues](known-issues/playback.md)
 - [ADR 0008: default libmpv](adr/0008-default-libmpv.md): owner-selected default
-  backend with mygo UI retained; formal M1 acceptance is separate.
+  backend with mygo UI retained; M1 accepted on 2026-11-13.

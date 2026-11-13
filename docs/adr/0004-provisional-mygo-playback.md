@@ -3,7 +3,7 @@
 > Superseded default selection, 2026-11-13: [ADR 0008](0008-default-libmpv.md)
 > selects libmpv as the default. The former mygo launcher is now explicitly
 > `cmd/mygo-native`; this dated temporary-use decision and its failures remain
-> historical evidence. Formal M1 acceptance remains pending.
+> historical evidence. M1 was accepted by the owner on 2026-11-13.
 
 > Subsequent measurement-scope decision: [ADR 0006](0006-m1-measurement-scope.md)
 > removes calibrated physical sync/rate measurements from M1 with no mandatory

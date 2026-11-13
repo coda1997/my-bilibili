@@ -2,7 +2,7 @@
 
 > Default adapter selection, 2026-11-13: [ADR 0008](0008-default-libmpv.md)
 > selects libmpv for playback and retains mygo for UI. The original proposal
-> and research below are historical; formal M1 acceptance remains pending.
+> and research below are historical; M1 was accepted by the owner on 2026-11-13.
 
 > Platform amendment, 2026-11-12: [ADR 0005](0005-platform-priority.md)
 > supersedes the Windows acceptance requirement below. macOS is required;

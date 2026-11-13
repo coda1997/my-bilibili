@@ -1,5 +1,10 @@
 # ADR 0005: macOS required; Windows P2 / nice-to-have
 
+> Acceptance update, 2026-11-13: the owner accepted M1 as completed with libmpv
+> playback and mygo UI. See [the acceptance handoff](../../reports/0025-m1-acceptance.md).
+> Pending-gate wording below describes this earlier decision's original scope;
+> historical evidence and untested limitations retain their meaning.
+
 > Subsequent owner decision, 2026-11-12: [ADR 0006](0006-m1-measurement-scope.md)
 > removes the calibrated physical sync/rate requirements retained below. Those
 > measurements were never performed and are not a mandatory later gate. This

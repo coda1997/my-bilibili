@@ -1,5 +1,10 @@
 # ADR 0006: Remove calibrated physical measurements from M1
 
+> Acceptance update, 2026-11-13: the owner accepted M1 as completed with libmpv
+> playback and mygo UI. See [the acceptance handoff](../../reports/0025-m1-acceptance.md).
+> Pending-gate wording below describes this earlier decision's original scope;
+> historical evidence and untested limitations retain their meaning.
+
 - Date: 2026-11-12
 - Status: owner-selected scope amendment
 - Scope: M1 physical A/V synchronization and output-rate measurements

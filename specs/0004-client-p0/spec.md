@@ -49,14 +49,16 @@ Login does not implicitly include the personal-content features above.
 
 ### Milestone gates and parallel delivery
 
-M0 is accepted; M1 macOS evaluation is in progress and not accepted. The
+M0 and M1 are accepted. The owner accepted M1 on 2026-11-13 with libmpv
+playback and mygo UI; M2/P0 remain proposed and unstarted. The
 [M1 contract](../0002-playback-spike/spec.md) and
 [stage-zero gates](../../docs/stage-zero.md) apply with the owner platform
-amendment above. See the [current handoff](../../reports/0018-platform-priority.md).
+amendment above. See the [current handoff](../../reports/0025-m1-acceptance.md).
 
-1. Select and independently review M1 separately. Obtain safe fixtures and
-   an actual macOS runtime; Windows is optional P2. Resolve native UI/playback feasibility before
-   starting product implementation. Do not infer native behavior from builds.
+1. M1 prerequisite satisfied: independently reviewed macOS fixture/target
+   evidence and the owner-accepted UI/player decision are recorded in the
+   current handoff. Windows remains optional P2/not-tested. This does not
+   establish sign-in, danmaku or the remaining product prerequisites.
 2. Before freezing this contract, resolve sign-in/session and danmaku access
    feasibility, and validate a native overlay/timebase seam with the selected
    player. These are additional P0 prerequisites, not claims that M1 already

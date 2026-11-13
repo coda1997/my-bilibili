@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "spec_id": "0012-m1-publication",
+  "tasks": [
+    {
+      "id": "PUB-001",
+      "title": "Record M1 acceptance and publish the reviewed PR",
+      "depends_on": [],
+      "write_paths": [
+        "README.md",
+        "docs/stage-zero.md",
+        "docs/architecture.md",
+        "docs/testing.md",
+        "docs/known-issues/playback.md",
+        "docs/adr/0002-go-ui-and-playback-boundary.md",
+        "docs/adr/0004-provisional-mygo-playback.md",
+        "docs/adr/0005-platform-priority.md",
+        "docs/adr/0006-m1-measurement-scope.md",
+        "docs/adr/0007-target-host-policy.md",
+        "docs/adr/0008-default-libmpv.md",
+        "experiments/playback/cmd/README.md",
+        "specs/0004-client-p0/spec.md",
+        "specs/0004-client-p0/plan.md",
+        "specs/0004-client-p0/architecture-review.md",
+        "reports/0025-m1-acceptance.md",
+        "AGENTS.md",
+        ".agents/skills/independent-review/SKILL.md",
+        "docs/development.md",
+        "docs/pull-requests.md",
+        "docs/templates/assignment.md",
+        "docs/templates/review.md",
+        "docs/workflow.md",
+        "reports/0004-workflow-clarifications.md",
+        "specs/0004-workflow-clarifications"
+      ],
+      "acceptance": [
+        "PUB-AC-01",
+        "PUB-AC-02",
+        "PUB-AC-03"
+      ],
+      "checks": [
+        "Verify code/fixture/dependency equality with approved M1 snapshot; review base documentation integration",
+        "go run ./cmd/dev check --race",
+        "Independent exact publication candidate/PR text review and link/privacy audit",
+        "Remote feature SHA, PR base/head, CI identity/results and ready-for-review read-back"
+      ]
+    }
+  ]
+}

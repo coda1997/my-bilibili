@@ -1,5 +1,9 @@
 # Explicit M1 commands
 
+> Current milestone status, 2026-11-13: M1 completed and accepted by the owner.
+> See [the acceptance handoff](../../../reports/0025-m1-acceptance.md).
+> M2/P0 remain unstarted; this does not approve their contracts or start new sessions.
+
 ## Default libmpv playback
 
 On 2026-11-13 the owner selected libmpv as the default playback backend, retaining
@@ -307,8 +311,7 @@ enables `autoload-files` only for explicit `AudioURL`; `audio-file-auto`,
 `sub-auto` and `cover-art-auto` remain disabled, preventing companion discovery.
 Independent selection-repair review now passes with 41 fresh fixture assertions.
 A subsequent scoped target-media invocation and final independent adapter assessment
-pass; the owner then selected libmpv as the default. Formal owner M1 milestone
-acceptance remains pending.
+pass; the owner then selected libmpv as the default. The owner accepted M1 as completed on 2026-11-13.
 Combined/separate fixture audibility has independently reviewed owner attestations.
 Calibrated physical sync/rate measurements were never performed and are outside
 M1 scope with no mandatory later check under ADR 0006. Windows remains optional

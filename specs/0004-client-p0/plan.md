@@ -7,8 +7,8 @@ delegation is started by this document. The existing M1/M2 gates still apply.
 
 Platform/status amendment, 2026-11-12: macOS is required; Windows is optional
 P2 and nonblocking for M1/M2/P0 under
-[ADR 0005](../../docs/adr/0005-platform-priority.md). M1 is now in progress;
-see the [current handoff](../../reports/0020-m1-measurement-scope.md). The detailed
+[ADR 0005](../../docs/adr/0005-platform-priority.md). M1 was subsequently accepted by the owner on 2026-11-13;
+see the [current handoff](../../reports/0025-m1-acceptance.md). The detailed
 P0 contract remains a draft. The verification section below records the original
 2026-11-10 planning snapshot, not current M1 state or delegation authority.
 
@@ -30,8 +30,8 @@ run recording. No account, catalog, player, danmaku or desktop shell exists.
 | --- | --- | --- | --- |
 | 1 | Record P0 scope, features, dependencies, verification and candidate Go boundaries | Owner product discussion; detailed contract still proposed | Draft written |
 | 2 | Inspect primary GitHub sources; map login/search/details/media/danmaku; record revisions, licenses and maintenance limitations | Distinguish source evidence from working endpoints and permissions | Initial reference inspection done; no Bilibili requests |
-| 3 | Resolve environment and authorized native fixtures | Pinned Go available, an actual macOS runtime and safe fixture provenance; no implicit installations | Go 1.27.3 installed with Homebrew on owner request; macOS synthetic fixtures available; authorized target fixtures remain unresolved; Windows deferred P2 |
-| 4 | Separately select/review and execute the existing serial M1 spike | Exact evaluated UI/player revision and macOS runtime capability evidence; independent adapter decision | In progress; fixture review passes, audibility attestations reviewed; target evidence and final acceptance remain; calibrated physical sync/rate outside M1 under ADR 0006 |
+| 3 | Resolve environment and authorized native fixtures | Pinned Go available, an actual macOS runtime and safe fixture provenance; no implicit installations | Go 1.27.3 installed with Homebrew on owner request; macOS synthetic fixtures available; bounded anonymous-target evidence accepted for M1; Windows deferred P2 |
+| 4 | Separately select/review and execute the existing serial M1 spike | Exact evaluated UI/player revision and macOS runtime capability evidence; independent adapter decision | Completed; independent fixture/target/adapter review and owner M1 acceptance on 2026-11-13; libmpv playback with mygo UI; calibrated physical sync/rate outside M1 under ADR 0006 |
 | 5 | Separately scope/review P0 access and overlay feasibility | Permitted login/session/search/media/danmaku path, protected storage and timebase/fullscreen seam; no bypass or silent feature removal | Not started; needs bounded assignment |
 | 6 | Set concrete ports, state machines, supported input/media formats, timeout/cap values and pinned dependencies | Independent architecture/security/native review; then authorized contract freeze | Architecture proposal ready for discussion, not approval |
 | 7 | Execute `P0-001`, then details `P0-002` and fixture player `P0-003` in parallel when authorized | Non-overlapping ownership, controllable fakes, checks, exact source identities | Not started |

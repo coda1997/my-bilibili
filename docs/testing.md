@@ -65,7 +65,7 @@ cookies, authenticated media URLs, or external network access.
 | Unit/package tests | Deterministic behavior and regression cases | Run command, candidate identity and result |
 | CLI/integration tests | Real process/filesystem interactions where exercised | Runtime OS, fixtures and observed behavior |
 | Cross-compilation | Source compiles for a target | Does not establish native execution |
-| Native UI/media smoke | Target OS behavior, input, playback and cleanup | Authorized fixtures and actual OS evidence for the exact candidate; current M1 technical gates support owner acceptance, which remains pending |
+| Native UI/media smoke | Target OS behavior, input, playback and cleanup | Authorized fixtures and actual OS evidence for the exact candidate; M1 was accepted by the owner on 2026-11-13; see [acceptance](../reports/0025-m1-acceptance.md) |
 | Packaging/release | Installable artifact and promotion behavior | Separate packaging/smoke/signing policy; not implemented yet |
 
 Under [ADR 0005](adr/0005-platform-priority.md), macOS is the required product

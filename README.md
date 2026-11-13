@@ -4,13 +4,14 @@ A Go desktop Bilibili client with macOS as the required platform and Windows
 as P2 / nice-to-have, and an experiment in
 spec-driven, independently reviewed agent development.
 
-The repository is in stage zero. M0 is accepted. Required macOS M1 technical
-evaluation is complete. On 2026-11-13 the owner selected **libmpv as the default
+The repository is in stage zero. M0 and M1 are completed and accepted. The owner accepted M1 on
+2026-11-13 after completion of the required macOS technical evaluation. On 2026-11-13 the owner selected **libmpv as the default
 playback backend**, retaining the mygo UI and existing playback boundary.
 `cmd/native` now uses libmpv; `cmd/mygo-native` preserves the old player for
 explicit diagnostics. See [the default switch handoff](reports/0024-default-libmpv.md)
 and [launch commands](experiments/playback/cmd/README.md#default-libmpv-playback).
-Formal owner M1 milestone acceptance remains pending. Independent
+See [M1 acceptance and publication](reports/0025-m1-acceptance.md) for the
+owner decision and current continuation. Independent
 review of the libmpv adapter has now technically closed both the delayed
 CoreAudio unload crash and the playing-close delay. The shutdown-order repair
 passed independent native cleanup checks, with playing Close at 44–78ms against
@@ -21,7 +22,7 @@ cancellation at 103.2ms/82.1ms and graceful cleanup. The prior six-scenario clea
 suite is separate evidence. The scoped anonymous target invocation now passes
 picture, separate tracks, controls and graceful cleanup; playing cancellation
 takes 87.8ms against 200ms. Independent target and final adapter reviews approve
-the scoped technical evidence; formal owner M1 acceptance remains open. Calibrated
+the scoped technical evidence; the owner accepted M1 on 2026-11-13. Calibrated
 physical sync/rate measurements were never performed and are outside M1 scope
 under [ADR 0006](docs/adr/0006-m1-measurement-scope.md), with no mandatory later
 measurement gate. Windows is
@@ -57,7 +58,8 @@ retained. This does not measure physical sync/rate.
 
 ## Start here
 
-- [Current handoff: libmpv is the default](reports/0024-default-libmpv.md)
+- [Current handoff: M1 completed and accepted](reports/0025-m1-acceptance.md)
+- [Default libmpv implementation and evidence](reports/0024-default-libmpv.md)
 - [Default playback decision](docs/adr/0008-default-libmpv.md)
 - [Previous M1 handoff: target PASS and adapter recommendation](reports/0021-target-access-method.md#post-repair-target-continuation-2026-11-13)
 - [Historical target failure and diagnostic repair](reports/0023-target-failure-evidence.md)
@@ -121,7 +123,7 @@ playing cancellation at 75.140416ms. Complete disposal, per-session unload,
 zero ownership, no shutdown fallback and eight-second survival pass, as does
 the full independent local race check. Both cleanup findings were technically
 closed at that stage; the later final assessment and owner default selection
-are recorded in the current handoff. Formal M1 acceptance remains pending.
+are recorded in the current handoff. The owner accepted M1 on 2026-11-13.
 The separate-track diagnosis found that disabling mpv's `autoload-files` also
 prevented selection of explicitly supplied audio. The repaired adapter permits
 that selection while audio/subtitle/cover-art discovery remain disabled. Its
