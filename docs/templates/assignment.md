@@ -21,6 +21,10 @@
 - Frozen spec/tasks and shared interfaces/async behavior:
 - Relevant source, diff, tests, and sanitized fixtures/evidence:
 - For closure: original finding, reproduction, and required verification:
+- For reviewer succession (otherwise not applicable): original reviewer and
+  report/finding IDs, unavailability reason, explicit human designation and
+  successor independence, prior repair-round count; follow the proposed
+  procedure in docs/workflow.md#reviewer-succession-proposed-clarification:
 
 Do not substitute the author's chat or desired verdict for review inputs.
 

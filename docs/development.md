@@ -5,6 +5,12 @@ It does not implement a scheduler, grant permissions, or replace its gates.
 
 ## Start from a fresh context
 
+For a read-only explanation, audit, or investigation, use the
+[proposed lightweight route](workflow.md#read-only-requests-proposed-clarification)
+instead of requiring an implementation assignment or creating a run. It does
+not bypass formal review inputs or authorize edits. The steps below apply to
+scoped changes; a request to edit leaves the read-only route.
+
 1. Read [README](../README.md) for the current handoff. Check the milestone in
    [stage zero](stage-zero.md); do not start a full client slice before the M1
    UI/playback decision. A proposed spec is not authorization to implement it.
@@ -60,11 +66,13 @@ the entire author's chat transcript.
 
 A reviewer must be a separate authorized agent/context, not the implementation
 author wearing a different role. For finding closure, provide the original
-finding/reproduction and the changed candidate. Select review dimensions from
-actual risk (correctness, architecture, security, native platform/UI), not an
-automatic fixed number of agents. Prepare the packet and dispatch native
-sub-agents under the owner's standing authorization; no per-dispatch permission
-is needed. Do not fabricate an independent result.
+finding/reproduction and the changed candidate. If the original reviewer cannot
+continue, follow the [proposed succession procedure](workflow.md#reviewer-succession-proposed-clarification),
+including explicit human designation; do not silently substitute a reviewer.
+Select review dimensions from actual risk (correctness, architecture, security,
+native platform/UI), not an automatic fixed number of agents. Prepare the packet
+and dispatch native sub-agents under the owner's standing authorization; no
+per-dispatch permission is needed. Do not fabricate an independent result.
 
 The controller may save a sanitized assignment under its run's `evidence/`
 and attach it with `run note` before dispatch. Published packets are immutable;

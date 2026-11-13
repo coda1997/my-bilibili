@@ -2,6 +2,11 @@
 
 ## Read order
 
+For read-only consultations, see the proposed lightweight route in
+`docs/workflow.md#read-only-requests-proposed-clarification`. It requires no
+implementation packet or new run, and grants no edit or approval authority.
+Formal independent reviews still require their assigned review inputs.
+
 1. Follow `README.md` to the current handoff and `docs/stage-zero.md`. Historical
    reports describe their own candidates, not necessarily the current checkout.
 2. Verify prerequisites in `docs/testing.md` before invoking Go. Inspect Git
@@ -17,6 +22,9 @@
 - Implementation: `feature-implement`, the assigned task, and `docs/testing.md`.
 - Independent architecture/code review: `independent-review` and
   `docs/templates/review.md`, in a separate authorized agent/context.
+- Unavailable reviewer: use the proposed succession procedure in
+  `docs/workflow.md#reviewer-succession-proposed-clarification`; do not infer
+  reassignment or closure authority.
 - PR or handoff preparation: `pr-handoff` and `docs/pull-requests.md`.
 
 These repo-local skills live in `.agents/skills/`. If skill discovery is not

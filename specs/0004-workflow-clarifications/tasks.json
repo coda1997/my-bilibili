@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "spec_id": "0004-workflow-clarifications",
+  "tasks": [
+    {
+      "id": "WFC-001",
+      "title": "Draft and verify read-only routing and reviewer succession",
+      "depends_on": [],
+      "write_paths": ["specs/0004-workflow-clarifications", "AGENTS.md", "docs/workflow.md", "docs/development.md", "docs/pull-requests.md", "docs/templates/assignment.md", "docs/templates/review.md", ".agents/skills/independent-review/SKILL.md", "reports/0004-workflow-clarifications.md"],
+      "acceptance": ["WFC-AC-01", "WFC-AC-02", "WFC-AC-03"],
+      "checks": ["go run ./cmd/dev check --race", "Validate changed skill metadata and local Markdown targets", "Populate templates and walk through read-only and reviewer-succession scenarios; independent review and human policy adoption remain pending"]
+    }
+  ]
+}
