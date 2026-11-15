@@ -77,3 +77,52 @@ inside every skill. Assign roles with `docs/templates/assignment.md`.
 - Keep the initial application a single Go module and modular monolith.
 - Do not add a generic agent framework, database, event bus, updater, or release
   credentials before a stage-zero acceptance criterion requires it.
+
+## Implementation discipline
+
+Prefer explicit contracts, direct control flow, and the smallest change that
+fully satisfies the assigned acceptance criteria.
+
+### Validation and errors
+
+- Validate external input at its owning boundary: CLI arguments, files,
+  network responses, subprocess output, and native callbacks. Keep transport
+  decoding and conversion in adapters; keep business rules in their owning
+  domain packages.
+- Reuse established internal invariants. Do not repeat the same validation
+  across internal layers or add guards for states the contract excludes.
+  Verify where an invariant is established before relying on it; a Go type
+  alone does not prove semantic validity.
+- Preserve checks for cancellation, state transitions, stale results, and
+  resource ownership. These enforce runtime contracts.
+- Return and propagate errors explicitly. Add context when it helps diagnosis,
+  preserving error identity where callers depend on it. Never turn a failure
+  into an empty result, default value, or success unless the contract defines
+  that behavior.
+- Do not use panic for expected input, I/O, or domain failures. Do not add
+  broad recover handlers that hide programming defects. Keep required cleanup
+  and the established error-sanitization boundary intact.
+
+### Scope and architecture
+
+- Before a non-trivial change, identify the owning package, affected callers,
+  dependency direction, and relevant state or lifetime contracts.
+- Search existing capability packages before adding helpers or interfaces.
+  Keep helpers local until there is a concrete shared need; follow
+  docs/architecture.md for boundary ownership.
+- If the request conflicts with an approved contract or requires changes
+  outside assigned paths, explain the concrete conflict and proposed trade-off
+  before implementation. Resolve routine choices within the existing design.
+- Match surrounding Go style and concurrency patterns. Avoid unrelated
+  refactors, renames, speculative fallbacks, compatibility layers, and unused
+  configuration.
+- Do not remove existing checks merely to shorten code. Establish that a check
+  is redundant against the actual contract and preserve relevant regression
+  coverage.
+
+### Role discipline
+
+- Planning and architecture review produce contracts, trade-offs, and review
+  findings; they do not authorize implementation.
+- Implementation follows the reviewed contract and assigned paths, with the
+  checks required by docs/testing.md.
