@@ -90,6 +90,12 @@ func (e *engine) renderLoop(a *nativeAPI, core uintptr, stop <-chan struct{}, do
 
 // Draw is UI-thread-only. It never waits for native rendering or decoding.
 func Draw(c *gui.Context, plain contract.Engine) {
+	DrawSized(c, plain, width, height)
+}
+
+// DrawSized scales presentation only. The native render buffers remain 640x360,
+// with the same UI-thread ownership and non-blocking frame acquisition as Draw.
+func DrawSized(c *gui.Context, plain contract.Engine, displayWidth, displayHeight float32) {
 	e, ok := plain.(*engine)
 	if !ok {
 		return
@@ -107,6 +113,6 @@ func Draw(c *gui.Context, plain contract.Engine) {
 		e.framesMu.Unlock()
 	}
 	if e.bitmap != nil {
-		gui.Image(c.Key("replacement-video"), e.bitmap).Width(width).Height(height).Fit(gui.Contain).Label("Synthetic replacement fixture video")
+		gui.Image(c.Key("replacement-video"), e.bitmap).Width(displayWidth).Height(displayHeight).Fit(gui.Contain).Label("Synthetic replacement fixture video")
 	}
 }

@@ -174,13 +174,115 @@ Calibrated physical A/V sync and actual display/speaker playback-rate measuremen
 are outside M1 scope under ADR 0006. They were never performed and remain
 not-tested; their absence does not prevent satisfying these exit criteria.
 
-The M1 feasibility gate is satisfied. M2 and the full desktop shell still need
-their own scoped planning, contract review and implementation authorization.
+The M1 feasibility gate is satisfied. M2 subsequently received its own reviewed
+contract and implementation authorization; its current acceptance status is
+recorded below. The full desktop shell remains outside this fixture slice.
 
 ## M2. One complete development loop
 
 Choose a small user-visible slice only after M1: for example, fixture-backed
 video details followed by a playback command through the approved adapter.
+
+Latest acceptance continuation — 2026-11-16: the original independent reviewer
+approved the scoped fullscreen causal repair and automated native response in
+formal round 5. REV-002 is technically CLOSED; REV-001 remains CLOSED. Independent
+targeted/tagged race tests pass and removing the callback guard makes the
+regressions fail. Four complete native suites each pass 30 checks; successful
+fixed runs total 51 fullscreen cycles. No new scoped defect or code repair was
+identified. Cumulative M2-004 history is five reviews/eight fixes, not a budget
+reset; no further automatic repair/review loop is active.
+
+Owner functional feedback — 2026-11-16: after the pinned normal package and
+manual picture/audio/interaction checklist were supplied, the owner replied
+“功能全部正常”. This is recorded as aggregate owner-reported functional acceptance,
+including the prompted ordinary playback/audio and controls. No detailed
+per-item observations or independent system-level accessibility audit were
+provided or inferred. The normal executable and preceding 274-file source
+snapshot remain unchanged. Run `20261116T145910Z-31c75327708a` preserves this
+attestation separately from the prior frozen checklist and review evidence.
+
+M2 still awaits exact-commit integration, changed-candidate CI and final owner
+milestone acceptance. The subsequent continuation prepares a scoped commit
+inventory and draft PR for `codex/m2-fixture-preview` into `master`; the remote
+base still matches. Publication awaits explicit owner authorization under the
+repository's commit/remote rules. No code change, new review or repair is
+requested by this feedback. See the latest section of
+[report 0028](../reports/0028-m2-fixture-preview.md).
+
+Historical additional repair completion — 2026-11-16: the proven
+fullscreen callback guard was already in maintained source. The controller
+rebuilt normal/e2e developer bundles and the driver, then passed one complete
+native suite (30 checks, 38.382s, five gracefully closed processes) and the
+recorded full race gate. No new implementation change was needed or counted;
+prior four reviews/eight fixes remain. This is packaging and verification of
+the existing repair, not independent closure or owner M2 acceptance. Fresh
+normal bundle build is established; its separate interactive launch is not.
+Artifacts and exact identities are in the current M2 handoff.
+
+Historical investigation — 2026-11-16: the owner authorized code/log investigation,
+causal repair and repeated native experiments without intermediate review/fix/
+human loops. The fullscreen driver had treated geometry and rendered-state
+restoration as transition completion. Native callback traces show that the
+next entry request reached the setter before the preceding DidExit delivery.
+Waiting for real DidEnter/DidExit counts alongside the original checks repairs
+the reproduced race. Five pre-fix reproductions and three guard-removal controls
+fail; thirteen fixed diagnostic prefixes and three complete native suites pass,
+covering 48 successful fixed fullscreen cycles. Each full suite passes 30 checks,
+including parts/replay, cancellation below 200ms, zero ownership, eight-second
+live survival and actual close. All 36 owned processes exit gracefully. Final
+local full race and relevant e2e race gates pass. The scoped investigation is
+complete; no formal review or independent finding closure was performed.
+REV-001 remains CLOSED and REV-002 remains OPEN pending separate disposition.
+Physical audibility, remaining manual inputs, exact-commit integration/CI and
+M2 acceptance remain pending. The latest owner instruction supersedes the
+per-attempt stop proposals in the historical sequence below for this completed
+investigation only; it does not change repository policy or product criteria.
+
+Historical execution before this investigation: [spec 0016](../specs/0016-m2-policy-continuation/spec.md)
+continues the original fixture preview with owner-approved R1–R9 budgets and
+the labeled handoff-drill alternative. Two authorized workers completed isolated
+application/fixture and desktop work. The integrated developer package builds;
+local checks and the separate 41-assertion laboratory regression pass. The first
+product native smoke failed at seek and exposed aliased report observations.
+The owner then authorized one additional M2-004 repair: snapshots are
+independently closed as repaired, and actual native seek passes. A later
+invocation passes controls, layouts and one fullscreen cycle, then fails in the
+second fullscreen cycle. After the owner reported accidental UI interaction,
+one unchanged retry was authorized. It passes seek again, then fails at a
+speed-menu action before reaching fullscreen. A separately authorized 2.8-second
+diagnostic establishes that the driver selects 2× before the popup node exists;
+the node appears later without another action. The owner authorized a fifth
+driver repair and one subsequent acceptance invocation. The bounded popup wait
+passes local race checks and the native 2× selection. That invocation again
+times out during the second fullscreen exit, with eleven product checks and
+graceful cleanup passing. The original reviewer completed the final third
+M2-004 review with REV-002 still OPEN; its independent race checks pass.
+The owner then authorized one fullscreen diagnostic, which ran once for
+10.437 seconds and reproduced the second-exit timeout with graceful cleanup.
+The trace establishes premature cached-state acceptance and an intended exit
+toggle sent after ordinary window state had returned, causing fullscreen entry.
+The first-cycle cached-state PASS does not prove completed native exit. Exact
+native callback timing remains unknown. The owner subsequently authorized one
+sixth driver repair with offline verification only. The driver now checks
+native geometry and rendered layout alongside cached state, requires ordinary
+restoration and rechecks action preconditions around capture and reversal.
+Targeted/four-package e2e/full race gates pass; fourteen mechanism-removal
+controls fail as intended. The owner then authorized one full native invocation
+and one fourth response review. That invocation fails after 9.514 seconds:
+controls, layouts and the first corroborated fullscreen cycle pass, then the
+second entry sequence times out before its capture completes. Cleanup is
+graceful without force; later native scenarios remain unexecuted. The exact
+failed RPC or predicate and current cause remain unknown. The original reviewer
+completes round four with independent targeted/e2e/full race gates passing and
+all fourteen negative controls failing as intended. REV-001 stays CLOSED;
+REV-002 stays OPEN, BLOCKING class 5. All six fixes and four formal reviews are
+consumed; repeated fullscreen acceptance has four observed failures, without
+claiming the same cause. The proposed next decision is one read-only second-entry
+diagnostic lasting at most 60 seconds. No further repair, review or native launch
+is authorized. This is a real escalation, not a drill. M2 is not completed or
+accepted; exact-commit integration and remaining product/native evidence are
+still pending.
+See [the current M2 handoff](../reports/0028-m2-fixture-preview.md).
 
 Exit criteria:
 
@@ -211,11 +313,16 @@ signing, notarization, and public releases are deliberately not implemented.
 
 ## Next action
 
-M0 and M1 are completed and accepted. Continue from the
-[M1 acceptance handoff](../reports/0025-m1-acceptance.md). The next product step
-is separately scoped M2 planning for a small fixture-backed slice using mygo UI
-and the accepted libmpv adapter. M2/P0 and the full shell have not started; M1
-acceptance alone does not freeze their contracts or authorize implementation.
+M0 and M1 are completed and accepted. The owner-requested concentrated
+fullscreen investigation is complete; read the
+[M2 cause-and-experiment handoff](../reports/0028-m2-fixture-preview.md).
+Preserve the callback-based completion requirement, existing geometry/layout
+and picture checks, exact artifacts, and all failed controls. The investigation
+ran no formal review loop and does not close REV-002 or accept M2. A later M2
+continuation must address the remaining manual evidence, independent disposition
+and exact-commit/CI requirements recorded there; no new repair loop is requested
+by this handoff. P0 and the full shell remain pending. No commit, push or release
+was performed or authorized by this investigation.
 
 Preserve the 200ms cancellation bound, complete teardown contract, evidence and
 all historical failures. Any future service/native invocation needs its own

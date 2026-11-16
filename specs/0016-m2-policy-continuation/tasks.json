@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "spec_id": "0016-m2-policy-continuation",
+  "tasks": [
+    {
+      "id": "M2-001",
+      "title": "Implement frozen shared declarations and business import checks",
+      "depends_on": [],
+      "write_paths": [
+        "internal/catalog",
+        "internal/app/contracts.go",
+        "internal/architecture"
+      ],
+      "acceptance": [
+        "M2-AC-05"
+      ],
+      "checks": [
+        "go test -count=1 ./internal/catalog ./internal/app ./internal/architecture",
+        "go run ./cmd/dev check --race",
+        "Independent review of exact shared declarations before worker dispatch"
+      ]
+    },
+    {
+      "id": "M2-002",
+      "title": "Implement fixture catalog and playback application use cases",
+      "depends_on": [
+        "M2-001"
+      ],
+      "write_paths": [
+        "internal/app/session.go",
+        "internal/app/session_test.go",
+        "internal/fixture"
+      ],
+      "acceptance": [
+        "M2-AC-01",
+        "M2-AC-02",
+        "M2-AC-05"
+      ],
+      "checks": [
+        "go test -race -count=1 ./internal/app ./internal/fixture ./internal/architecture",
+        "Distinct original 30-second fixture provenance and integrity checks",
+        "Worker source manifest and return packet"
+      ]
+    },
+    {
+      "id": "M2-003",
+      "title": "Implement player desktop UI and bounded display-size extension",
+      "depends_on": [
+        "M2-001"
+      ],
+      "write_paths": [
+        "internal/desktop",
+        "experiments/playback/mpvprobe/surface.go",
+        "experiments/playback/mpvprobe/surface_test.go"
+      ],
+      "acceptance": [
+        "M2-AC-03",
+        "M2-AC-05"
+      ],
+      "checks": [
+        "go test -race -count=1 ./internal/desktop ./experiments/playback/mpvprobe ./internal/architecture",
+        "Headless UI event and layout assertions",
+        "Worker source manifest and return packet"
+      ]
+    },
+    {
+      "id": "M2-004",
+      "title": "Integrate native composition, developer packaging and product smoke",
+      "depends_on": [
+        "M2-002",
+        "M2-003"
+      ],
+      "write_paths": [
+        "cmd/my-bilibili",
+        "cmd/package-preview",
+        "cmd/preview-smoke",
+        "internal/previewbundle"
+      ],
+      "acceptance": [
+        "M2-AC-01",
+        "M2-AC-03",
+        "M2-AC-04"
+      ],
+      "checks": [
+        "go test -race -count=1 ./cmd/my-bilibili ./cmd/package-preview ./cmd/preview-smoke ./internal/previewbundle",
+        "Actual macOS developer package launch outside repository",
+        "Bounded product native smoke and existing 41-assertion fixture suite"
+      ]
+    },
+    {
+      "id": "M2-005",
+      "title": "Complete exact-candidate reviews, bounded repair evidence and handoff",
+      "depends_on": [
+        "M2-004"
+      ],
+      "write_paths": [
+        "README.md",
+        "docs/stage-zero.md",
+        "reports/0028-m2-fixture-preview.md"
+      ],
+      "acceptance": [
+        "M2-AC-04",
+        "M2-AC-05",
+        "M2-AC-06"
+      ],
+      "checks": [
+        "go run ./cmd/dev check --race",
+        "Independent candidate-bound code and macOS UI/native reviews",
+        "Actual bounded repair/closure; real human escalation or executed explicitly labeled handoff drill; cumulative R1-R9 ledger",
+        "Durable status distinguishes delivered product, missing evidence and milestone acceptance"
+      ]
+    }
+  ]
+}
