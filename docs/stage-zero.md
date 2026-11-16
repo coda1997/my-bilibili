@@ -201,13 +201,19 @@ provided or inferred. The normal executable and preceding 274-file source
 snapshot remain unchanged. Run `20261116T145910Z-31c75327708a` preserves this
 attestation separately from the prior frozen checklist and review evidence.
 
-M2 still awaits exact-commit integration, changed-candidate CI and final owner
-milestone acceptance. The subsequent continuation prepares a scoped commit
-inventory and draft PR for `codex/m2-fixture-preview` into `master`; the remote
-base still matches. Publication awaits explicit owner authorization under the
-repository's commit/remote rules. No code change, new review or repair is
-requested by this feedback. See the latest section of
-[report 0028](../reports/0028-m2-fixture-preview.md).
+Publication and CI continuation — 2026-11-16: Draft
+[PR #9](https://github.com/coda1997/my-bilibili/pull/9) publishes the candidate.
+Initial CI passed Linux/Windows but macOS race tests exhausted artificial
+whole-test4s/1.2s deadlines. The owner authorized repair9/review6. The controller
+reproduced the exact phases with controlled picture-processing delay and repaired
+only the test contexts/fixtures, retaining production per-transition limits and
+all state/order assertions. Repaired targeted/full local race checks pass;
+restoring old test limits and removing the native callback guard both fail their
+discriminating controls. The original reviewer and new exact-candidate CI supply
+the final disposition within the same authorized round. See current PR checks
+and the latest section of [report0028](../reports/0028-m2-fixture-preview.md).
+M2 milestone acceptance and merge remain separate owner decisions; there is no
+automatic additional repair/review loop.
 
 Historical additional repair completion — 2026-11-16: the proven
 fullscreen callback guard was already in maintained source. The controller

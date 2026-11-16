@@ -1,4 +1,84 @@
-# M2 fixture preview: repair approved, owner confirms functions
+# M2 fixture preview: macOS CI test deadline repair
+
+## macOS CI test deadline repair — 2026-11-16
+
+M2 is published as Draft [PR #9](https://github.com/coda1997/my-bilibili/pull/9),
+initial head `6b35cdf91d85b10938dad115a65c9597a2932df2`. The first required CI run
+`43892470266` tested merge `3611dcdbe3554cbaecaebc26bdf47295b650e66e`, whose tree
+matches that head: Linux race and Windows non-race PASS, macOS race FAIL. The
+controller downloaded all three run artifacts and verified their source/log
+identities. This is the new required-verification finding **M2-CI-001**, separate
+from the closed original native smoke REV-002. Earlier native passes and owner
+functional confirmation remain valid within their recorded scope.
+
+The owner explicitly authorized one additional test-timing diagnosis/repair,
+original-reviewer response and push/recheck CI. Run:
+`20261116T151908Z-a7869129e308`. Retain five previous reviews/eight previous fixes;
+this is repair iteration **9** and original-reviewer response **6**, with no
+further automatic iteration. Runtime code, native deadlines, CI policy and
+frozen contracts are unchanged. Only `cmd/preview-smoke/fullscreen_test.go` and
+the three handoff documents change.
+
+### Observed failure and local reproduction
+
+The failing tests use fake RPC fixtures, not a native app. Successful three-cycle
+tests imposed a 4s parent context around three 500ms entry waits plus three large
+PNG decode/pixel-hash operations. The missing-callback test imposed 1.2s around
+entry, capture and the later exit-callback wait. CI exhausted these parent
+contexts at `entry-post-capture`: successful cases had five actions/three captures;
+the missing-callback case had only one action and never reached its exit phase.
+
+The unchanged tests pass naturally on the local Mac. Independent timing samples
+of the 1710x1073 decode/hash operation are 304.643/304.858/304.703ms; successful
+cases take about2.9–3.2s. A scratch-only 500ms delay in picture processing reproduces
+all CI failure locations/action counts locally. A separate 700ms fake capture-RPC
+delay also reproduces parent-budget exhaustion, at the earlier capture phase.
+These are controlled local reproductions, not spontaneous local failures or
+measurements of CI host scheduling. They establish the test's sensitivity to
+valid capture cost; the actual CI machine's cost breakdown was not measured.
+
+### Test-only repair and validation
+
+Success scenarios now use the test context with the driver's existing 5s
+per-transition bounds. The missing-callback scenario reaches the actual exit
+phase and must expire under that phase's unchanged 5s bound, with two actions,
+one capture, no premature transition and zero PASS records. A 900ms fake capture
+case deliberately exceeds the old whole-test budget while each transition stays
+within its real contract. Existing geometry, session, ordering, picture and
+shared-entry-deadline assertions remain. No production timeout or predicate is
+relaxed; no runtime app change or native relaunch is needed for this test repair.
+
+| Verification | Actual local result |
+| --- | --- |
+| Original race tests, normal timing | PASS; no spontaneous local reproduction claimed |
+| Original tests with 500ms extra picture work | Expected FAIL at the same CI phases/counters |
+| Repaired targeted race tests, including slow captures and shared5s deadline | PASS |
+| Repaired tests with the same500ms picture work | PASS |
+| Restore only old parent contexts | Slow-capture and missing-callback regressions FAIL as expected |
+| Remove only production callback-completion guard in scratch overlay | All delayed-callback/slow-capture cases detect premature actions; missing-callback case rejects wrong PASS |
+| `go run ./cmd/dev check --run 20261116T151908Z-a7869129e308 --race` | PASS, all six steps |
+
+The first parent-context negative-control selector selected only the missing
+callback test; a corrected selector actually ran and failed both intended
+regressions. Both command records are retained. The repair candidate has274files,
+manifest `0203517c81d062b6634b33cb2700ca878d1f9f917f3e9bfe939304c0d41b5359`,
+archive `a3b9a57ba781b3177319043e5620375eee55dfe4de51b5366e8df4c2e84c042e`;
+only the test file differs from the published base before this prose update.
+
+Original reviewer `/root/m2_feature_review` evaluates this exact repair and
+subsequent CI within one authorized round6. The current run retains its final
+review and actual publication/CI identities when available. This section records
+the local prepublication evidence; the PR carries the latest remote checks and
+independent disposition. Local passing tests alone do not close M2-CI-001 or
+substitute for the new macOS CI result. No second repair/review is implicit.
+
+M2 final milestone acceptance and merge remain separate owner decisions. The
+single follow-up inventory continues M2-CI-001 and those remaining gates; no
+unrelated defect or systemic follow-up is established, and issues remain0/5.
+GitHub CI artifacts expire after14days; downloaded logs, profiles, snapshots,
+normal/e2e packages and reviewer evidence under `.agent/` remain local-only.
+The following sections preserve their historical state, including prepublication
+status that is superseded by PR9 and this continuation.
 
 ## Publication preparation — 2026-11-16
 

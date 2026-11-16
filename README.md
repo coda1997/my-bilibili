@@ -78,13 +78,16 @@ verification is now recorded as owner-reported aggregate acceptance, including
 the prompted playback/audio and controls. No item-by-item measurements or
 independent system-level accessibility audit are claimed.
 
-**M2 still awaits exact-commit integration, changed-candidate CI and final
-milestone acceptance.** The commit inventory and draft PR are prepared for
-`codex/m2-fixture-preview` into `master`; publication awaits explicit owner
-authorization. Remote master still matches the local base. No further automatic
-repair/review loop is active.
+M2 is published as Draft [PR #9](https://github.com/coda1997/my-bilibili/pull/9).
+Its first CI passed Linux/Windows but failed macOS in fake fullscreen tests whose
+4s/1.2s parent contexts expired during picture processing. The owner authorized
+one test-only repair: controlled local reproduction, retained per-transition
+production limits, slow-capture regressions and full local race checks now pass.
+The original reviewer and new CI evaluate this candidate within authorized
+round6/repair9. See the PR for current remote checks and final review disposition.
+Final M2 acceptance and merge remain separate owner decisions.
 
-- [Current handoff: M2 repair approved, owner confirms functions](reports/0028-m2-fixture-preview.md)
+- [Current handoff: M2 macOS CI test deadline repair](reports/0028-m2-fixture-preview.md)
 - [Previous handoff: PR tooling guard repairs](reports/0027-playback-tooling-guards.md)
 - [M1 publication and CI portability repair](reports/0026-target-test-portability.md)
 - [M1 completed and accepted](reports/0025-m1-acceptance.md)
