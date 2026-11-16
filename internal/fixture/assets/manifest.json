@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "name": "part-1.mp4",
+      "bytes": 1531610,
+      "sha256": "4354b76229e5270c132c0782cedd7e421bc7e48facfd1bccaf15d4c83e2e71b2"
+    },
+    {
+      "name": "part-2.mp4",
+      "bytes": 1534238,
+      "sha256": "ff1b6d9da3699ba5211fcc44478d91d9f892e434a57bade1bbaacde86720436b"
+    },
+    {
+      "name": "cover.png",
+      "bytes": 1578,
+      "sha256": "80645d20dd855924a49e3bf4725a8244586b6109037d71d35da0fe6b2c5bc80d"
+    },
+    {
+      "name": "metadata.json",
+      "bytes": 541,
+      "sha256": "d1fe54b6027b9dde875777235f3debb947aab67af1635cf8c7ad6131482b7f9c"
+    }
+  ]
+}

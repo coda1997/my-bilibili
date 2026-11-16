@@ -58,7 +58,37 @@ retained. This does not measure physical sync/rate.
 
 ## Start here
 
-- [Current handoff: PR tooling guard repairs](reports/0027-playback-tooling-guards.md)
+M2's fullscreen repair now has scoped independent approval. On 2026-11-16,
+the original reviewer closed REV-002 after verifying four complete native suites
+with 30 passing checks each, 51 complete fixed fullscreen cycles, and independent
+race regressions including a failing guard-removal control. REV-001 remains
+closed. Cumulative M2-004 history is five formal reviews and eight actual fixes;
+this acceptance continuation changes documentation only.
+
+The uncommitted fixture desktop candidate has fresh developer bundles at
+`.agent/m2-repair-final/MyBilibili.app` and `MyBilibiliE2E.app`. The driver now
+waits for actual native fullscreen completion callbacks alongside the existing
+geometry/layout checks. Normal-app transition behavior and deadlines are
+unchanged. libmpv remains an internal hardcoded development path, with no user
+configuration; bundling it for distribution is future work.
+
+On 2026-11-16 the owner replied **“功能全部正常”** after receiving the normal
+package and picture/audio/interaction checklist. Ordinary-package functional
+verification is now recorded as owner-reported aggregate acceptance, including
+the prompted playback/audio and controls. No item-by-item measurements or
+independent system-level accessibility audit are claimed.
+
+M2 is published as Draft [PR #9](https://github.com/coda1997/my-bilibili/pull/9).
+Its first CI passed Linux/Windows but failed macOS in fake fullscreen tests whose
+4s/1.2s parent contexts expired during picture processing. The owner authorized
+one test-only repair: controlled local reproduction, retained per-transition
+production limits, slow-capture regressions and full local race checks now pass.
+The original reviewer and new CI evaluate this candidate within authorized
+round6/repair9. See the PR for current remote checks and final review disposition.
+Final M2 acceptance and merge remain separate owner decisions.
+
+- [Current handoff: M2 macOS CI test deadline repair](reports/0028-m2-fixture-preview.md)
+- [Previous handoff: PR tooling guard repairs](reports/0027-playback-tooling-guards.md)
 - [M1 publication and CI portability repair](reports/0026-target-test-portability.md)
 - [M1 completed and accepted](reports/0025-m1-acceptance.md)
 - [Default libmpv implementation and evidence](reports/0024-default-libmpv.md)
@@ -140,8 +170,9 @@ passes 41 assertions, with loading cancellation at 103.35175ms and separate
 playing cancellation at 45.361125ms. Missing-audio failure and graceful cleanup
 pass without forced cleanup. Physical audio, measured A/V sync, Windows and
 real-service access were not tested in that invocation. Later audibility/target
-evidence and the default selection have their own records; M2/P0/the full shell
-have not started.
+evidence and the default selection have their own records. M2's separate fixture
+preview now has scoped automated-native approval and owner-reported functional
+acceptance, with integration/CI pending; P0 and the full shell remain pending. See the current M2 handoff above.
 
 Supplemental native playhead measurements observe rates of 0.453×, 0.996× and
 2.000× in short initial windows for the 0.5×, 1× and 2× presets. A later,

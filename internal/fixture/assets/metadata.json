@@ -1,0 +1,19 @@
+{
+  "id": "preview-video",
+  "title": "A little color, a little motion",
+  "creator": "my-bilibili preview",
+  "description": "Two original synthetic clips for exploring playback. Part 1 uses a pink marker and a 440 Hz tone; Part 2 uses shifted colors, a blue marker and a 660 Hz tone.",
+  "cover_id": "preview-cover",
+  "parts": [
+    {
+      "id": "part-1",
+      "title": "Part 1 · Pink signal",
+      "duration_ms": 30000
+    },
+    {
+      "id": "part-2",
+      "title": "Part 2 · Blue signal",
+      "duration_ms": 30000
+    }
+  ]
+}
