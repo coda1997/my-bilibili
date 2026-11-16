@@ -5,6 +5,8 @@ description: Prepare a my-bilibili PR description or durable continuation handof
 
 # Publish an honest continuation
 
+Follow [agent convergence](../../../docs/agent-convergence.md) R2/R5/R6/R7/R8/R9 for dispositions, issue filing/batching, rulings, fix evidence and re-orientation.
+
 Read the current handoff from [README](../../../README.md) and follow
 [PR/handoff guidance](../../../docs/pull-requests.md) and the canonical
 [workflow](../../../docs/workflow.md). Check the requested authority before any
@@ -27,4 +29,4 @@ is not an attachment available to remote reviewers.
 Return the draft/report paths, actual checks and independent decisions,
 remaining gates, and smallest next action with its owner/required authority.
 Keep the PR a draft while required gates are pending. A handoff or green run
-does not close someone else's finding or authorize remote publication.
+does not technically close someone else's BLOCKING finding or authorize remote publication.

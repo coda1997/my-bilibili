@@ -3,6 +3,8 @@
 This guide makes the [workflow](workflow.md) usable by a human-operated lead.
 It does not implement a scheduler, grant permissions, or replace its gates.
 
+Follow [agent convergence](agent-convergence.md) R1–R9 for finding disposition, scope, budgets and completion.
+
 ## Start from a fresh context
 
 For a read-only explanation, audit, or investigation, use the
@@ -65,7 +67,7 @@ the entire author's chat transcript.
 | Controller/handoff | Worker outputs, candidate checks, independent reviews | Integration identity, evidence records, draft PR and durable handoff |
 
 A reviewer must be a separate authorized agent/context, not the implementation
-author wearing a different role. For finding closure, provide the original
+author wearing a different role. For BLOCKING closure, provide the original
 finding/reproduction and the changed candidate. If the original reviewer cannot
 continue, follow the [proposed succession procedure](workflow.md#reviewer-succession-proposed-clarification),
 including explicit human designation; do not silently substitute a reviewer.
@@ -93,12 +95,12 @@ the controller's run or change review/policy records.
    tracked/untracked candidate files, their hashes/modes, and the base SHA. Do
    not identify modified code solely by the unchanged HEAD commit. Keep a diff
    and enumerate any excluded local files. The recorder does not do this for you.
-4. Dispatch authorized independent review of that exact candidate. Apply the
-   [review/repair policy](workflow.md#review-and-repair-policy), including the
-   three-round limit and human escalation. Changes invalidate affected checks
-   and reviews; identify and re-review the new candidate.
+4. Dispatch authorized independent review of that exact candidate. Record its
+   round and finding dispositions. Changes invalidate affected checks and
+   reviews; identify the new candidate and re-verify affected evidence within
+   the remaining budget.
 5. Prepare a [PR/handoff](pull-requests.md). Publish no remote change without
-   the requested authority. Only the independent reviewer closes their findings;
+   the requested authority. Only the independent reviewer technically closes BLOCKING findings;
    a `succeeded` run or green test suite cannot approve itself.
 
 ## Repo-local skills

@@ -1,5 +1,7 @@
 # Pull requests and handoffs
 
+Follow [agent convergence](agent-convergence.md) R1–R9 for review readiness, issue filing, fix evidence and completion.
+
 ## Authority and source identity
 
 Preparing text locally is not permission to commit, push, create a PR, change
@@ -27,7 +29,7 @@ Use [the PR template](../.github/pull_request_template.md). A useful title is
 Explain why the change is needed, its boundaries, and which ACs it satisfies.
 For each claim link a concrete check/evidence locator and state the actual
 result and platform. Include failures, not-tested items, open questions, and
-lower-severity findings with their owners/dispositions. Do not paste raw local
+findings with their tier/class, severity, owners and dispositions. Do not paste raw local
 logs, cookies, signed URLs, or private media into the PR.
 
 List reviewer identities, independence, dimensions, and the exact candidate
@@ -39,16 +41,16 @@ from human approval of checks, policy, task-scope, or CI changes.
 
 Start as a draft when implementation, candidate CI, review, or policy approval
 is outstanding. Run [checks](testing.md), obtain authorized independent review,
-repair within the [bounded loop](workflow.md#review-and-repair-policy), and
-revalidate the changed candidate. Reviewers close their own findings; do not
-resolve a review comment solely because the author believes the fix works.
-If the original reviewer cannot continue, use the
+revalidate responses and changed behavior within the remaining review budget.
+The assigned independent reviewer technically closes BLOCKING findings; an
+author's belief that a fix works does not establish that closure.
+If that reviewer cannot continue, use the
 [proposed succession procedure](workflow.md#reviewer-succession-proposed-clarification).
 Keep closure pending until designation and independent verification are recorded;
 do not attribute a successor's decision to the original reviewer.
 
-Before requesting merge, establish every AC, required platform result, and
-blocking review disposition for the candidate. Confirm actual remote required
+Before requesting merge, establish the agreed AC evidence, required platform
+results, BLOCKING closures and high-severity rulings for the candidate. Confirm actual remote required
 checks/review enforcement, not merely the existence of workflow files. After
 the owner's 2026-11-10 settings update, `master` requires PR-based linear
 history, including administrators, and only squash merging is enabled. The

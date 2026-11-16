@@ -1,5 +1,7 @@
 # Assignment: <role> / <task-id>
 
+Follow [agent convergence](../agent-convergence.md) R1–R9 for scope, review/fix counters, issue budget, rulings and re-orientation.
+
 ## Identity and authority
 
 - Role: lead / architecture-review / implementation / code-review / handoff
@@ -9,6 +11,15 @@
   work; record any task-specific restriction.
 - Commit/push/PR/merge/release authority: not granted unless explicitly stated.
 - Run ID and prior run/finding references:
+- Policy version and any authorized transition from a frozen older assignment:
+- Review/fix history: current formal review round, cumulative fix iterations,
+  repeated-failure identities/counts, prior agent/candidate/run references and
+  policy-permitted finding dispositions:
+- Logical run/sweep identity, shared finding inventory and issue budget:
+- New issues already created, single advisory follow-up destination and
+  remaining review/fix/filing allowances:
+- Human escalation/resumption: decision needed, evidence packet, explicit human
+  direction and additional round allowance (or not applicable):
 - Checkout/worktree and base revision:
 - Exact candidate commit, or uncommitted manifest/archive and hashes:
 - Spec path/version/hash and task-graph hash:
@@ -23,13 +34,15 @@
 - For closure: original finding, reproduction, and required verification:
 - For reviewer succession (otherwise not applicable): original reviewer and
   report/finding IDs, unavailability reason, explicit human designation and
-  successor independence, prior repair-round count; follow the proposed
+  successor independence, prior review/fix counts; follow the proposed
   procedure in docs/workflow.md#reviewer-succession-proposed-clarification:
 
 Do not substitute the author's chat or desired verdict for review inputs.
 
 ## Boundaries
 
+- Original goal and assigned issue/bug class:
+- Done criteria and required evidence for each:
 - Candidate write paths, exactly as assigned in tasks.json:
 - Read-only/shared contracts and prohibited changes:
 - Scratch/evidence output location (reviewers do not edit the candidate):
@@ -44,7 +57,9 @@ worktree isolation are not technical access controls.
 - Required ACs and verification commands/procedures:
 - Review dimensions, if applicable:
 - Return: source/candidate identity, changed paths, AC-to-test results,
-  evidence locators, findings/limitations, and smallest next action.
+  evidence locators, observed versus inferred, contract relied on,
+  findings/limitations and found-not-done destinations, updated counters,
+  and smallest next action.
 - Review return: use docs/templates/review.md; state independence truthfully.
 - Stop/escalate: unclear authority, boundary/contract changes, unsafe inputs,
   missing prerequisites, unexpected changes, or the workflow's repair limit.

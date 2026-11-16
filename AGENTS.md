@@ -1,5 +1,7 @@
 # Repository instructions
 
+Follow [agent convergence](docs/agent-convergence.md) R1–R9 for finding tiers, scope, bounded review, issue triage and completion.
+
 ## Read order
 
 For read-only consultations, see the proposed lightweight route in

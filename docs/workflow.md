@@ -137,22 +137,12 @@ distributed dispatch, and automatic stale-lock recovery are out of scope.
 
 ## Review and repair policy
 
-Findings record a stable ID, severity, candidate commit, spec version, exact
-location, observed/expected behavior, reproduction, and required evidence.
-Use `docs/templates/review.md`. Independent reviewers close their findings.
-
-Block on P0/P1 findings and unmet acceptance criteria. Record ownership and
-disposition for lower-severity findings. Re-run affected checks and review on
-changed candidate commits. Start with at most three repair rounds; recurring
-failure, ambiguous requirements, or reviewer disagreement goes to a human.
-
-Those rules are not yet machine-enforced. A future controller must load gate
-policy from a trusted baseline, not the candidate's editable copy. Policy
-changes must not approve themselves.
+Follow [agent convergence](agent-convergence.md) R1–R9 for current finding tiers, scope, review/fix budgets, issue triage, rulings and completion.
 
 ### Reviewer succession (proposed clarification)
 
-If the original reviewer/context cannot continue, the human must explicitly
+For BLOCKING technical closure, if the original reviewer/context cannot continue,
+the human must explicitly
 designate a successor independent of the implementation before reassignment.
 The controller records the designation and reason in a new assignment, with
 the original reviewer/finding IDs, report locator, reproduction, required
@@ -169,7 +159,7 @@ decision. An implementation author cannot act as their own successor reviewer.
 Without explicit designation or required verification evidence, leave closure
 pending and report the gap. If reviewers disagree, escalate to the human rather
 than replacing a reviewer to obtain a preferred verdict. Succession does not
-reset the repair-round count or waive acceptance, CI, or policy-approval gates.
+reset the review/fix counters or waive acceptance, CI, or policy-approval gates.
 
 ## CI, storage, and release
 

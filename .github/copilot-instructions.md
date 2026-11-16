@@ -3,6 +3,8 @@
 These instructions supplement the root AGENTS.md; they do not replace the
 repository protocol or grant implementation, delegation, or remote authority.
 
+Follow [agent convergence](../docs/agent-convergence.md) R1/R2/R3/R4/R5/R6/R7 for finding labels, scope, review limits, triage and independent rulings.
+
 ## Review context
 
 - Write review explanations in Simplified Chinese. Preserve code identifiers,
@@ -36,12 +38,11 @@ repository protocol or grant implementation, delegation, or remote authority.
 - Report actionable findings with a precise file location, concrete failure
   scenario, expected behavior, and impact. Identify missing regression
   coverage where relevant; distinguish confirmed defects from open questions.
-- Follow the repository's severity and repair policy in docs/workflow.md.
-  Prioritize P0/P1 findings and unmet acceptance criteria; retain actionable
-  lower-severity findings rather than silently discarding them.
+- Return each finding's `BLOCKING [class N]` or `ADVISORY` label, severity,
+  evidence and disposition using docs/templates/review.md.
 - State which checks actually ran and which evidence is unavailable. Follow
   docs/testing.md before invoking Go; do not install tools or weaken gates
   merely to obtain a passing result.
 - Review completion is not acceptance, merge authorization, or automatic
-  closure of another reviewer's findings. Do not claim that a Copilot review
+  closure of another reviewer's BLOCKING findings. Do not claim that a Copilot review
   alone establishes the repository's independent-review requirements.

@@ -5,6 +5,8 @@ description: Review a my-bilibili architecture contract or exact code candidate 
 
 # Review without authoring the candidate
 
+Follow [agent convergence](../../../docs/agent-convergence.md) R1/R2/R3/R4/R5/R6/R7/R9 for tiers, advisory closure, scope, budgets, triage, rulings and evidence.
+
 Use the canonical [workflow](../../../docs/workflow.md),
 [role packet](../../../docs/templates/assignment.md), and
 [review format](../../../docs/templates/review.md). Start from the current
@@ -29,9 +31,10 @@ sanitized logs; do not write the controller's run or change historical reports.
 Do not bind dirty code solely to HEAD or accept baseline CI as changed-candidate
 evidence. Report unavailable inputs and checks rather than inventing results.
 
-Return candidate/spec identities, checks actually run, findings with severity,
-reproduction and required evidence, and a technical decision. Only the assigned
-independent reviewer closes their findings. If the original reviewer cannot
+Return candidate/spec identities, checks actually run, findings labelled
+`BLOCKING [class N]` or `ADVISORY`, severity, reproduction, disposition and
+required evidence, and a technical decision. Only the assigned independent
+reviewer technically closes BLOCKING findings. If that reviewer cannot
 continue, follow the [proposed succession procedure](../../../docs/workflow.md#reviewer-succession-proposed-clarification);
 do not assume reassignment or closure authority. Distinguish that decision from
 human policy approval, missing CI/platform acceptance, and merge authority.
