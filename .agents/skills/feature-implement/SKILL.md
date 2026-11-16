@@ -5,6 +5,8 @@ description: Implement an assigned my-bilibili task or repair within a reviewed 
 
 # Implement the assigned slice
 
+Follow [agent convergence](../../../docs/agent-convergence.md) R3/R4/R5/R7/R9 for scope, repair budgets, issue triage, observed contracts and re-orientation.
+
 Read the current handoff from [README](../../../README.md), the role packet,
 frozen spec/tasks, and relevant code. Use [development](../../../docs/development.md)
 and the canonical [workflow](../../../docs/workflow.md) for the execution rules.
@@ -21,8 +23,7 @@ then the full assigned check; state actual OS results and anything not tested.
 
 Return changed paths and exact source identity, AC-to-test results, sanitized
 evidence, limitations, and the next action. Workers use their own scratch and
-return logs; only the controller publishes to its run. Follow the workflow's
-bounded repair policy when an independent reviewer requests changes.
+return logs; only the controller publishes to its run.
 
 Self-checking is not independent approval. Use the repository's standing
 delegation authority for scoped sub-agent work. This skill does not grant

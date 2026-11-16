@@ -5,6 +5,8 @@ description: Plan a scoped my-bilibili feature or repair by producing a spec, ta
 
 # Plan a bounded change
 
+Follow [agent convergence](../../../docs/agent-convergence.md) R3/R5/R7/R8/R9 for scope, issue triage, observed contracts, recurrence and re-orientation.
+
 Start with [README](../../../README.md), the current handoff, and the selected
 milestone. Follow [development](../../../docs/development.md) and the canonical
 [workflow](../../../docs/workflow.md); this skill grants no extra authority.
