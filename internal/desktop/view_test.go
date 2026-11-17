@@ -30,8 +30,9 @@ func (p *fakePlayer) record(name string) error {
 	p.calls = append(p.calls, call{name: name})
 	return p.err
 }
-func (p *fakePlayer) Start(context.Context) error { return p.record("start") }
-func (p *fakePlayer) RetryDetail() error          { return p.record("retry-detail") }
+func (p *fakePlayer) Start(context.Context) error       { return p.record("start") }
+func (p *fakePlayer) RetryDetail() error                { return p.record("retry-detail") }
+func (p *fakePlayer) SelectQuality(app.QualityID) error { return nil }
 func (p *fakePlayer) SelectPart(id catalog.PartID) error {
 	p.calls = append(p.calls, call{name: "part", part: id})
 	return p.err

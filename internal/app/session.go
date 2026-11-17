@@ -16,6 +16,7 @@ import (
 type Session struct {
 	source      Source
 	controller  *playback.Controller
+	options     Options
 	video       catalog.Video
 	detailPhase DetailPhase
 	detailError catalog.Code
@@ -35,6 +36,10 @@ type Session struct {
 	selectionError      catalog.Code
 	selectionRetry      catalog.PartID
 	selectionIntent     bool
+	selectionPurpose    sourcePurpose
+	selectionQuality    QualityID
+	selectionStartAt    time.Duration
+	selectionNewWatch   bool
 	playbackRetryError  catalog.Code
 	selectedQuality     QualityID
 	playbackQuality     QualityID
@@ -42,6 +47,9 @@ type Session struct {
 	input               playback.Input
 	expiresAt           time.Time
 	hasInput            bool
+	refreshOnRetry      bool
+	watchSequence       uint64
+	resume              resumeState
 	intent, retryIntent bool
 	initializing        bool
 	generation          uint64
@@ -55,11 +63,16 @@ var _ Player = (*Session)(nil)
 // New validates dependencies without invoking Source or starting a worker.
 // Start supplies the lifetime context for both source work and playback.
 func New(source Source, controller *playback.Controller) (*Session, error) {
-	if source == nil || controller == nil {
+	return NewWithOptions(source, controller, Options{})
+}
+
+func NewWithOptions(source Source, controller *playback.Controller, options Options) (*Session, error) {
+	if source == nil || controller == nil || options.InitialPage < 0 ||
+		options.InitialPart != "" && options.InitialPage != 0 || options.StartAt < 0 || options.StartAt > 7*24*time.Hour {
 		return nil, playback.Invalid
 	}
 	return &Session{
-		source: source, controller: controller, detailPhase: DetailInitial,
+		source: source, controller: controller, options: options, detailPhase: DetailInitial,
 		requests: make(chan sourceRequest, 1), results: make(chan sourceResult, 1), done: make(chan struct{}),
 		requestContext: context.WithTimeout, now: time.Now,
 		volume: 1, rate: 1, unmutedVolume: 1,
@@ -125,6 +138,7 @@ func (s *Session) State() State {
 		SelectedPart: s.selected, PlaybackPart: s.playback, SelectionError: s.selectionError,
 		PlaybackRetryError: s.playbackRetryError, Playback: s.controller.Snapshot(),
 		SelectedQuality: s.selectedQuality, PlaybackQuality: s.playbackQuality, Qualities: cloneQualities(s.qualities),
+		Resuming: s.resume.active, ResumeError: s.resume.err, WatchSequence: s.watchSequence,
 		DesiredPlaying: s.intent, Volume: s.volume, Rate: s.rate}
 	if s.pending != nil && s.pending.request.purpose != detailRequest {
 		state.ResolvingPart, state.DesiredPlaying = s.pending.request.part, s.pending.intent
@@ -218,10 +232,14 @@ func (s *Session) retireRequest() {
 }
 
 func (s *Session) submit(purpose sourcePurpose, part catalog.PartID, intent bool) {
+	s.submitTarget(purpose, ResolveRequest{Part: part}, intent, 0, false)
+}
+
+func (s *Session) submitTarget(purpose sourcePurpose, target ResolveRequest, intent bool, startAt time.Duration, newWatch bool) {
 	s.retireRequest()
 	ctx, cancel := s.requestContext(s.ctx, sourceTimeout)
-	request := sourceRequest{generation: s.sourceGeneration, purpose: purpose, part: part, ctx: ctx}
-	s.pending = &sourceAttempt{request: request, cancel: cancel, intent: intent}
+	request := sourceRequest{generation: s.sourceGeneration, purpose: purpose, part: target.Part, quality: target.Quality, ctx: ctx}
+	s.pending = &sourceAttempt{request: request, cancel: cancel, intent: intent, startAt: startAt, newWatch: newWatch}
 	// There is one UI-thread producer. retireRequest emptied this capacity-one
 	// mailbox, and the worker can only remove from it. Submission cannot wait.
 	s.requests <- request
@@ -243,10 +261,14 @@ func (s *Session) SelectPart(id catalog.PartID) error {
 	if s.partIndex(id) < 0 {
 		return playback.Invalid
 	}
+	s.options.InitialPart, s.options.InitialPage, s.options.StartAt = "", 0, 0
+	wasResuming := s.resume.active || s.resume.err != catalog.None
+	s.resume = resumeState{}
 	s.selected = id
 	s.selectionError, s.selectionRetry = catalog.None, ""
-	if s.pending != nil && s.pending.request.part == id {
+	if s.pending != nil && s.pending.request.part == id && s.pending.request.purpose == selectionRequest {
 		s.pending.intent = true
+		s.pending.startAt, s.pending.newWatch = 0, true
 		return nil
 	}
 	// Invalidate B before any accepted-A fast path, including a no-op/resume
@@ -254,11 +276,18 @@ func (s *Session) SelectPart(id catalog.PartID) error {
 	s.retireRequest()
 	if id == s.playback && s.hasInput {
 		s.selectedQuality = s.playbackQuality
+		if wasResuming {
+			return s.reopen(true, true, true)
+		}
 		switch s.controller.Snapshot().State {
 		case playback.Loading, playback.Playing, playback.Ready, playback.Paused:
-			return s.playAccepted(true)
+			err := s.playAccepted(true)
+			if err == nil {
+				s.watchSequence++
+			}
+			return err
 		case playback.Ended, playback.Failed:
-			return s.reopen(true)
+			return s.reopen(true, true, true)
 		}
 	}
 	s.selectPart(id, true)
@@ -269,7 +298,7 @@ func (s *Session) selectPart(id catalog.PartID, intent bool) {
 	s.selected = id
 	s.selectedQuality = ""
 	s.selectionError, s.selectionRetry = catalog.None, ""
-	s.submit(selectionRequest, id, intent)
+	s.submitTarget(selectionRequest, ResolveRequest{Part: id}, intent, 0, true)
 }
 
 // usable reports whether an input with this expiry may still be opened.
@@ -279,23 +308,30 @@ func (s *Session) usable(expiresAt time.Time) bool {
 
 // reopen targets accepted playback. A different selected part's failure and
 // retry intent remain intact, including while an expired input is refreshed.
-func (s *Session) reopen(intent bool) error {
+func (s *Session) reopen(intent, newWatch, fromZero bool) error {
 	s.playbackRetryError = catalog.None
 	if s.playback == s.selected {
 		s.selectionError, s.selectionRetry = catalog.None, ""
 	}
-	if s.usable(s.expiresAt) {
-		err := s.open(s.playback, s.input, s.expiresAt, intent)
+	startAt := s.controller.Snapshot().Position
+	if s.resume.active || s.resume.err != catalog.None {
+		startAt = s.resume.target
+	}
+	if fromZero {
+		startAt = 0
+	}
+	if s.usable(s.expiresAt) && !s.refreshOnRetry {
+		err := s.open(s.playback, s.input, s.expiresAt, intent, startAt, newWatch)
 		if err != nil && !s.closed && s.playback != s.selected {
 			s.playbackRetryError = safeContentError(err)
 		}
 		return err
 	}
-	s.submit(playbackRequest, s.playback, intent)
+	s.submitTarget(playbackRequest, ResolveRequest{Part: s.playback, Quality: s.playbackQuality}, intent, startAt, newWatch)
 	return nil
 }
 
-func (s *Session) open(id catalog.PartID, in playback.Input, expiresAt time.Time, intent bool) error {
+func (s *Session) open(id catalog.PartID, in playback.Input, expiresAt time.Time, intent bool, startAt time.Duration, newWatch bool) error {
 	if s.closed {
 		return playback.IsClosed
 	}
@@ -316,6 +352,10 @@ func (s *Session) open(id catalog.PartID, in playback.Input, expiresAt time.Time
 		s.playback, s.input, s.expiresAt, s.hasInput = id, in, expiresAt, true
 		s.intent, s.retryIntent = intent, intent
 		s.generation, s.initializing = after.Generation, true
+		s.resume = resumeState{generation: after.Generation, target: startAt, active: startAt > 0, readyDeadline: s.now().Add(10 * time.Second)}
+		if newWatch || s.watchSequence == 0 {
+			s.watchSequence++
+		}
 		s.playbackRetryError = catalog.None
 		s.observeTerminal(after)
 	}
@@ -349,7 +389,12 @@ func (s *Session) RetrySelection() error {
 	if s.selectionRetry == "" {
 		return playback.Invalid
 	}
-	s.selectPart(s.selectionRetry, s.selectionIntent)
+	if s.selectionPurpose == qualityRequest && s.controller.Snapshot().State == playback.Ended {
+		return playback.Invalid
+	}
+	s.selectionError = catalog.None
+	s.submitTarget(s.selectionPurpose, ResolveRequest{Part: s.selectionRetry, Quality: s.selectionQuality}, s.selectionIntent, s.selectionStartAt, s.selectionNewWatch)
+	s.selectionRetry = ""
 	return nil
 }
 
@@ -370,7 +415,7 @@ func (s *Session) RetryPlayback() error {
 	if s.controller.Snapshot().State == playback.Loading {
 		return nil
 	}
-	return s.reopen(s.retryIntent)
+	return s.reopen(s.retryIntent, false, false)
 }
 
 func (s *Session) Play() error  { return s.play(true) }
@@ -393,7 +438,7 @@ func (s *Session) setPlaying(intent bool) error {
 			return nil
 		}
 	} else if state == playback.Ended && intent {
-		return s.reopen(true)
+		return s.reopen(true, true, true)
 	}
 	return s.playAccepted(intent)
 }
@@ -403,11 +448,14 @@ func (s *Session) playAccepted(intent bool) error {
 	if state != playback.Loading && state != playback.Ready && state != playback.Paused && state != playback.Playing {
 		return playback.Invalid
 	}
+	if s.resume.err != catalog.None {
+		return playback.Invalid
+	}
 	alreadyRequested := s.intent == intent
 	s.intent, s.retryIntent = intent, intent
 	// Native snapshots can lag commands. Suppression follows accepted intent,
 	// never the separate intent of the part which is still resolving.
-	if state == playback.Loading || alreadyRequested {
+	if state == playback.Loading || s.resume.active || alreadyRequested {
 		return nil
 	}
 	kind := playback.Pause
@@ -425,7 +473,7 @@ func (s *Session) Toggle() error {
 		return s.setPlaying(!s.pending.intent)
 	}
 	if s.controller.Snapshot().State == playback.Ended {
-		return s.reopen(true)
+		return s.reopen(true, true, true)
 	}
 	return s.setPlaying(!s.intent)
 }
@@ -435,7 +483,7 @@ func (s *Session) Seek(position time.Duration) error {
 		return err
 	}
 	state := s.controller.Snapshot()
-	if position < 0 || state.Duration <= 0 || (state.State != playback.Ready && state.State != playback.Paused && state.State != playback.Playing) {
+	if s.resume.active || s.resume.err != catalog.None || position < 0 || state.Duration <= 0 || (state.State != playback.Ready && state.State != playback.Paused && state.State != playback.Playing) {
 		return playback.Invalid
 	}
 	return s.command(playback.Command{Kind: playback.Seek, Position: position})
@@ -491,8 +539,17 @@ func (s *Session) command(cmd playback.Command) error {
 func (s *Session) observeTerminal(state playback.Snapshot) {
 	switch state.State {
 	case playback.Failed:
+		if s.resume.active {
+			s.resume.active, s.resume.err = false, safeContentError(state.Error)
+		}
 		s.intent, s.initializing = false, false
 	case playback.Ended:
+		if s.pending != nil && s.pending.request.purpose == qualityRequest {
+			s.retireRequest()
+			s.selectedQuality = s.playbackQuality
+			s.selectionError, s.selectionRetry = catalog.None, ""
+		}
+		s.resume = resumeState{}
 		s.intent, s.retryIntent, s.initializing = false, false, false
 	case playback.Closed:
 		s.stopSource()
@@ -514,16 +571,18 @@ func (s *Session) failAttempt(attempt *sourceAttempt, code catalog.Code) {
 			return
 		}
 		fallthrough
-	case selectionRequest:
+	case selectionRequest, qualityRequest:
 		s.selectionError = code
 		s.selectionRetry, s.selectionIntent = attempt.request.part, attempt.intent
+		s.selectionPurpose, s.selectionQuality = attempt.request.purpose, attempt.request.quality
+		s.selectionStartAt, s.selectionNewWatch = attempt.startAt, attempt.newWatch
 	}
 }
 
 func (s *Session) matches(request sourceRequest) bool {
 	return !s.closed && sourceContextError(s.ctx) == nil && s.pending != nil &&
 		s.pending.request.generation == request.generation &&
-		s.pending.request.purpose == request.purpose && s.pending.request.part == request.part
+		s.pending.request.purpose == request.purpose && s.pending.request.part == request.part && s.pending.request.quality == request.quality
 }
 
 func (s *Session) accept(result sourceResult) {
@@ -540,9 +599,17 @@ func (s *Session) accept(result sourceResult) {
 		if result.request.purpose == detailRequest {
 			err = catalog.ValidateVideo(result.video)
 		} else {
-			err = result.resolution.Input.Validate()
+			in := result.resolution.Input
+			in.Headers = maps.Clone(in.Headers)
+			err = in.Validate()
+			if s.options.InputPolicy != nil {
+				err = s.options.InputPolicy.Validate(in)
+			}
 			if err == nil {
 				err = validateQualities(result.resolution)
+			}
+			if err == nil && result.request.quality != "" && result.resolution.Quality.ID != result.request.quality {
+				err = catalog.QualityUnavailable
 			}
 			if err == nil && !s.usable(result.resolution.ExpiresAt) {
 				err = playback.Media
@@ -564,14 +631,18 @@ func (s *Session) accept(result sourceResult) {
 	if result.request.purpose == detailRequest {
 		s.video = cloneVideo(result.video)
 		s.detailPhase, s.detailError = DetailReady, catalog.None
-		s.selectPart(s.video.Parts[0].ID, false)
+		s.initialSelection()
 		return
 	}
+	if result.request.purpose == qualityRequest {
+		attempt.startAt = s.controller.Snapshot().Position
+	}
 	before := s.controller.Snapshot().Generation
-	err = s.open(result.request.part, result.resolution.Input, result.resolution.ExpiresAt, attempt.intent)
+	err = s.open(result.request.part, result.resolution.Input, result.resolution.ExpiresAt, attempt.intent, attempt.startAt, attempt.newWatch)
 	if s.controller.Snapshot().Generation != before {
 		s.playbackQuality = result.resolution.Quality.ID
 		s.qualities = cloneQualities(result.resolution.Qualities)
+		s.refreshOnRetry = result.resolution.RefreshOnRetry
 		if s.selected == s.playback {
 			s.selectedQuality = s.playbackQuality
 		}
@@ -607,19 +678,7 @@ func (s *Session) Tick() {
 		s.accept(result)
 	default:
 	}
-	state := s.controller.Snapshot()
-	if !s.initializing || state.Generation != s.generation || (state.State != playback.Ready && state.State != playback.Paused && state.State != playback.Playing) {
-		return
-	}
-	s.initializing = false
-	for _, cmd := range []playback.Command{{Kind: playback.Volume, Value: s.volume}, {Kind: playback.Rate, Value: s.rate}} {
-		if s.command(cmd) != nil {
-			return
-		}
-	}
-	if s.intent {
-		_ = s.command(playback.Command{Kind: playback.Play})
-	}
+	s.advanceReady(s.controller.Snapshot())
 }
 
 func (s *Session) stopSource() {
@@ -628,6 +687,7 @@ func (s *Session) stopSource() {
 	}
 	s.closed = true
 	s.intent, s.retryIntent, s.initializing = false, false, false
+	s.resume = resumeState{}
 	s.selectionRetry = ""
 	s.retireRequest()
 	if s.cancel != nil {

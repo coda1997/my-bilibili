@@ -27,6 +27,7 @@ type controlledSource struct {
 type sourceCall struct {
 	ctx      context.Context
 	part     catalog.PartID
+	quality  QualityID
 	reply    chan sourceReply
 	returned chan struct{}
 }
@@ -37,12 +38,12 @@ type sourceReply struct {
 	err        error
 }
 
-func (s *controlledSource) call(ctx context.Context, part catalog.PartID) sourceReply {
+func (s *controlledSource) call(ctx context.Context, part catalog.PartID, quality QualityID) sourceReply {
 	active := s.active.Add(1)
 	for old := s.peak.Load(); active > old && !s.peak.CompareAndSwap(old, active); old = s.peak.Load() {
 	}
 	defer s.active.Add(-1)
-	call := &sourceCall{ctx: ctx, part: part, reply: make(chan sourceReply, 1), returned: make(chan struct{})}
+	call := &sourceCall{ctx: ctx, part: part, quality: quality, reply: make(chan sourceReply, 1), returned: make(chan struct{})}
 	defer close(call.returned)
 	select {
 	case s.calls <- call:
@@ -64,12 +65,12 @@ func (s *controlledSource) call(ctx context.Context, part catalog.PartID) source
 }
 
 func (s *controlledSource) Detail(ctx context.Context) (catalog.Video, error) {
-	r := s.call(ctx, "")
+	r := s.call(ctx, "", "")
 	return r.video, r.err
 }
 
 func (s *controlledSource) Resolve(ctx context.Context, request ResolveRequest) (Resolution, error) {
-	r := s.call(ctx, request.Part)
+	r := s.call(ctx, request.Part, request.Quality)
 	return r.resolution, r.err
 }
 

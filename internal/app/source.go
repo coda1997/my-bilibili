@@ -16,6 +16,7 @@ const (
 	detailRequest sourcePurpose = iota
 	selectionRequest
 	playbackRequest
+	qualityRequest
 )
 
 // Requests are immutable after submission. The UI-owned attempt holds mutable
@@ -24,13 +25,16 @@ type sourceRequest struct {
 	generation uint64
 	purpose    sourcePurpose
 	part       catalog.PartID
+	quality    QualityID
 	ctx        context.Context
 }
 
 type sourceAttempt struct {
-	request sourceRequest
-	cancel  context.CancelFunc
-	intent  bool
+	request  sourceRequest
+	cancel   context.CancelFunc
+	intent   bool
+	startAt  time.Duration
+	newWatch bool
 }
 
 type sourceResult struct {
@@ -106,7 +110,7 @@ func runSource(ctx context.Context, source Source, requests <-chan sourceRequest
 			result.video, result.err = source.Detail(request.ctx)
 			result.video = cloneVideo(result.video)
 		} else {
-			result.resolution, result.err = source.Resolve(request.ctx, ResolveRequest{Part: request.part})
+			result.resolution, result.err = source.Resolve(request.ctx, ResolveRequest{Part: request.part, Quality: request.quality})
 			result.resolution.Input.Headers = maps.Clone(result.resolution.Input.Headers)
 			result.resolution.Qualities = cloneQualities(result.resolution.Qualities)
 		}

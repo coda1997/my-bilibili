@@ -100,6 +100,7 @@ type Player interface {
 	Start(context.Context) error
 	RetryDetail() error
 	SelectPart(catalog.PartID) error
+	SelectQuality(QualityID) error
 	NextPart() error
 	RetrySelection() error
 	RetryPlayback() error
