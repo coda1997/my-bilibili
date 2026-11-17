@@ -49,9 +49,14 @@ library; product packages (`cmd/my-bilibili`, `internal/...`) never import
 
 `app.Source` returns a `Resolution`: a playback input plus an optional expiry.
 Session reuses a cached input only before `ExpiresAt - ResolutionMargin` and
-otherwise resolves again. Source calls currently run synchronously on the UI
-thread; moving them off it, with stale-result handling, is required before a
-network-backed source.
+otherwise resolves again. Source detail/resolution run on one owned worker,
+with one latest pending request and one acknowledged result. Only UI-thread
+Tick accepts a current, live, unexpired result and opens native playback.
+Construction does no source I/O; submission deadlines include queue wait.
+Close cancels work without waiting on the UI thread, and composition joins
+Done through the native dispatcher before window disposal. Done alone does
+not request window close. The default input policy remains fixture-only;
+real service adapters require their separately reviewed integration contract.
 
 ## Async contract requirements
 
