@@ -46,7 +46,7 @@ func TestSourceReceiptStreamFailsClosed(t *testing.T) {
 		"duplicate":  append(bytes.Clone(valid), valid...),
 		"incomplete": bytes.TrimSuffix(valid, []byte{'\n'}),
 		"malformed":  []byte("{\"Event\":\"private-sentinel\"}\n"),
-		"bounded":    append(bytes.Clone(valid), bytes.Repeat([]byte{'x'}, 65537)...),
+		"bounded":    append(append(bytes.Clone(valid), bytes.Repeat([]byte{'x'}, 65537)...), '\n'),
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := newSourceReceipts()

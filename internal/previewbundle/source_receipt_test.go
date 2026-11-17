@@ -18,7 +18,7 @@ func TestSourceReceiptRetainsStrictObservationBoundary(t *testing.T) {
 	}
 	text := string(data)
 	for _, bad := range []string{
-		"", "null", "{}", text + " {}", text[:len(text)-1], strings.Repeat(" ", 65537),
+		"", "null", "{}", text + " {}", text[:len(text)-1], text + strings.Repeat(" ", 65537),
 		strings.Replace(text, `"Event":"source-window-closed",`, ``, 1),
 		strings.Replace(text, `"Event":`, `"event":`, 1),
 		strings.Replace(text, `"Event":`, `"Event":"source-window-closed","Event":`, 1),
