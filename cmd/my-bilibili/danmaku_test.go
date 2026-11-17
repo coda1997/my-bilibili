@@ -196,7 +196,9 @@ func danmakuSessionScenario(t *testing.T, closePending bool) {
 			t.Fatal("controlled source did not settle", session.State())
 			return app.State{}
 		}
-		state := pump(func(s app.State) bool { return s.Playback.State == playback.Ready || s.Playback.State == playback.Paused })
+		state := pump(func(s app.State) bool {
+			return s.Playback.State == playback.Ready || s.Playback.State == playback.Paused
+		})
 		first := renderBoundDanmaku(a, state)
 		requireFixturePhrase(t, first, "中文弹幕测试")
 		if err := session.SelectPart("part-2"); err != nil {
