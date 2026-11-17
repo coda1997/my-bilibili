@@ -1,21 +1,21 @@
-package mpvprobe
+package mpv
 
 import (
 	"os"
 	"path/filepath"
 
 	"github.com/ebitengine/purego"
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 func load(path string) (*nativeAPI, error) {
 	info, err := os.Lstat(path)
 	if !filepath.IsAbs(path) || err != nil || !info.Mode().IsRegular() {
-		return nil, contract.Unsupported
+		return nil, playback.Unsupported
 	}
 	h, err := purego.Dlopen(path, purego.RTLD_NOW|purego.RTLD_LOCAL)
 	if err != nil {
-		return nil, contract.Unsupported
+		return nil, playback.Unsupported
 	}
 	a := &nativeAPI{unload: func() { _ = purego.Dlclose(h) }}
 	bindings := []struct {
@@ -34,13 +34,13 @@ func load(path string) (*nativeAPI, error) {
 		symbol, err := purego.Dlsym(h, binding.name)
 		if err != nil {
 			a.unload()
-			return nil, contract.Unsupported
+			return nil, playback.Unsupported
 		}
 		purego.RegisterFunc(binding.fn, symbol)
 	}
 	if a.version() != 2<<16|6 {
 		a.unload()
-		return nil, contract.Unsupported
+		return nil, playback.Unsupported
 	}
 	return a, nil
 }

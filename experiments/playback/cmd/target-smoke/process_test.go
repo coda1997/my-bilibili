@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 func TestChildEnvironmentAndFixedArguments(t *testing.T) {
@@ -165,7 +165,7 @@ func TestOwnedProcessEarlyExitAndSpawnFailure(t *testing.T) {
 	if shutdown(p, socket, r, time.Second) == nil || r.ForcedCleanup {
 		t.Fatal("early exit treated as supervised success")
 	}
-	if _, err := startOwned(filepath.Join(t.TempDir(), "absent"), "/library", "/socket", nil); !errors.Is(err, contract.Media) {
+	if _, err := startOwned(filepath.Join(t.TempDir(), "absent"), "/library", "/socket", nil); !errors.Is(err, playback.Media) {
 		t.Fatal(err)
 	}
 }
@@ -212,8 +212,8 @@ func TestInvalidDescriptorStopsBeforeSpawnAndRedacts(t *testing.T) {
 func TestSafeErrorClassification(t *testing.T) {
 	for _, tc := range []struct {
 		err  error
-		want contract.ErrorCode
-	}{{context.DeadlineExceeded, contract.Timeout}, {context.Canceled, contract.Canceled}, {contract.Unsupported, contract.Unsupported}, {contract.Invalid, contract.Invalid}, {errors.New("SECRET_RAW_NATIVE_OUTPUT"), contract.Media}, {contract.ErrorCode("SECRET"), contract.Media}} {
+		want playback.ErrorCode
+	}{{context.DeadlineExceeded, playback.Timeout}, {context.Canceled, playback.Canceled}, {playback.Unsupported, playback.Unsupported}, {playback.Invalid, playback.Invalid}, {errors.New("SECRET_RAW_NATIVE_OUTPUT"), playback.Media}, {playback.ErrorCode("SECRET"), playback.Media}} {
 		if got := safeCode(tc.err); got != tc.want {
 			t.Fatalf("want %s got %s", tc.want, got)
 		}

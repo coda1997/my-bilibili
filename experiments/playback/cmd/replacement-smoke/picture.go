@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 func record(r *report, name, result, detail string, s observed) {
@@ -67,7 +67,7 @@ func (c *client) picture(ctx context.Context, dir, name string) error {
 
 func (c *client) ready(ctx context.Context, key string) (observed, error) {
 	s, err := c.openUntil(ctx, key, 10*time.Second, func(s observed) bool {
-		return s.State == contract.Ready && s.Duration > 0 && s.Owned && s.Error == contract.NoError
+		return s.State == playback.Ready && s.Duration > 0 && s.Owned && s.Error == playback.NoError
 	})
 	if err != nil {
 		return s, fmt.Errorf("%w (state=%s error=%s duration=%s owned=%t)", err, s.State, s.Error, s.Duration, s.Owned)

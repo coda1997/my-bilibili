@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"my-bilibili/experiments/playback/contract"
-	"my-bilibili/experiments/playback/mpvprobe"
+	"my-bilibili/internal/adapters/mpv"
+	"my-bilibili/internal/playback"
 )
 
 func TestLauncherSetupBeforeNativeLoad(t *testing.T) {
@@ -23,7 +23,7 @@ func TestLauncherSetupBeforeNativeLoad(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer v.Close()
-			if v.Controller.Active() || v.Controller.Snapshot().State != contract.Idle || mpvprobe.Owned() != (mpvprobe.Resources{}) {
+			if v.Controller.Active() || v.Controller.Snapshot().State != playback.Idle || mpv.Owned() != (mpv.Resources{}) {
 				t.Fatal("configuration acquired native resources or opened media")
 			}
 			if base == "" {

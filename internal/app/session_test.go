@@ -9,36 +9,42 @@ import (
 	"testing"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
 	"my-bilibili/internal/catalog"
+	"my-bilibili/internal/playback"
 )
 
 type fakeSource struct {
 	video     catalog.Video
 	detailErr error
-	inputs    map[catalog.PartID]contract.Input
+	inputs    map[catalog.PartID]playback.Input
 	errors    map[catalog.PartID]error
 	resolved  []catalog.PartID
+	expires   map[catalog.PartID]time.Time
+	contexts  []context.Context
 }
 
-func (f *fakeSource) Detail() (catalog.Video, error) { return f.video, f.detailErr }
-func (f *fakeSource) Resolve(id catalog.PartID) (contract.Input, error) {
+func (f *fakeSource) Detail(ctx context.Context) (catalog.Video, error) {
+	f.contexts = append(f.contexts, ctx)
+	return f.video, f.detailErr
+}
+func (f *fakeSource) Resolve(ctx context.Context, id catalog.PartID) (Resolution, error) {
+	f.contexts = append(f.contexts, ctx)
 	f.resolved = append(f.resolved, id)
-	return f.inputs[id], f.errors[id]
+	return Resolution{Input: f.inputs[id], ExpiresAt: f.expires[id]}, f.errors[id]
 }
 
 type fakeEngine struct {
 	deferCommands bool
-	pending       []contract.Command
-	snapshot      contract.Snapshot
-	commands      []contract.Command
+	pending       []playback.Command
+	snapshot      playback.Snapshot
+	commands      []playback.Command
 	closed        int
-	failKind      contract.CommandKind
+	failKind      playback.CommandKind
 	failErr       error
 }
 
-func (e *fakeEngine) Snapshot() contract.Snapshot { return e.snapshot }
-func (e *fakeEngine) Command(c contract.Command) error {
+func (e *fakeEngine) Snapshot() playback.Snapshot { return e.snapshot }
+func (e *fakeEngine) Command(c playback.Command) error {
 	e.commands = append(e.commands, c)
 	if c.Kind == e.failKind {
 		return e.failErr
@@ -51,36 +57,36 @@ func (e *fakeEngine) Command(c contract.Command) error {
 	return nil
 }
 
-func (e *fakeEngine) apply(c contract.Command) {
+func (e *fakeEngine) apply(c playback.Command) {
 	switch c.Kind {
-	case contract.Play:
-		e.snapshot.State = contract.Playing
-	case contract.Pause:
-		e.snapshot.State = contract.Paused
-	case contract.Seek:
+	case playback.Play:
+		e.snapshot.State = playback.Playing
+	case playback.Pause:
+		e.snapshot.State = playback.Paused
+	case playback.Seek:
 		e.snapshot.Position = c.Position
-	case contract.Volume:
+	case playback.Volume:
 		e.snapshot.Volume = c.Value
-	case contract.Rate:
+	case playback.Rate:
 		e.snapshot.Rate = c.Value
 	}
 }
 func (e *fakeEngine) Close() error { e.closed++; return nil }
 
 type fakeOpener struct {
-	inputs   []contract.Input
+	inputs   []playback.Input
 	engines  []*fakeEngine
 	contexts []context.Context
 	err      error
 }
 
-func (o *fakeOpener) Open(ctx context.Context, in contract.Input) (contract.Engine, error) {
+func (o *fakeOpener) Open(ctx context.Context, in playback.Input) (playback.Engine, error) {
 	o.inputs = append(o.inputs, in)
 	o.contexts = append(o.contexts, ctx)
 	if o.err != nil {
 		return nil, o.err
 	}
-	e := &fakeEngine{snapshot: contract.Snapshot{State: contract.Loading, Duration: 30 * time.Second, Rate: 1, Volume: 1}}
+	e := &fakeEngine{snapshot: playback.Snapshot{State: playback.Loading, Duration: 30 * time.Second, Rate: 1, Volume: 1}}
 	o.engines = append(o.engines, e)
 	return e, nil
 }
@@ -96,13 +102,14 @@ func newHarness(t *testing.T) *harness {
 	t.Helper()
 	h := &harness{now: time.Unix(100, 0), opener: &fakeOpener{}, source: &fakeSource{
 		video:  catalog.Video{ID: "video", Title: "Title", Creator: "Creator", Description: "Description", CoverID: "cover", Parts: []catalog.Part{{ID: "p1", Title: "One", Duration: 30 * time.Second}, {ID: "p2", Title: "Two", Duration: 30 * time.Second}}},
-		inputs: map[catalog.PartID]contract.Input{"p1": {FilePath: "/fixture-one.mp4"}, "p2": {FilePath: "/fixture-two.mp4"}}, errors: map[catalog.PartID]error{},
+		inputs: map[catalog.PartID]playback.Input{"p1": {FilePath: "/fixture-one.mp4"}, "p2": {FilePath: "/fixture-two.mp4"}}, errors: map[catalog.PartID]error{}, expires: map[catalog.PartID]time.Time{},
 	}}
 	var err error
-	h.s, err = New(h.source, contract.New(h.opener, func() time.Time { return h.now }))
+	h.s, err = New(context.Background(), h.source, playback.New(h.opener, func() time.Time { return h.now }))
 	if err != nil {
 		t.Fatal(err)
 	}
+	h.s.now = func() time.Time { return h.now }
 	return h
 }
 func (h *harness) start(t *testing.T) {
@@ -112,18 +119,18 @@ func (h *harness) start(t *testing.T) {
 	}
 }
 func (h *harness) engine() *fakeEngine { return h.opener.engines[len(h.opener.engines)-1] }
-func (h *harness) tick(state contract.State) {
+func (h *harness) tick(state playback.State) {
 	h.engine().snapshot.State = state
-	h.now = h.now.Add(contract.PollInterval)
+	h.now = h.now.Add(playback.PollInterval)
 	h.s.Tick()
 }
-func requireError(t *testing.T, err error, want contract.ErrorCode) {
+func requireError(t *testing.T, err error, want playback.ErrorCode) {
 	t.Helper()
 	if err != want {
 		t.Fatalf("error=%v want %v", err, want)
 	}
 }
-func countKind(e *fakeEngine, kind contract.CommandKind) int {
+func countKind(e *fakeEngine, kind playback.CommandKind) int {
 	n := 0
 	for _, c := range e.commands {
 		if c.Kind == kind {
@@ -149,24 +156,24 @@ func TestConstructionAndCopyIsolation(t *testing.T) {
 	} {
 		x := newHarness(t)
 		change(&x.source.video)
-		_, err := New(x.source, x.s.controller)
-		requireError(t, err, contract.Invalid)
+		_, err := New(context.Background(), x.source, x.s.controller)
+		requireError(t, err, playback.Invalid)
 	}
-	_, err := New(nil, h.s.controller)
-	requireError(t, err, contract.Invalid)
-	_, err = New(h.source, nil)
-	requireError(t, err, contract.Invalid)
+	_, err := New(context.Background(), nil, h.s.controller)
+	requireError(t, err, playback.Invalid)
+	_, err = New(context.Background(), h.source, nil)
+	requireError(t, err, playback.Invalid)
 	h.source.detailErr = errors.New("private detail path")
-	_, err = New(h.source, h.s.controller)
-	requireError(t, err, contract.Media)
-	h.source.detailErr = fmt.Errorf("private: %w", contract.Unsupported)
-	_, err = New(h.source, h.s.controller)
-	requireError(t, err, contract.Unsupported)
+	_, err = New(context.Background(), h.source, h.s.controller)
+	requireError(t, err, playback.Media)
+	h.source.detailErr = fmt.Errorf("private: %w", playback.Unsupported)
+	_, err = New(context.Background(), h.source, h.s.controller)
+	requireError(t, err, playback.Unsupported)
 }
 
 func TestStartupPausedOnceAndReadOnlyState(t *testing.T) {
 	h := newHarness(t)
-	requireError(t, h.s.Start(nil), contract.Invalid)
+	requireError(t, h.s.Start(nil), playback.Invalid)
 	h.start(t)
 	h.start(t)
 	if len(h.opener.inputs) != 1 || h.s.Engine() != h.engine() {
@@ -180,13 +187,13 @@ func TestStartupPausedOnceAndReadOnlyState(t *testing.T) {
 	if len(h.engine().commands) != before {
 		t.Fatal("State issued commands")
 	}
-	h.tick(contract.Ready)
-	want := []contract.Command{{Kind: contract.Volume, Value: 1}, {Kind: contract.Rate, Value: 1}}
+	h.tick(playback.Ready)
+	want := []playback.Command{{Kind: playback.Volume, Value: 1}, {Kind: playback.Rate, Value: 1}}
 	if !reflect.DeepEqual(h.engine().commands, want) {
 		t.Fatal(h.engine().commands)
 	}
-	h.tick(contract.Paused)
-	h.tick(contract.Paused)
+	h.tick(playback.Paused)
+	h.tick(playback.Paused)
 	if !reflect.DeepEqual(h.engine().commands, want) {
 		t.Fatal("poll repeated initialization")
 	}
@@ -220,13 +227,13 @@ func TestLoadingIntentSettingsAndReplacement(t *testing.T) {
 			if len(h.opener.inputs) != 1 || len(h.engine().commands) != 0 {
 				t.Fatal("loading reopened or commanded")
 			}
-			h.tick(contract.Ready)
+			h.tick(playback.Ready)
 			h.tick(h.engine().snapshot.State)
 			wantPlay := 0
 			if finishPlaying {
 				wantPlay = 1
 			}
-			if countKind(h.engine(), contract.Play) != wantPlay || countKind(h.engine(), contract.Rate) != 1 || countKind(h.engine(), contract.Volume) != 1 {
+			if countKind(h.engine(), playback.Play) != wantPlay || countKind(h.engine(), playback.Rate) != 1 || countKind(h.engine(), playback.Volume) != 1 {
 				t.Fatal(h.engine().commands)
 			}
 			if h.engine().snapshot.Volume != .4 || h.engine().snapshot.Rate != 1.5 {
@@ -246,9 +253,9 @@ func TestLoadingIntentSettingsAndReplacement(t *testing.T) {
 	if old.closed != 1 || len(old.commands) != 0 || h.s.State().Playback.Generation != 2 || h.s.State().PlaybackPart != "p2" {
 		t.Fatal("replacement lifetime/identity")
 	}
-	old.snapshot.State = contract.Ready
-	h.tick(contract.Ready)
-	if len(old.commands) != 0 || countKind(h.engine(), contract.Play) != 1 || h.engine().snapshot.Rate != 2 || h.engine().snapshot.Volume != .3 {
+	old.snapshot.State = playback.Ready
+	h.tick(playback.Ready)
+	if len(old.commands) != 0 || countKind(h.engine(), playback.Play) != 1 || h.engine().snapshot.Rate != 2 || h.engine().snapshot.Volume != .3 {
 		t.Fatal("stale intent or lost settings")
 	}
 }
@@ -256,15 +263,15 @@ func TestLoadingIntentSettingsAndReplacement(t *testing.T) {
 func TestCurrentPartAndEndedReplay(t *testing.T) {
 	h := newHarness(t)
 	h.start(t)
-	h.tick(contract.Paused)
+	h.tick(playback.Paused)
 	if err := h.s.SelectPart("p1"); err != nil {
 		t.Fatal(err)
 	}
-	h.tick(contract.Playing)
+	h.tick(playback.Playing)
 	if err := h.s.SelectPart("p1"); err != nil {
 		t.Fatal(err)
 	}
-	if len(h.opener.inputs) != 1 || countKind(h.engine(), contract.Play) != 1 {
+	if len(h.opener.inputs) != 1 || countKind(h.engine(), playback.Play) != 1 {
 		t.Fatal("current part reopened or duplicate play")
 	}
 	for _, action := range []string{"play", "toggle", "select"} {
@@ -272,9 +279,9 @@ func TestCurrentPartAndEndedReplay(t *testing.T) {
 			x := newHarness(t)
 			x.start(t)
 			_ = x.s.Play()
-			x.tick(contract.Ready)
+			x.tick(playback.Ready)
 			x.engine().snapshot.Position = 30 * time.Second
-			x.tick(contract.Ended)
+			x.tick(playback.Ended)
 			if x.s.State().DesiredPlaying || x.s.State().PlaybackPart != "p1" || len(x.opener.inputs) != 1 {
 				t.Fatal("completion advanced or kept intent")
 			}
@@ -308,19 +315,19 @@ func TestCurrentPartAndEndedReplay(t *testing.T) {
 
 func TestSelectionFailureAndSeparateRetries(t *testing.T) {
 	h := newHarness(t)
-	h.source.inputs["p1"] = contract.Input{URL: "http://127.0.0.1:8080/a", Headers: map[string]string{"X-Test": "original"}}
+	h.source.inputs["p1"] = playback.Input{URL: "http://127.0.0.1:8080/a", Headers: map[string]string{"X-Test": "original"}}
 	h.start(t)
 	_ = h.s.Play()
-	h.tick(contract.Ready)
-	h.tick(contract.Playing)
+	h.tick(playback.Ready)
+	h.tick(playback.Playing)
 	old := h.engine()
 	h.source.errors["p2"] = errors.New("secret source URL")
-	requireError(t, h.s.SelectPart("p2"), contract.Media)
+	requireError(t, h.s.SelectPart("p2"), playback.Media)
 	state := h.s.State()
 	if state.SelectedPart != "p2" || state.PlaybackPart != "p1" || !state.DesiredPlaying || old.closed != 0 {
 		t.Fatal(state)
 	}
-	requireError(t, h.s.SelectPart("unknown"), contract.Invalid)
+	requireError(t, h.s.SelectPart("unknown"), playback.Invalid)
 	if h.s.State().SelectedPart != "p2" {
 		t.Fatal("unknown selection changed identity")
 	}
@@ -331,7 +338,7 @@ func TestSelectionFailureAndSeparateRetries(t *testing.T) {
 	if err := h.s.RetryPlayback(); err != nil {
 		t.Fatal(err)
 	}
-	if h.s.State().SelectedPart != "p2" || h.s.State().PlaybackPart != "p1" || h.s.State().SelectionError != contract.Media || h.opener.inputs[1].Headers["X-Test"] != "original" {
+	if h.s.State().SelectedPart != "p2" || h.s.State().PlaybackPart != "p1" || h.s.State().SelectionError != playback.Media || h.opener.inputs[1].Headers["X-Test"] != "original" {
 		t.Fatal("retry targets or input aliased")
 	}
 	if h.s.State().DesiredPlaying {
@@ -341,41 +348,41 @@ func TestSelectionFailureAndSeparateRetries(t *testing.T) {
 	if err := h.s.RetrySelection(); err != nil {
 		t.Fatal(err)
 	}
-	if h.s.State().SelectedPart != "p2" || h.s.State().PlaybackPart != "p2" || h.s.State().SelectionError != contract.NoError || !h.s.State().DesiredPlaying {
+	if h.s.State().SelectedPart != "p2" || h.s.State().PlaybackPart != "p2" || h.s.State().SelectionError != playback.NoError || !h.s.State().DesiredPlaying {
 		t.Fatal(h.s.State())
 	}
-	requireError(t, h.s.RetrySelection(), contract.Invalid)
+	requireError(t, h.s.RetrySelection(), playback.Invalid)
 }
 
 func TestInvalidResolvedInputPreservesEngineAndFailedOpenAdvancesIdentity(t *testing.T) {
 	h := newHarness(t)
 	h.start(t)
 	old := h.engine()
-	h.source.inputs["p2"] = contract.Input{URL: "https://unapproved.invalid/video"}
-	requireError(t, h.s.SelectPart("p2"), contract.Invalid)
+	h.source.inputs["p2"] = playback.Input{URL: "https://unapproved.invalid/video"}
+	requireError(t, h.s.SelectPart("p2"), playback.Invalid)
 	if old.closed != 0 || h.s.State().PlaybackPart != "p1" || h.s.State().Playback.Generation != 1 {
 		t.Fatal("validation replaced playback")
 	}
-	h.source.inputs["p2"] = contract.Input{FilePath: "/fixture-two.mp4"}
+	h.source.inputs["p2"] = playback.Input{FilePath: "/fixture-two.mp4"}
 	h.opener.err = errors.New("private decoder details")
-	requireError(t, h.s.RetrySelection(), contract.Media)
-	if old.closed != 1 || h.s.State().PlaybackPart != "p2" || h.s.State().Playback.Generation != 2 || h.s.State().DesiredPlaying || h.s.State().SelectionError != contract.NoError {
+	requireError(t, h.s.RetrySelection(), playback.Media)
+	if old.closed != 1 || h.s.State().PlaybackPart != "p2" || h.s.State().Playback.Generation != 2 || h.s.State().DesiredPlaying || h.s.State().SelectionError != playback.NoError {
 		t.Fatal(h.s.State())
 	}
 	h.opener.err = nil
 	if err := h.s.RetryPlayback(); err != nil {
 		t.Fatal(err)
 	}
-	h.tick(contract.Ready)
-	if countKind(h.engine(), contract.Play) != 1 {
+	h.tick(playback.Ready)
+	if countKind(h.engine(), playback.Play) != 1 {
 		t.Fatal("failed playback lost retry intent")
 	}
 }
 
 func TestStartupSelectionRetryKeepsPausedIntent(t *testing.T) {
 	h := newHarness(t)
-	h.source.errors["p1"] = contract.Media
-	requireError(t, h.s.Start(context.Background()), contract.Media)
+	h.source.errors["p1"] = playback.Media
+	requireError(t, h.s.Start(context.Background()), playback.Media)
 	if len(h.opener.inputs) != 0 || h.s.State().PlaybackPart != "" {
 		t.Fatal("failed resolve acquired playback")
 	}
@@ -383,8 +390,8 @@ func TestStartupSelectionRetryKeepsPausedIntent(t *testing.T) {
 	if err := h.s.RetrySelection(); err != nil {
 		t.Fatal(err)
 	}
-	h.tick(contract.Ready)
-	if countKind(h.engine(), contract.Play) != 0 || h.s.State().DesiredPlaying {
+	h.tick(playback.Ready)
+	if countKind(h.engine(), playback.Play) != 0 || h.s.State().DesiredPlaying {
 		t.Fatal("startup retry autoplays")
 	}
 }
@@ -392,12 +399,12 @@ func TestStartupSelectionRetryKeepsPausedIntent(t *testing.T) {
 func TestSeekValidationAndSettings(t *testing.T) {
 	h := newHarness(t)
 	h.start(t)
-	requireError(t, h.s.Seek(time.Second), contract.Invalid)
-	if len(h.engine().commands) != 0 || h.s.State().Playback.State == contract.Failed {
+	requireError(t, h.s.Seek(time.Second), playback.Invalid)
+	if len(h.engine().commands) != 0 || h.s.State().Playback.State == playback.Failed {
 		t.Fatal("unusable seek harmed loading")
 	}
-	h.tick(contract.Paused)
-	requireError(t, h.s.Seek(-time.Second), contract.Invalid)
+	h.tick(playback.Paused)
+	requireError(t, h.s.Seek(-time.Second), playback.Invalid)
 	if err := h.s.Seek(time.Minute); err != nil {
 		t.Fatal(err)
 	}
@@ -405,17 +412,17 @@ func TestSeekValidationAndSettings(t *testing.T) {
 		t.Fatal("seek not clamped")
 	}
 	h.engine().snapshot.Duration = 0
-	h.tick(contract.Paused)
-	requireError(t, h.s.Seek(0), contract.Invalid)
-	if h.s.State().Playback.State == contract.Failed {
+	h.tick(playback.Paused)
+	requireError(t, h.s.Seek(0), playback.Invalid)
+	if h.s.State().Playback.State == playback.Failed {
 		t.Fatal("invalid seek failed healthy session")
 	}
 	before := len(h.engine().commands)
 	for _, v := range []float64{-1, 1.1, math.NaN(), math.Inf(1)} {
-		requireError(t, h.s.SetVolume(v), contract.Invalid)
+		requireError(t, h.s.SetVolume(v), playback.Invalid)
 	}
 	for _, v := range []float64{0, 3.1, math.NaN(), math.Inf(-1)} {
-		requireError(t, h.s.SetRate(v), contract.Invalid)
+		requireError(t, h.s.SetRate(v), playback.Invalid)
 	}
 	if len(h.engine().commands) != before || h.s.State().Volume != 1 || h.s.State().Rate != 1 {
 		t.Fatal("invalid settings mutated state")
@@ -437,7 +444,7 @@ func TestSeekValidationAndSettings(t *testing.T) {
 }
 
 func TestCommandFailureClearsIntentAndInitialCommandsStop(t *testing.T) {
-	for _, kind := range []contract.CommandKind{contract.Volume, contract.Rate, contract.Play} {
+	for _, kind := range []playback.CommandKind{playback.Volume, playback.Rate, playback.Play} {
 		t.Run(string(kind), func(t *testing.T) {
 			h := newHarness(t)
 			h.start(t)
@@ -445,8 +452,8 @@ func TestCommandFailureClearsIntentAndInitialCommandsStop(t *testing.T) {
 			e := h.engine()
 			e.failKind = kind
 			e.failErr = errors.New("private native error")
-			h.tick(contract.Ready)
-			if h.s.State().Playback.State != contract.Failed || h.s.State().Playback.Error != contract.Media || h.s.State().DesiredPlaying || e.closed != 1 {
+			h.tick(playback.Ready)
+			if h.s.State().Playback.State != playback.Failed || h.s.State().Playback.Error != playback.Media || h.s.State().DesiredPlaying || e.closed != 1 {
 				t.Fatal(h.s.State())
 			}
 			n := len(e.commands)
@@ -458,8 +465,8 @@ func TestCommandFailureClearsIntentAndInitialCommandsStop(t *testing.T) {
 			if err := h.s.RetryPlayback(); err != nil {
 				t.Fatal(err)
 			}
-			h.tick(contract.Ready)
-			if countKind(h.engine(), contract.Play) != 1 {
+			h.tick(playback.Ready)
+			if countKind(h.engine(), playback.Play) != 1 {
 				t.Fatal("retry lost requested play intent")
 			}
 		})
@@ -472,7 +479,7 @@ func TestTimeoutCancellationAndTerminalClose(t *testing.T) {
 	old := h.engine()
 	h.now = h.now.Add(10 * time.Second)
 	h.s.Tick()
-	if h.s.State().Playback.Error != contract.Timeout || old.closed != 1 {
+	if h.s.State().Playback.Error != playback.Timeout || old.closed != 1 {
 		t.Fatal("readiness timeout")
 	}
 	if err := h.s.RetryPlayback(); err != nil {
@@ -488,10 +495,10 @@ func TestTimeoutCancellationAndTerminalClose(t *testing.T) {
 	}
 	cancel()
 	x.s.Tick()
-	if x.s.State().Playback.Error != contract.Canceled || x.engine().closed != 1 || x.s.Engine() != nil {
+	if x.s.State().Playback.Error != playback.Canceled || x.engine().closed != 1 || x.s.Engine() != nil {
 		t.Fatal("cancel disposal")
 	}
-	requireError(t, x.s.Play(), contract.IsClosed)
+	requireError(t, x.s.Play(), playback.IsClosed)
 	if err := h.s.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -504,7 +511,7 @@ func TestTimeoutCancellationAndTerminalClose(t *testing.T) {
 	for name, action := range map[string]func() error{
 		"start": func() error { return h.s.Start(context.Background()) }, "select": func() error { return h.s.SelectPart("p1") }, "next": h.s.NextPart, "selection retry": h.s.RetrySelection, "playback retry": h.s.RetryPlayback, "play": h.s.Play, "pause": h.s.Pause, "toggle": h.s.Toggle, "seek": func() error { return h.s.Seek(0) }, "volume": func() error { return h.s.SetVolume(.5) }, "rate": func() error { return h.s.SetRate(1) }, "mute": h.s.ToggleMute,
 	} {
-		t.Run(name, func(t *testing.T) { requireError(t, action(), contract.IsClosed) })
+		t.Run(name, func(t *testing.T) { requireError(t, action(), playback.IsClosed) })
 	}
 	h.s.Tick()
 }
@@ -517,8 +524,8 @@ func TestActionAtFirstReadinessDoesNotDuplicatePendingPlay(t *testing.T) {
 			if err := h.s.Play(); err != nil {
 				t.Fatal(err)
 			}
-			h.engine().snapshot.State = contract.Ready
-			h.now = h.now.Add(contract.PollInterval)
+			h.engine().snapshot.State = playback.Ready
+			h.now = h.now.Add(playback.PollInterval)
 			var err error
 			if action == "play" {
 				err = h.s.Play()
@@ -528,7 +535,7 @@ func TestActionAtFirstReadinessDoesNotDuplicatePendingPlay(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if countKind(h.engine(), contract.Play) != 1 {
+			if countKind(h.engine(), playback.Play) != 1 {
 				t.Fatalf("first-ready action sent duplicate play: %v", h.engine().commands)
 			}
 		})
@@ -541,19 +548,19 @@ func TestCompletionClearsRetryIntentButExplicitReplayPlays(t *testing.T) {
 	if err := h.s.Play(); err != nil {
 		t.Fatal(err)
 	}
-	h.tick(contract.Ready)
-	h.tick(contract.Ended)
+	h.tick(playback.Ready)
+	h.tick(playback.Ended)
 	if err := h.s.RetryPlayback(); err != nil {
 		t.Fatal(err)
 	}
-	h.tick(contract.Ready)
-	if h.s.State().DesiredPlaying || countKind(h.engine(), contract.Play) != 0 {
+	h.tick(playback.Ready)
+	if h.s.State().DesiredPlaying || countKind(h.engine(), playback.Play) != 0 {
 		t.Fatal("playback retry restored stale pre-completion intent")
 	}
 	if err := h.s.Play(); err != nil {
 		t.Fatal(err)
 	}
-	if countKind(h.engine(), contract.Play) != 1 {
+	if countKind(h.engine(), playback.Play) != 1 {
 		t.Fatal("explicit play did not request playback")
 	}
 }
@@ -565,12 +572,12 @@ func deferredPlaybackHarness(t *testing.T, playing bool) *harness {
 	h := newHarness(t)
 	h.start(t)
 	t.Cleanup(func() { _ = h.s.Close() })
-	h.tick(contract.Paused)
+	h.tick(playback.Paused)
 	if playing {
 		if err := h.s.Play(); err != nil {
 			t.Fatal(err)
 		}
-		h.tick(contract.Playing)
+		h.tick(playback.Playing)
 	}
 	h.engine().commands = nil
 	h.engine().deferCommands = true
@@ -585,7 +592,7 @@ func TestPlaybackIntentWithDeferredCommands(t *testing.T) {
 				e := h.engine()
 				initial := e.snapshot.State
 				for i, intent := range []bool{!playing, !playing, playing, playing} {
-					h.now = h.now.Add(contract.PollInterval)
+					h.now = h.now.Add(playback.PollInterval)
 					action := h.s.Pause
 					if intent {
 						action = h.s.Play
@@ -600,7 +607,7 @@ func TestPlaybackIntentWithDeferredCommands(t *testing.T) {
 						t.Fatal("lost requested intent")
 					}
 				}
-				want := []contract.Command{{Kind: contract.Play}, {Kind: contract.Pause}}
+				want := []playback.Command{{Kind: playback.Play}, {Kind: playback.Pause}}
 				if playing {
 					want[0], want[1] = want[1], want[0]
 				}
@@ -633,18 +640,18 @@ func TestOppositePlaybackIntentFailure(t *testing.T) {
 			h := deferredPlaybackHarness(t, playing)
 			e := h.engine()
 			first, second := h.s.Play, h.s.Pause
-			failKind := contract.Pause
+			failKind := playback.Pause
 			if playing {
-				first, second, failKind = h.s.Pause, h.s.Play, contract.Play
+				first, second, failKind = h.s.Pause, h.s.Play, playback.Play
 			}
 			if err := first(); err != nil {
 				t.Fatal(err)
 			}
 			e.failKind, e.failErr = failKind, errors.New("private native failure")
-			h.now = h.now.Add(contract.PollInterval)
-			requireError(t, second(), contract.Media)
+			h.now = h.now.Add(playback.PollInterval)
+			requireError(t, second(), playback.Media)
 			state := h.s.State()
-			if state.Playback.State != contract.Failed || state.Playback.Error != contract.Media || state.DesiredPlaying || h.s.Engine() != nil || e.closed != 1 {
+			if state.Playback.State != playback.Failed || state.Playback.Error != playback.Media || state.DesiredPlaying || h.s.Engine() != nil || e.closed != 1 {
 				t.Fatal("opposite command failure did not clear intent and dispose", state)
 			}
 			if len(e.commands) != 2 || e.commands[1].Kind != failKind {
@@ -656,6 +663,135 @@ func TestOppositePlaybackIntentFailure(t *testing.T) {
 			}
 			if e.closed != 1 || len(e.commands) != 2 {
 				t.Fatal("failure cleanup repeated commands or disposal")
+			}
+		})
+	}
+}
+
+type ctxKey struct{}
+
+func TestExpiringResolutionIsReusedUntilMarginThenResolvedAgain(t *testing.T) {
+	h := newHarness(t)
+	one, refreshed := playback.Input{URL: "http://127.0.0.1:1/one"}, playback.Input{URL: "http://127.0.0.1:1/one-refreshed"}
+	h.source.inputs["p1"], h.source.expires["p1"] = one, h.now.Add(10*time.Minute)
+	startCtx := context.WithValue(context.Background(), ctxKey{}, "start")
+	if err := h.s.Start(startCtx); err != nil {
+		t.Fatal(err)
+	}
+	if got := h.source.contexts[len(h.source.contexts)-1]; got != startCtx {
+		t.Fatal("Resolve did not receive the session context")
+	}
+	h.tick(playback.Failed)
+	if err := h.s.RetryPlayback(); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.source.resolved) != 1 || !reflect.DeepEqual(h.opener.inputs[1], one) {
+		t.Fatalf("unexpired input not reused: resolved=%v inputs=%v", h.source.resolved, h.opener.inputs)
+	}
+
+	// At exactly ExpiresAt-ResolutionMargin the cached input is no longer usable.
+	h.now = h.source.expires["p1"].Add(-ResolutionMargin)
+	h.source.inputs["p1"], h.source.expires["p1"] = refreshed, h.now.Add(10*time.Minute)
+	h.tick(playback.Failed)
+	if err := h.s.RetryPlayback(); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.source.resolved) != 2 || !reflect.DeepEqual(h.opener.inputs[2], refreshed) || h.s.State().PlaybackPart != "p1" {
+		t.Fatalf("expired input not resolved again: resolved=%v inputs=%v", h.source.resolved, h.opener.inputs)
+	}
+
+	// A failed re-resolution keeps the current engine and becomes a selection retry.
+	h.tick(playback.Ended)
+	engines := len(h.opener.engines)
+	h.now = h.source.expires["p1"]
+	h.source.errors["p1"] = errors.New("private signed URL")
+	requireError(t, h.s.Play(), playback.Media)
+	if len(h.opener.engines) != engines || h.engine().closed != 0 || h.s.State().SelectionError != playback.Media || h.s.State().PlaybackPart != "p1" {
+		t.Fatal(h.s.State())
+	}
+	delete(h.source.errors, "p1")
+	h.source.expires["p1"] = h.now.Add(10 * time.Minute)
+	if err := h.s.RetrySelection(); err != nil {
+		t.Fatal(err)
+	}
+	h.tick(playback.Ready)
+	if len(h.opener.engines) != engines+1 || h.s.State().SelectionError != playback.NoError || countKind(h.engine(), playback.Play) != 1 {
+		t.Fatal("selection retry after failed re-resolution did not replay")
+	}
+}
+
+func TestResolutionAlreadyInsideMarginIsRejectedWithoutOpening(t *testing.T) {
+	h := newHarness(t)
+	h.start(t)
+	old := h.engine()
+	h.source.expires["p2"] = h.now.Add(ResolutionMargin)
+	requireError(t, h.s.SelectPart("p2"), playback.Media)
+	if len(h.opener.engines) != 1 || old.closed != 0 || h.s.State().PlaybackPart != "p1" || h.s.State().SelectionError != playback.Media {
+		t.Fatal(h.s.State())
+	}
+	h.source.expires["p2"] = h.now.Add(ResolutionMargin + time.Nanosecond)
+	if err := h.s.RetrySelection(); err != nil {
+		t.Fatal(err)
+	}
+	if h.s.State().PlaybackPart != "p2" || old.closed != 1 {
+		t.Fatal(h.s.State())
+	}
+}
+
+func TestNewPassesContextToDetailAndRejectsNilContext(t *testing.T) {
+	h := newHarness(t)
+	ctx := context.WithValue(context.Background(), ctxKey{}, "detail")
+	if _, err := New(ctx, h.source, h.s.controller); err != nil {
+		t.Fatal(err)
+	}
+	if h.source.contexts[len(h.source.contexts)-1] != ctx {
+		t.Fatal("Detail did not receive the construction context")
+	}
+	_, err := New(nil, h.source, h.s.controller)
+	requireError(t, err, playback.Invalid)
+}
+
+func TestExpiredPlaybackRetryKeepsPendingSelectionOfAnotherPart(t *testing.T) {
+	for _, reresolveFails := range []bool{false, true} {
+		t.Run(fmt.Sprintf("reresolveFails=%v", reresolveFails), func(t *testing.T) {
+			h := newHarness(t)
+			h.source.expires["p1"] = h.now.Add(10 * time.Minute)
+			h.start(t)
+			if err := h.s.Play(); err != nil {
+				t.Fatal(err)
+			}
+			h.tick(playback.Ready)
+			h.tick(playback.Playing)
+			h.source.errors["p2"] = errors.New("private p2 failure")
+			requireError(t, h.s.SelectPart("p2"), playback.Media)
+			h.tick(playback.Failed)
+			h.now = h.now.Add(20 * time.Minute)
+			h.source.expires["p1"] = h.now.Add(10 * time.Minute)
+			engines := len(h.opener.engines)
+			if reresolveFails {
+				h.source.errors["p1"] = errors.New("private p1 failure")
+				requireError(t, h.s.RetryPlayback(), playback.Media)
+				if len(h.opener.engines) != engines {
+					t.Fatal("failed re-resolution opened media")
+				}
+			} else {
+				if err := h.s.RetryPlayback(); err != nil {
+					t.Fatal(err)
+				}
+				if len(h.opener.engines) != engines+1 || h.s.State().PlaybackPart != "p1" {
+					t.Fatal("expired playback was not resolved again")
+				}
+			}
+			state := h.s.State()
+			if state.SelectedPart != "p2" || state.SelectionError != playback.Media || h.s.selectionRetry != "p2" {
+				t.Fatalf("pending p2 selection changed: %+v retry=%q", state, h.s.selectionRetry)
+			}
+			delete(h.source.errors, "p2")
+			if err := h.s.RetrySelection(); err != nil {
+				t.Fatal(err)
+			}
+			if h.s.State().PlaybackPart != "p2" || h.s.State().SelectionError != playback.NoError {
+				t.Fatal(h.s.State())
 			}
 		})
 	}

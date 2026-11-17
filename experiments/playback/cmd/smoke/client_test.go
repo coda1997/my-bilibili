@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 func TestAutomationClientRejectsBadReplies(t *testing.T) {
@@ -63,7 +63,7 @@ func TestSliderWaitsForEachSampleBetweenKeyInputs(t *testing.T) {
 				if i == 4 {
 					position = 250 * time.Millisecond
 				}
-				s, _ := json.Marshal(observed{Snapshot: contract.Snapshot{State: contract.Paused, Position: position}})
+				s, _ := json.Marshal(observed{Snapshot: playback.Snapshot{State: playback.Paused, Position: position}})
 				r, _ := json.Marshal(map[string]any{"nodes": []node{{Label: "snapshot " + string(s)}}})
 				result = string(r)
 			}
@@ -116,7 +116,7 @@ func snapshotClient(t *testing.T, responseDelay, readDelay time.Duration) *clien
 	t.Helper()
 	a, b := net.Pipe()
 	done := make(chan struct{})
-	s, err := json.Marshal(observed{Snapshot: contract.Snapshot{State: contract.Ready, Duration: 8 * time.Second}, Owned: true})
+	s, err := json.Marshal(observed{Snapshot: playback.Snapshot{State: playback.Ready, Duration: 8 * time.Second}, Owned: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestUntilRejectsLatePositiveSnapshot(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := snapshotClient(t, tc.responseDelay, tc.readDelay)
-			_, err := c.until(context.Background(), 20*time.Millisecond, func(s observed) bool { return s.State == contract.Ready })
+			_, err := c.until(context.Background(), 20*time.Millisecond, func(s observed) bool { return s.State == playback.Ready })
 			if err == nil {
 				t.Fatal("positive snapshot arriving after assertion deadline accepted")
 			}
@@ -162,8 +162,8 @@ func TestUntilRejectsLatePositiveSnapshot(t *testing.T) {
 
 func TestUntilAcceptsOnTimePositiveSnapshot(t *testing.T) {
 	c := snapshotClient(t, 0, 0)
-	s, err := c.until(context.Background(), time.Second, func(s observed) bool { return s.State == contract.Ready })
-	if err != nil || s.State != contract.Ready || !s.Owned {
+	s, err := c.until(context.Background(), time.Second, func(s observed) bool { return s.State == playback.Ready })
+	if err != nil || s.State != playback.Ready || !s.Owned {
 		t.Fatalf("on-time snapshot rejected: state=%s owned=%t err=%v", s.State, s.Owned, err)
 	}
 }
@@ -172,7 +172,7 @@ func TestUntilHonorsShorterParentDeadline(t *testing.T) {
 	c := snapshotClient(t, 80*time.Millisecond, 0)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
-	if _, err := c.until(ctx, time.Second, func(s observed) bool { return s.State == contract.Ready }); err == nil {
+	if _, err := c.until(ctx, time.Second, func(s observed) bool { return s.State == playback.Ready }); err == nil {
 		t.Fatal("positive snapshot after shorter parent deadline accepted")
 	}
 }
@@ -183,7 +183,7 @@ func TestUntilRejectsCanceledPositiveObservation(t *testing.T) {
 	defer cancel()
 	if _, err := c.until(ctx, time.Second, func(s observed) bool {
 		cancel()
-		return s.State == contract.Ready
+		return s.State == playback.Ready
 	}); err == nil {
 		t.Fatal("positive observation accepted after context cancellation")
 	}
@@ -227,7 +227,7 @@ func replacementClient(t *testing.T, states []observed) *client {
 }
 
 func TestReadyWaitsForReplacementGeneration(t *testing.T) {
-	old := observed{Snapshot: contract.Snapshot{Generation: 7, State: contract.Ready, Duration: 8 * time.Second}, Owned: true}
+	old := observed{Snapshot: playback.Snapshot{Generation: 7, State: playback.Ready, Duration: 8 * time.Second}, Owned: true}
 	next := old
 	next.Generation++
 	c := replacementClient(t, []observed{old, old, next})
@@ -239,9 +239,9 @@ func TestReadyWaitsForReplacementGeneration(t *testing.T) {
 
 func TestOpenUntilBindsLoadingAndFailuresToNewGeneration(t *testing.T) {
 	for _, state := range []observed{
-		{Snapshot: contract.Snapshot{Generation: 7, State: contract.Loading}, Owned: true},
-		{Snapshot: contract.Snapshot{Generation: 7, State: contract.Failed, Error: contract.Unsupported}},
-		{Snapshot: contract.Snapshot{Generation: 7, State: contract.Failed, Error: contract.Media}},
+		{Snapshot: playback.Snapshot{Generation: 7, State: playback.Loading}, Owned: true},
+		{Snapshot: playback.Snapshot{Generation: 7, State: playback.Failed, Error: playback.Unsupported}},
+		{Snapshot: playback.Snapshot{Generation: 7, State: playback.Failed, Error: playback.Media}},
 	} {
 		t.Run(string(state.State)+"/"+string(state.Error), func(t *testing.T) {
 			predicate := func(s observed) bool {

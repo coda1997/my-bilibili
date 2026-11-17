@@ -1,24 +1,7 @@
 # Architecture baseline
 
-Status: development foundation (M0) accepted by the owner on 2026-11-10.
-Required macOS M1 technical evaluation is complete. On 2026-11-13 the owner
-selected libmpv as the default behind the existing plain playback boundary,
-retaining mygo UI; see [ADR 0008](adr/0008-default-libmpv.md) and
-[the current handoff](../reports/0025-m1-acceptance.md). The owner accepted
-M1 as completed on 2026-11-13; M2/P0 remain unstarted.
-The [previous target handoff](../reports/0021-target-access-method.md#post-repair-target-continuation-2026-11-13) records the
-owner-requested removal of target host restrictions. All valid HTTPS media hosts
-and ports are accepted; source/rendition, TLS, expiry and lifecycle checks remain.
-The first version-2 native target attempt failed readiness/picture and graceful
-exit; its cause remains unknown. After the safe-diagnostic repair and separate
-readiness review, a later target invocation passes picture, selected separate
-tracks, controls, 87.7575ms playing cancellation and graceful exit. Independent
-review accepts this scoped evidence and closes the current target blocker;
-the previous stopped refresh and failed invocation remain preserved.
-The owner’s 2026-11-11 provisional mygo selection is superseded. The old player
-remains available as `cmd/mygo-native` for diagnostics, with its known failures.
-Current review dispositions: [readiness publication](../reports/0003-publication.md#independent-review).
-Historical findings: `reports/0001-independent-review.md`.
+Current state is in [STATUS](../STATUS.md); this document describes stable
+boundaries only. Decisions are listed at the end.
 
 ## Product scope
 
@@ -45,9 +28,30 @@ Do not create empty packages for every imagined future feature.
 
 Business modules must not import UI types, platform handles, database drivers,
 or Bilibili transport DTOs. Cross-module dependencies must be explicit.
-The foundation currently validates task contracts, not these future product
-import rules. Add executable import checks when the first product packages
-exist; do not describe documentation-only boundaries as enforced.
+`internal/architecture` enforces two rules in tests: `internal/catalog` and
+`internal/app` depend only on each other, `internal/playback` and the standard
+library; product packages (`cmd/my-bilibili`, `internal/...`) never import
+`experiments/`. Other boundaries here are documented, not yet enforced.
+
+## Packages
+
+| Package | Owns |
+| --- | --- |
+| `internal/catalog` | Framework-free video and part model |
+| `internal/app` | Session: application intent, part selection, `Source` contract, observable state |
+| `internal/playback` | Plain playback boundary: `Input`, `Engine`, `Controller`, snapshots, safe error codes |
+| `internal/adapters/mpv` | libmpv adapter implementing `playback.Opener`/`Engine`; runtime build notes |
+| `internal/desktop` | mygo view and rendering of `app.State` |
+| `internal/fixture` | Hash-verified bundled fixture `Source` |
+| `internal/previewbundle` | macOS developer bundle layout and runtime checks |
+| `cmd/my-bilibili` | Composition root |
+| `experiments/` | Probes and harnesses kept as evidence tools; product code must not import them |
+
+`app.Source` returns a `Resolution`: a playback input plus an optional expiry.
+Session reuses a cached input only before `ExpiresAt - ResolutionMargin` and
+otherwise resolves again. Source calls currently run synchronously on the UI
+thread; moving them off it, with stale-result handling, is required before a
+network-backed source.
 
 ## Async contract requirements
 

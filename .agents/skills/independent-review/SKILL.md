@@ -9,8 +9,7 @@ Follow [agent convergence](../../../docs/agent-convergence.md) R1/R2/R3/R4/R5/R6
 
 Use the canonical [workflow](../../../docs/workflow.md),
 [role packet](../../../docs/templates/assignment.md), and
-[review format](../../../docs/templates/review.md). Start from the current
-handoff linked by [README](../../../README.md), not the author's desired verdict.
+[review format](../../../docs/templates/review.md). Start from [STATUS](../../../STATUS.md), not the author's desired verdict.
 
 Confirm reviewer identity and independence from implementation. If you authored
 the change, provide a packet for a separate reviewer and use the repository's
@@ -35,6 +34,6 @@ Return candidate/spec identities, checks actually run, findings labelled
 `BLOCKING [class N]` or `ADVISORY`, severity, reproduction, disposition and
 required evidence, and a technical decision. Only the assigned independent
 reviewer technically closes BLOCKING findings. If that reviewer cannot
-continue, follow the [proposed succession procedure](../../../docs/workflow.md#reviewer-succession-proposed-clarification);
+continue, follow the [succession procedure](../../../docs/workflow.md#reviewer-succession);
 do not assume reassignment or closure authority. Distinguish that decision from
 human policy approval, missing CI/platform acceptance, and merge authority.

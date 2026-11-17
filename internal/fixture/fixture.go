@@ -3,6 +3,7 @@ package fixture
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
@@ -12,9 +13,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
 	"my-bilibili/internal/app"
 	"my-bilibili/internal/catalog"
+	"my-bilibili/internal/playback"
 )
 
 // The binary pins the manifest as well as each asset. Replacing both an asset
@@ -40,27 +41,27 @@ type source struct {
 // absolute path so later process working-directory changes cannot redirect it.
 func New(resourceDir string) (app.Source, error) {
 	if resourceDir == "" {
-		return nil, contract.Invalid
+		return nil, playback.Invalid
 	}
 	dir, err := filepath.Abs(resourceDir)
 	if err != nil {
-		return nil, contract.Media
+		return nil, playback.Media
 	}
 	manifestPath := filepath.Join(dir, "manifest.json")
 	info, err := os.Lstat(manifestPath)
 	if err != nil || !info.Mode().IsRegular() || info.Size() != int64(len(expectedManifest)) {
-		return nil, contract.Media
+		return nil, playback.Media
 	}
 	data, err := os.ReadFile(manifestPath)
 	if err != nil || !bytes.Equal(data, expectedManifest) {
-		return nil, contract.Media
+		return nil, playback.Media
 	}
 	var manifest struct {
 		Version int     `json:"version"`
 		Files   []asset `json:"files"`
 	}
 	if json.Unmarshal(data, &manifest) != nil {
-		return nil, contract.Media
+		return nil, playback.Media
 	}
 	s := &source{dir: dir, parts: make(map[catalog.PartID]asset)}
 	for _, file := range manifest.Files {
@@ -76,7 +77,7 @@ func New(resourceDir string) (app.Source, error) {
 	}
 	data, err = os.ReadFile(filepath.Join(dir, "metadata.json"))
 	if err != nil {
-		return nil, contract.Media
+		return nil, playback.Media
 	}
 	var metadata struct {
 		ID          catalog.VideoID `json:"id"`
@@ -91,7 +92,7 @@ func New(resourceDir string) (app.Source, error) {
 		} `json:"parts"`
 	}
 	if json.Unmarshal(data, &metadata) != nil {
-		return nil, contract.Media
+		return nil, playback.Media
 	}
 	s.video = catalog.Video{ID: metadata.ID, Title: metadata.Title, Creator: metadata.Creator, Description: metadata.Description, CoverID: metadata.CoverID}
 	for _, part := range metadata.Parts {
@@ -104,38 +105,39 @@ func verify(dir string, file asset) error {
 	path := filepath.Join(dir, file.Name)
 	info, err := os.Lstat(path)
 	if err != nil || !info.Mode().IsRegular() || info.Size() != file.Bytes {
-		return contract.Media
+		return playback.Media
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return contract.Media
+		return playback.Media
 	}
 	h := sha256.New()
 	_, readErr := io.Copy(h, f)
 	closeErr := f.Close()
 	if readErr != nil || closeErr != nil || hex.EncodeToString(h.Sum(nil)) != file.SHA256 {
-		return contract.Media
+		return playback.Media
 	}
 	return nil
 }
 
-func (s *source) Detail() (catalog.Video, error) {
+func (s *source) Detail(context.Context) (catalog.Video, error) {
 	video := s.video
 	video.Parts = append([]catalog.Part(nil), video.Parts...)
 	return video, nil
 }
 
-func (s *source) Resolve(id catalog.PartID) (contract.Input, error) {
+func (s *source) Resolve(_ context.Context, id catalog.PartID) (app.Resolution, error) {
 	file, ok := s.parts[id]
 	if !ok {
-		return contract.Input{}, contract.Invalid
+		return app.Resolution{}, playback.Invalid
 	}
 	if err := verify(s.dir, file); err != nil {
-		return contract.Input{}, err
+		return app.Resolution{}, err
 	}
-	in := contract.Input{FilePath: filepath.Join(s.dir, file.Name)}
+	in := playback.Input{FilePath: filepath.Join(s.dir, file.Name)}
 	if err := in.Validate(); err != nil {
-		return contract.Input{}, contract.Invalid
+		return app.Resolution{}, playback.Invalid
 	}
-	return in, nil
+	// Bundled local files do not expire.
+	return app.Resolution{Input: in}, nil
 }

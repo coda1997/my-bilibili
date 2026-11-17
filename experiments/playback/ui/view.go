@@ -10,12 +10,12 @@ import (
 	"time"
 
 	gui "github.com/egoist/mygo/ui"
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 type Source struct {
 	Key, Label string
-	Input      contract.Input
+	Input      playback.Input
 }
 
 const ProvisionalWarning = "TEMPORARY MYGO PLAYER / slow loading may freeze the UI; headers and separate audio unsupported"
@@ -36,22 +36,22 @@ func (s *sliderState) sample(generation uint64, value float64) {
 }
 
 type View struct {
-	Controller *contract.Controller
+	Controller *playback.Controller
 	Sources    []Source
-	Surface    func(*gui.Context, contract.Engine)
+	Surface    func(*gui.Context, playback.Engine)
 	Quit       func()
 	Text       string
 	Warning    string
-	lastError  contract.ErrorCode
+	lastError  playback.ErrorCode
 	cancel     context.CancelFunc
-	lastInput  *contract.Input
+	lastInput  *playback.Input
 	seekUI     sliderState
 	volumeUI   sliderState
 }
 
-func (v *View) open(in contract.Input) {
+func (v *View) open(in playback.Input) {
 	if err := in.Validate(); err != nil {
-		v.lastError = contract.Invalid
+		v.lastError = playback.Invalid
 		return
 	}
 	saved := in
@@ -64,27 +64,27 @@ func (v *View) open(in contract.Input) {
 	v.cancel = cancel
 	v.lastError = ""
 	if err := v.Controller.Open(ctx, in); err != nil {
-		v.lastError = err.(contract.ErrorCode)
+		v.lastError = err.(playback.ErrorCode)
 	}
 }
 
 func (v *View) retry() {
-	if v.lastInput != nil && v.Controller.Snapshot().State != contract.Loading {
+	if v.lastInput != nil && v.Controller.Snapshot().State != playback.Loading {
 		v.open(*v.lastInput)
 	}
 }
 
-func (v *View) command(c *gui.Context, cmd contract.Command) {
+func (v *View) command(c *gui.Context, cmd playback.Command) {
 	v.lastError = ""
 	if err := v.Controller.Command(cmd); err != nil {
-		v.lastError = err.(contract.ErrorCode)
+		v.lastError = err.(playback.ErrorCode)
 	}
 	c.Invalidate()
 }
 
 func (v *View) transport(c *gui.Context) {
 	s := v.Controller.Snapshot()
-	usable := v.Controller.Active() && (s.State == contract.Ready || s.State == contract.Paused || s.State == contract.Playing || s.State == contract.Ended)
+	usable := v.Controller.Active() && (s.State == playback.Ready || s.State == playback.Paused || s.State == playback.Playing || s.State == playback.Ended)
 	gui.Text(c, fmt.Sprintf("Position %.2fs / %.2fs (sampled) / %s", s.Position.Seconds(), s.Duration.Seconds(), s.State)).Font("Menlo").FontSize(12)
 	seekDisabled := !usable || s.Duration <= 0
 	maximum := s.Duration.Seconds()
@@ -100,7 +100,7 @@ func (v *View) transport(c *gui.Context) {
 		if position < maximum {
 			target = time.Duration(position * float64(time.Second))
 		}
-		v.command(c, contract.Command{Kind: contract.Seek, Position: target})
+		v.command(c, playback.Command{Kind: playback.Seek, Position: target})
 	}
 	// Pressed is bounds-limited; slider capture continues outside those bounds.
 	button, captured := seek.PressedButton()
@@ -110,7 +110,7 @@ func (v *View) transport(c *gui.Context) {
 		gui.Text(c, fmt.Sprintf("Volume %.0f%% / Speed %.1fx", s.Volume*100, s.Rate)).Font("Menlo").FontSize(12)
 		volume := gui.Slider(c.Key("volume-slider"), &v.volumeUI.value, 0, 1).Label("Playback volume").Width(300).Disabled(!usable)
 		if volume.Changed() && usable {
-			v.command(c, contract.Command{Kind: contract.Volume, Value: v.volumeUI.value})
+			v.command(c, playback.Command{Kind: playback.Volume, Value: v.volumeUI.value})
 		}
 		button, captured := volume.PressedButton()
 		v.volumeUI.pressed = captured && button == 0 && usable
@@ -121,10 +121,10 @@ func (v *View) transport(c *gui.Context) {
 			rate       float64
 		}{{"speed-half", "0.5x", .5}, {"speed-normal", "1x", 1}, {"speed-double", "2x", 2}} {
 			if gui.Button(c.Key(preset.key), preset.label).Disabled(!usable).Clicked() && usable {
-				v.command(c, contract.Command{Kind: contract.Rate, Value: preset.rate})
+				v.command(c, playback.Command{Kind: playback.Rate, Value: preset.rate})
 			}
 		}
-		if gui.Button(c.Key("retry"), "Retry last input").Disabled(v.lastInput == nil || s.State == contract.Loading).Clicked() {
+		if gui.Button(c.Key("retry"), "Retry last input").Disabled(v.lastInput == nil || s.State == playback.Loading).Clicked() {
 			v.retry()
 			c.Invalidate()
 		}
@@ -142,7 +142,7 @@ func (v *View) Close() {
 func (v *View) Render(c *gui.Context) {
 	v.Controller.Tick()
 	if v.Controller.Active() {
-		c.After(contract.PollInterval)
+		c.After(playback.PollInterval)
 	}
 	ink := gui.RGB(35, 44, 49)
 	gui.Scroll(c.Key("lab-scroll")).Fill().Padding(22).Gap(10).Background(gui.RGB(245, 241, 231)).Children(func() {
@@ -173,13 +173,13 @@ func (v *View) Render(c *gui.Context) {
 		gui.Row(c).Gap(7).Children(func() {
 			for _, b := range []struct {
 				key, label string
-				cmd        contract.Command
+				cmd        playback.Command
 			}{
-				{"play", "Play", contract.Command{Kind: contract.Play}},
-				{"pause", "Pause", contract.Command{Kind: contract.Pause}},
-				{"seek", "Seek 3s", contract.Command{Kind: contract.Seek, Position: 3 * time.Second}},
-				{"volume", "Volume 25%", contract.Command{Kind: contract.Volume, Value: .25}},
-				{"rate", "Rate 1.5x", contract.Command{Kind: contract.Rate, Value: 1.5}},
+				{"play", "Play", playback.Command{Kind: playback.Play}},
+				{"pause", "Pause", playback.Command{Kind: playback.Pause}},
+				{"seek", "Seek 3s", playback.Command{Kind: playback.Seek, Position: 3 * time.Second}},
+				{"volume", "Volume 25%", playback.Command{Kind: playback.Volume, Value: .25}},
+				{"rate", "Rate 1.5x", playback.Command{Kind: playback.Rate, Value: 1.5}},
 			} {
 				if gui.Button(c.Key(b.key), b.label).Clicked() {
 					v.command(c, b.cmd)
@@ -207,9 +207,9 @@ func (v *View) Render(c *gui.Context) {
 		})
 		s := v.Controller.Snapshot()
 		status, _ := json.Marshal(struct {
-			contract.Snapshot
+			playback.Snapshot
 			Owned        bool               `json:"owned"`
-			ControlError contract.ErrorCode `json:"control_error"`
+			ControlError playback.ErrorCode `json:"control_error"`
 			WindowHidden bool               `json:"window_hidden"`
 		}{s, v.Controller.Active(), v.lastError, c.WindowHidden()})
 		// This observable text is native sampled state, not a Play-command echo.

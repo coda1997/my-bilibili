@@ -16,9 +16,9 @@ Before a push or PR, verify the intended repository and visibility match the
 user's authorization. The owner confirmed public visibility on 2026-11-10.
 Do not change visibility to work around an account-plan limitation.
 
-Record the spec/task IDs and exact source identity. A draft for an uncommitted
-candidate must say so and refer to its manifest/archive; do not call the base
-commit the candidate. PR commits created later need checks/reviews matched to
+Record the lane, spec/task IDs if any, and the candidate commit SHA; see
+[evidence identity](workflow.md#evidence-identity-and-tables). Do not call the
+base commit the candidate. PR commits created later need checks/reviews matched to
 their content. Do not claim CI ran for a revision it did not test.
 
 ## Write the PR
@@ -27,8 +27,8 @@ Use [the PR template](../.github/pull_request_template.md). A useful title is
 `[<spec-id>] <observable change>`, not a list of implementation steps.
 
 Explain why the change is needed, its boundaries, and which ACs it satisfies.
-For each claim link a concrete check/evidence locator and state the actual
-result and platform. Include failures, not-tested items, open questions, and
+Give the evidence as a table (claim, evidence, result, scope and not tested),
+binding CI to the run URL for the PR head SHA. Include failures, not-tested items, open questions, and
 findings with their tier/class, severity, owners and dispositions. Do not paste raw local
 logs, cookies, signed URLs, or private media into the PR.
 
@@ -45,7 +45,7 @@ revalidate responses and changed behavior within the remaining review budget.
 The assigned independent reviewer technically closes BLOCKING findings; an
 author's belief that a fix works does not establish that closure.
 If that reviewer cannot continue, use the
-[proposed succession procedure](workflow.md#reviewer-succession-proposed-clarification).
+[succession procedure](workflow.md#reviewer-succession).
 Keep closure pending until designation and independent verification are recorded;
 do not attribute a successor's decision to the original reviewer.
 
@@ -63,9 +63,9 @@ for the completed supervised merge and its actual checks.
 
 ## Durable handoff
 
-Write a new sanitized report for this continuation rather than altering a
+For full-lane work, write a new sanitized report rather than altering a
 historical review or closed run. Use [handoff.md](templates/handoff.md), update
-the current pointer in README/stage-zero, and retain source identity, actual
+[STATUS](../STATUS.md), and retain source identity, actual
 checks, review/finding status, missing evidence, and the smallest next action.
 
 Keep large logs in the controller run or access-controlled artifact storage.

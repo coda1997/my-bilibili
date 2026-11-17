@@ -4,30 +4,36 @@ Follow [agent convergence](docs/agent-convergence.md) R1–R9 for finding tiers,
 
 ## Read order
 
-For read-only consultations, see the proposed lightweight route in
-`docs/workflow.md#read-only-requests-proposed-clarification`. It requires no
-implementation packet or new run, and grants no edit or approval authority.
-Formal independent reviews still require their assigned review inputs.
+For read-only consultations, use the lightweight route in
+`docs/workflow.md#read-only-requests`. It requires no implementation packet or
+new run, and grants no edit or approval authority. Formal independent reviews
+still require their assigned review inputs.
 
-1. Follow `README.md` to the current handoff and `docs/stage-zero.md`. Historical
-   reports describe their own candidates, not necessarily the current checkout.
+1. Read `STATUS.md`: current state, next actions, blockers and the owner action
+   queue. Do not read `reports/` by default; open a report only when STATUS or
+   the task links it. Reports describe their own candidates, not the checkout.
 2. Verify prerequisites in `docs/testing.md` before invoking Go. Inspect Git
    status and source identity; do not assume ignored tools/runs exist in a clone.
-3. Read `docs/architecture.md`, `docs/workflow.md`, the assigned spec/tasks, and
-   the role assignment. Use `docs/development.md` for feature startup and routing.
+3. Choose the risk lane in `docs/workflow.md#risk-lanes`. For the full lane,
+   read `docs/architecture.md`, `docs/workflow.md`, the assigned spec/tasks and
+   the role assignment, and use `docs/development.md` for startup and routing.
 4. Use `go run ./cmd/dev run list` and `run status --id <id>` for local run state.
    An empty local run list does not erase the durable handoff.
 
 ## Task routing
 
+- Fast-lane fix: regression test, fix, `go run ./cmd/dev check --race`, and a
+  PR body with an evidence table; one independent code review.
 - Planning: `feature-plan`, `docs/templates/spec.md`, and `docs/templates/tasks.json`.
 - Implementation: `feature-implement`, the assigned task, and `docs/testing.md`.
 - Independent architecture/code review: `independent-review` and
   `docs/templates/review.md`, in a separate authorized agent/context.
-- Unavailable reviewer: use the proposed succession procedure in
-  `docs/workflow.md#reviewer-succession-proposed-clarification`; do not infer
-  reassignment or closure authority.
+- Unavailable reviewer: use the succession procedure in
+  `docs/workflow.md#reviewer-succession`; do not infer reassignment or closure
+  authority.
 - PR or handoff preparation: `pr-handoff` and `docs/pull-requests.md`.
+- Owner-only steps: add them to the owner action queue in `STATUS.md` and batch
+  them; see `docs/workflow.md#owner-actions`.
 
 These repo-local skills live in `.agents/skills/`. If skill discovery is not
 available, read the matching `SKILL.md` directly. Skills are procedures, not
@@ -57,9 +63,11 @@ inside every skill. Assign roles with `docs/templates/assignment.md`.
 - Run `go run ./cmd/dev check` for a code change; use `--race` where supported.
 - The controller owns `.agent/runs/`. Workers submit evidence to the controller;
   a worktree is not a security sandbox or an approval mechanism.
+- Bind evidence to a commit SHA and, for CI, the run URL for that SHA. Write
+  evidence as a claim/evidence/result/scope table.
 - Checkpoint significant progress with `run note`; write the next action and
-  remaining blockers before handing off. Only sanitized final conclusions go
-  in `reports/`. Do not manually edit published run events or frozen inputs.
+  remaining blockers in `STATUS.md` before handing off. Only sanitized final
+  conclusions go in `reports/`. Do not manually edit published run events or frozen inputs.
 - The local recorder is an observability tool, not a trusted merge gate.
 - Run records never substitute for independent review. Changes to checks,
   workflow policy, task scope, or CI need separate human review before use as

@@ -7,36 +7,36 @@ import (
 	"io"
 	"strings"
 
-	"my-bilibili/experiments/playback/mpvprobe"
+	"my-bilibili/internal/adapters/mpv"
 )
 
-func (c *client) resources(ctx context.Context) (mpvprobe.Resources, error) {
+func (c *client) resources(ctx context.Context) (mpv.Resources, error) {
 	nodes, err := c.tree(ctx)
 	if err != nil {
-		return mpvprobe.Resources{}, err
+		return mpv.Resources{}, err
 	}
-	var result mpvprobe.Resources
+	var result mpv.Resources
 	found := false
 	for _, n := range nodes {
 		if strings.HasPrefix(n.Label, "resources ") {
 			var valid bool
 			if result, valid = resourceObservation(strings.TrimPrefix(n.Label, "resources ")); found || !valid {
-				return mpvprobe.Resources{}, errors.New("native resource observation invalid")
+				return mpv.Resources{}, errors.New("native resource observation invalid")
 			}
 			found = true
 		}
 	}
 	if !found {
-		return mpvprobe.Resources{}, errors.New("native resource observation absent")
+		return mpv.Resources{}, errors.New("native resource observation absent")
 	}
 	return result, nil
 }
 
-func resourceObservation(text string) (mpvprobe.Resources, bool) {
-	var result mpvprobe.Resources
+func resourceObservation(text string) (mpv.Resources, bool) {
+	var result mpv.Resources
 	d := json.NewDecoder(strings.NewReader(text))
 	if token, err := d.Token(); err != nil || token != json.Delim('{') {
-		return mpvprobe.Resources{}, false
+		return mpv.Resources{}, false
 	}
 	fields := map[string]*int64{"Cores": &result.Cores, "Renderers": &result.Renderers, "Workers": &result.Workers}
 	seen := make(map[string]bool)
@@ -44,28 +44,28 @@ func resourceObservation(text string) (mpvprobe.Resources, bool) {
 		token, err := d.Token()
 		key, ok := token.(string)
 		if err != nil || !ok || seen[key] {
-			return mpvprobe.Resources{}, false
+			return mpv.Resources{}, false
 		}
 		seen[key] = true
 		var raw json.RawMessage
 		if d.Decode(&raw) != nil {
-			return mpvprobe.Resources{}, false
+			return mpv.Resources{}, false
 		}
 		// Decode exact required fields only. Missing/null fields and case
 		// aliases must not become observed zero counters or override them.
 		if counter, required := fields[key]; required {
 			var value *int64
 			if json.Unmarshal(raw, &value) != nil || value == nil || *value < 0 {
-				return mpvprobe.Resources{}, false
+				return mpv.Resources{}, false
 			}
 			*counter = *value
 		}
 	}
 	if token, err := d.Token(); err != nil || token != json.Delim('}') || !seen["Cores"] || !seen["Renderers"] || !seen["Workers"] {
-		return mpvprobe.Resources{}, false
+		return mpv.Resources{}, false
 	}
 	if _, err := d.Token(); err != io.EOF {
-		return mpvprobe.Resources{}, false
+		return mpv.Resources{}, false
 	}
 	return result, true
 }

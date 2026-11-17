@@ -1,12 +1,13 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"testing"
 
-	"my-bilibili/experiments/playback/contract"
 	"my-bilibili/internal/app"
 	"my-bilibili/internal/fixture"
+	"my-bilibili/internal/playback"
 )
 
 func TestWindowClosePreservesStartupFailure(t *testing.T) {
@@ -14,16 +15,16 @@ func TestWindowClosePreservesStartupFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := app.New(source, contract.New(nil, nil))
+	session, err := app.New(context.Background(), source, playback.New(nil, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := &application{session: session, closeError: contract.Unsupported}
+	a := &application{session: session, closeError: playback.Unsupported}
 	a.onClose()
-	if !errors.Is(a.closeError, contract.Unsupported) {
+	if !errors.Is(a.closeError, playback.Unsupported) {
 		t.Fatal("window close erased startup failure", a.closeError)
 	}
-	if session.State().Playback.State != contract.Closed {
+	if session.State().Playback.State != playback.Closed {
 		t.Fatal("playback was not disposed")
 	}
 }
@@ -33,7 +34,7 @@ func TestDisposeBeforeStartIsTerminalAndIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := app.New(source, contract.New(nil, nil))
+	session, err := app.New(context.Background(), source, playback.New(nil, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,10 +45,10 @@ func TestDisposeBeforeStartIsTerminalAndIdempotent(t *testing.T) {
 	if err := a.dispose(); err != nil {
 		t.Fatal(err)
 	}
-	if s := session.State(); s.Playback.State != contract.Closed {
+	if s := session.State(); s.Playback.State != playback.Closed {
 		t.Fatal(s)
 	}
-	if err := session.Play(); err != contract.IsClosed {
+	if err := session.Play(); err != playback.IsClosed {
 		t.Fatal(err)
 	}
 }

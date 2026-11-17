@@ -32,15 +32,13 @@ own work. The initial findings are preserved in `reports/0001-independent-review
 follow the current handoff from README for later dispositions. Review completion
 is not acceptance.
 
-## Read-only requests (proposed clarification)
+## Read-only requests
 
-This clarification and reviewer succession below are local proposals pending
-independent review and separate human policy adoption. They do not amend the
-owner's previously adopted policies by themselves.
+Adopted by the owner on 2026-11-17 together with reviewer succession below.
 
 Repository explanations, configuration audits, and other read-only investigations
 do not require an implementation spec, assignment packet, or new recorded run.
-Read README and the relevant guidance, inspect source identity and available
+Read [STATUS](../STATUS.md) and the relevant guidance, inspect source identity and available
 evidence, and report findings and limits. Follow testing prerequisites if
 verification commands are needed. Do not treat inspection or author self-checks
 as independent approval; formal acceptance reviews still need the exact candidate
@@ -135,11 +133,75 @@ The control checkout owns these paths. Worktree-specific copies are not a
 shared database. Multi-host execution, authenticated writers, idempotent
 distributed dispatch, and automatic stale-lock recovery are out of scope.
 
+## Risk lanes
+
+The owner approved risk lanes, evidence identity, owner actions and local
+commit authority on 2026-11-17.
+
+Every change takes one lane. Record the lane in the PR body. When unsure, use
+the full lane; a reviewer may move a change from fast to full.
+
+**Fast lane.** All of these hold:
+
+- It fixes a reproduced defect, or it is a small documentation, test or
+  tooling change.
+- It does not change a shared contract (exported types and interfaces of
+  `internal/app`, `internal/playback`, `internal/catalog` or an adapter),
+  native lifecycle, threading or cleanup, credentials, authentication or
+  privacy, dependencies, CI, checks, or this policy.
+- As a guideline, it changes at most about 200 lines of non-test code.
+
+Process: an issue or a short problem statement in the PR → a failing regression
+test for a defect → the fix → `go run ./cmd/dev check --race` → a PR with an
+[evidence table](#evidence-identity-and-tables) → one independent code review
+of the PR head commit → passing CI on that commit → the owner's merge decision.
+No spec directory, assignment packet, run record or report is required; the PR
+body is the handoff. R1–R9 still apply.
+
+**Full lane.** Everything else: spec and task DAG, architecture review before
+freeze, a recorded run, independent code review, a report and an update to
+[STATUS](../STATUS.md).
+
+## Evidence identity and tables
+
+The identity of a candidate is a Git commit SHA. Reviews, checks and CI bind to
+that SHA; a change after review produces a new SHA that needs its own checks.
+An assigned implementation task authorizes local commits on its feature
+branch; pushing, PRs and merging still need their own authority. If a commit is
+not authorized, record the base SHA plus the SHA-256 of `git diff --binary`
+including untracked files, and say that the candidate is uncommitted.
+
+CI evidence is the GitHub Actions run URL for that exact SHA. Local hashes of
+manifests, archives and executables belong in the run directory, not in reports
+or PRs. The one exception is an artifact handed to someone else, such as a
+build the owner tests; record that artifact's SHA-256 once.
+
+Record evidence as a table, one claim per row, instead of repeating qualifiers
+in prose:
+
+| Claim | Evidence | Result | Scope and not tested |
+| --- | --- | --- | --- |
+| Expired input is resolved again | `go test ./internal/app -run Expiring` at `<sha>` | PASS | Fake source; no network source |
+
+## Owner actions
+
+Some steps only the owner can do: a physical device or unlocked Mac, account
+sign-in, seeing or hearing output, policy adoption, remote authorization and
+merging. Put each one in the owner action queue in [STATUS](../STATUS.md) with
+what to do, prerequisites already prepared (build, checklist, commands), the
+expected time, what it unblocks and how to report the result.
+
+Batch the queue: ask once per milestone, or earlier only when the queue blocks
+all other authorized work. Meanwhile continue unblocked work. Do not retry an
+owner step without the owner's confirmation that its precondition holds.
+
 ## Review and repair policy
 
 Follow [agent convergence](agent-convergence.md) R1–R9 for current finding tiers, scope, review/fix budgets, issue triage, rulings and completion.
 
-### Reviewer succession (proposed clarification)
+### Reviewer succession
+
+Adopted by the owner on 2026-11-17.
 
 For BLOCKING technical closure, if the original reviewer/context cannot continue,
 the human must explicitly
@@ -186,7 +248,8 @@ Public release automation is intentionally absent from the foundation.
 
 ## Handoff
 
-Use `docs/templates/handoff.md` for a concise report. Keep only sanitized
+Full-lane work uses `docs/templates/handoff.md` for a concise report and
+updates [STATUS](../STATUS.md); fast-lane work uses the PR body. Keep only sanitized
 conclusions, run IDs, source revisions, verification results, review status,
 artifact locators, limitations, and next actions in Git. Link large evidence
 to access-controlled storage with an explicit retention policy. Local runs

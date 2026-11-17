@@ -7,9 +7,9 @@ import (
 	"time"
 
 	gui "github.com/egoist/mygo/ui"
-	"my-bilibili/experiments/playback/contract"
 	"my-bilibili/internal/app"
 	"my-bilibili/internal/catalog"
+	"my-bilibili/internal/playback"
 )
 
 const overlayDelay = 3 * time.Second
@@ -35,7 +35,7 @@ type View struct {
 	seek, volume         sliderState
 	partsOpen, speedOpen bool
 	controlsHeld         bool
-	lastError            contract.ErrorCode
+	lastError            playback.ErrorCode
 }
 
 type sliderState struct {
@@ -65,13 +65,13 @@ func (v *View) active() { v.lastActivity = v.now() }
 
 func (v *View) action(c *gui.Context, fn func() error) {
 	v.pendingClick = time.Time{}
-	v.lastError = contract.NoError
+	v.lastError = playback.NoError
 	if err := fn(); err != nil {
-		var code contract.ErrorCode
+		var code playback.ErrorCode
 		if errors.As(err, &code) {
 			v.lastError = code
 		} else {
-			v.lastError = contract.Media
+			v.lastError = playback.Media
 		}
 	}
 	v.active()
@@ -86,7 +86,7 @@ func (v *View) fullscreen(c *gui.Context, enabled bool) {
 }
 
 func (v *View) overlayVisible(s app.State) bool {
-	return s.Playback.State != contract.Playing || v.controlsHeld || v.seek.pressed || v.volume.pressed || v.partsOpen || v.speedOpen || v.now().Sub(v.lastActivity) < overlayDelay
+	return s.Playback.State != playback.Playing || v.controlsHeld || v.seek.pressed || v.volume.pressed || v.partsOpen || v.speedOpen || v.now().Sub(v.lastActivity) < overlayDelay
 }
 
 func (v *View) videoInput(c *gui.Context, video gui.Element) {
@@ -163,10 +163,10 @@ func (v *View) shortcuts(c *gui.Context, s app.State) {
 }
 
 func usable(s app.State) bool {
-	return s.Playback.State != contract.Idle && s.Playback.State != contract.Closed
+	return s.Playback.State != playback.Idle && s.Playback.State != playback.Closed
 }
 func seekable(s app.State) bool {
-	return s.Playback.Duration > 0 && (s.Playback.State == contract.Ready || s.Playback.State == contract.Paused || s.Playback.State == contract.Playing)
+	return s.Playback.Duration > 0 && (s.Playback.State == playback.Ready || s.Playback.State == playback.Paused || s.Playback.State == playback.Playing)
 }
 func partTitle(s app.State, id catalog.PartID) string {
 	for i, p := range s.Video.Parts {

@@ -8,11 +8,11 @@ import (
 
 	"github.com/egoist/mygo"
 	gui "github.com/egoist/mygo/ui"
-	"my-bilibili/experiments/playback/contract"
-	"my-bilibili/experiments/playback/mpvprobe"
+	"my-bilibili/internal/adapters/mpv"
 	"my-bilibili/internal/app"
 	"my-bilibili/internal/desktop"
 	"my-bilibili/internal/fixture"
+	"my-bilibili/internal/playback"
 	"my-bilibili/internal/previewbundle"
 )
 
@@ -37,7 +37,7 @@ func run() error {
 	}
 	executable, err := os.Executable()
 	if err != nil {
-		return contract.Media
+		return playback.Media
 	}
 	resources, err := previewbundle.Resources(executable)
 	if err != nil {
@@ -52,17 +52,17 @@ func run() error {
 		return err
 	}
 	defer cleanup()
-	session, err := app.New(source, contract.New(mpvprobe.Opener{Library: previewbundle.Library}, nil))
+	session, err := app.New(context.Background(), source, playback.New(mpv.Opener{Library: previewbundle.Library}, nil))
 	if err != nil {
 		return err
 	}
 	coverData, err := os.ReadFile(filepath.Join(resources, "cover.png"))
 	if err != nil {
-		return contract.Media
+		return playback.Media
 	}
 	cover, err := gui.DecodeBitmap(coverData)
 	if err != nil {
-		return contract.Media
+		return playback.Media
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -75,7 +75,7 @@ func run() error {
 			return
 		}
 		a.view = &desktop.View{Player: session, DoubleClickInterval: interval,
-			Surface: func(c *gui.Context, w, h float32) { mpvprobe.DrawSized(c, session.Engine(), w, h) },
+			Surface: func(c *gui.Context, w, h float32) { mpv.DrawSized(c, session.Engine(), w, h) },
 			Cover: func(c *gui.Context, id string) {
 				if id == "preview-cover" {
 					gui.Image(c, cover).Size(80, 45)
@@ -111,7 +111,7 @@ func run() error {
 		a.window.Focus()
 	})
 	if err := mygo.App.Run(); err != nil {
-		return contract.Media
+		return playback.Media
 	}
 	if err := a.dispose(); err != nil {
 		return err
@@ -123,8 +123,8 @@ func (a *application) dispose() error {
 	if err := a.session.Close(); err != nil {
 		return err
 	}
-	if mpvprobe.Owned() != (mpvprobe.Resources{}) {
-		return contract.Media
+	if mpv.Owned() != (mpv.Resources{}) {
+		return playback.Media
 	}
 	return nil
 }

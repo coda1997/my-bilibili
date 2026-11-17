@@ -14,7 +14,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 // A whitelist avoids inherited proxy credentials, loader injections, mpv options,
@@ -55,7 +55,7 @@ func startCommand(cmd *exec.Cmd, descriptor []byte) (*ownedProcess, error) {
 	cmd.Stderr = io.Discard
 	cmd.WaitDelay = time.Second
 	if cmd.Start() != nil {
-		return nil, contract.Media
+		return nil, playback.Media
 	}
 	p := &ownedProcess{cmd: cmd, done: make(chan error, 1)}
 	go func() { p.done <- cmd.Wait() }()
@@ -101,7 +101,7 @@ func connect(ctx context.Context, socket string, p *ownedProcess, r *report) (*c
 			return nil, ctx.Err()
 		}
 		if p != nil && p.exited() {
-			return nil, contract.Media
+			return nil, playback.Media
 		}
 		conn, err := (&net.Dialer{Timeout: 100 * time.Millisecond}).DialContext(ctx, "unix", socket)
 		if err == nil {
@@ -124,7 +124,7 @@ func shutdown(p *ownedProcess, socket string, r *report, grace time.Duration) (e
 	}()
 	if p.exited() {
 		r.Checks = append(r.Checks, check{Name: "owned-process-exit", Result: "fail", Detail: "unexpected exit before supervised quit"})
-		return contract.Media
+		return playback.Media
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	r.setPhase(phaseCleanupConnect)
@@ -146,10 +146,10 @@ func shutdown(p *ownedProcess, socket string, r *report, grace time.Duration) (e
 		r.ForcedCleanup = true
 		_ = p.cmd.Process.Kill()
 		if !p.await(3 * time.Second) {
-			return contract.Timeout
+			return playback.Timeout
 		}
 		r.Checks = append(r.Checks, check{Name: "owned-process-exit", Result: "fail", Detail: "forced kill and reap"})
-		return contract.Timeout
+		return playback.Timeout
 	}
 	if err != nil || p.exit != nil {
 		r.Checks = append(r.Checks, check{Name: "owned-process-exit", Result: "fail", Detail: "quit or exit failed"})
@@ -157,11 +157,11 @@ func shutdown(p *ownedProcess, socket string, r *report, grace time.Duration) (e
 			r.setPhase(rpcPhase)
 			return safeCode(err)
 		}
-		return contract.Media
+		return playback.Media
 	}
 	r.setPhase(phaseCleanupSocket)
 	if _, statErr := os.Lstat(socket); !errors.Is(statErr, os.ErrNotExist) {
-		return contract.Media
+		return playback.Media
 	}
 	r.Checks = append(r.Checks, check{Name: "owned-process-exit", Result: "pass", Detail: "quit acknowledged; zero exit; owned automation socket removed"})
 	return nil
@@ -176,23 +176,23 @@ func run(ctx context.Context, app, manifest string, descriptor []byte, r *report
 	}
 	m, h, err := verifyRuntime(manifest)
 	if err != nil {
-		return contract.Invalid
+		return playback.Invalid
 	}
 	r.RuntimeSHA256 = h
 	app, err = filepath.Abs(app)
 	if err != nil {
-		return contract.Invalid
+		return playback.Invalid
 	}
 	r.AppSHA256, _, err = artifactHash(app, 128<<20)
 	if err != nil {
-		return contract.Invalid
+		return playback.Invalid
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 	socketDir, err := os.MkdirTemp("", "tgt-")
 	if err != nil {
-		return contract.Media
+		return playback.Media
 	}
 	defer os.RemoveAll(socketDir)
 	socket := filepath.Join(socketDir, "a.sock")

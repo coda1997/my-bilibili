@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -52,7 +53,7 @@ func TestBusinessDependencyBoundary(t *testing.T) {
 					continue
 				}
 				switch pkg.ImportPath {
-				case "my-bilibili/internal/catalog", "my-bilibili/internal/app", "my-bilibili/experiments/playback/contract":
+				case "my-bilibili/internal/catalog", "my-bilibili/internal/app", "my-bilibili/internal/playback":
 				default:
 					t.Errorf("business dependency %q is outside the reviewed plain catalog/app/playback boundary", pkg.ImportPath)
 				}
@@ -61,6 +62,36 @@ func TestBusinessDependencyBoundary(t *testing.T) {
 				if !seen[root] {
 					t.Errorf("dependency output omitted required package %q", root)
 				}
+			}
+		})
+	}
+}
+
+// Product packages must not depend on experiments. Probes may import product
+// packages, never the reverse.
+func TestProductDoesNotImportExperiments(t *testing.T) {
+	for _, tags := range []string{"", "e2e"} {
+		t.Run("tags="+tags, func(t *testing.T) {
+			cmd := exec.Command("go", "list", "-deps", "-tags", tags, "-f", "{{.ImportPath}}", "./cmd/my-bilibili", "./internal/...")
+			cmd.Dir = filepath.Join("..", "..")
+			cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOOS=darwin", "GOARCH=arm64", "CGO_ENABLED=1")
+			output, err := cmd.Output()
+			if err != nil {
+				var exit *exec.ExitError
+				if errors.As(err, &exit) {
+					t.Fatalf("inspect product dependencies: %v\n%s", err, exit.Stderr)
+				}
+				t.Fatal(err)
+			}
+			found := false
+			for _, path := range strings.Fields(string(output)) {
+				found = found || path == "my-bilibili/internal/adapters/mpv"
+				if strings.HasPrefix(path, "my-bilibili/experiments/") {
+					t.Errorf("product dependency %q is under experiments/", path)
+				}
+			}
+			if !found {
+				t.Error("dependency output omitted the libmpv adapter used by cmd/my-bilibili")
 			}
 		})
 	}

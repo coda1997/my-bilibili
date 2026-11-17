@@ -56,8 +56,8 @@ repair_root="$runtime_root/coreaudio-cleanup-r1"
 mpv_source="$repair_root/source/mpv-0.42.0"
 mpv_build="$repair_root/build"
 mpv_prefix="$repair_root/prefix"
-mpv_patch="$PWD/experiments/playback/mpvprobe/runtime/mpv-0.42.0-coreaudio-helpers.patch"
-mpv_cleanup_patch="$PWD/experiments/playback/mpvprobe/runtime/mpv-0.42.0-coreaudio-cleanup.patch"
+mpv_patch="$PWD/internal/adapters/mpv/runtime/mpv-0.42.0-coreaudio-helpers.patch"
+mpv_cleanup_patch="$PWD/internal/adapters/mpv/runtime/mpv-0.42.0-coreaudio-cleanup.patch"
 
 export PYTHONPATH="$runtime_root/build-tools"
 export NINJA="$runtime_root/build-tools/ninja-1.13.0.data/scripts/ninja"
@@ -96,7 +96,7 @@ Identify system dyld-cache images by path and the exact OS build; unavailable
 standalone system files have no fabricated file hashes. Retain source and
 dependency licenses, Homebrew receipts/SBOMs, acquisition checksums, the exact
 patch, before/after manifests and complete build/tool provenance. Use the
-manifest format in the [command README](../../cmd/README.md).
+manifest format in the [command README](../../../../experiments/playback/cmd/README.md).
 
 Only successful build, loader and provenance checks permit native regression
 and playback checks. Bind the exact Go source snapshot, native
@@ -122,7 +122,7 @@ After preflight, explicitly run the tagged Go test with the repaired runtime:
 
 ```sh
 MY_BILIBILI_MPV_LIBRARY="$mpv_prefix/lib/libmpv.2.dylib" \
-  go test -tags nativecleanup ./experiments/playback/mpvprobe \
+  go test -tags nativecleanup ./internal/adapters/mpv \
   -run '^TestNativeCoreAudioCleanup$' -count=1 -v -timeout=120s
 ```
 

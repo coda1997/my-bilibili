@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 type client struct {
@@ -203,9 +203,9 @@ func (c *client) openUntil(ctx context.Context, key string, limit time.Duration,
 }
 
 type observed struct {
-	contract.Snapshot
+	playback.Snapshot
 	Owned        bool               `json:"owned"`
-	ControlError contract.ErrorCode `json:"control_error"`
+	ControlError playback.ErrorCode `json:"control_error"`
 	WindowHidden bool               `json:"window_hidden"`
 }
 

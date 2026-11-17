@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 func validDescriptor(now time.Time) descriptor {
@@ -65,7 +65,7 @@ func TestStrictDescriptorAndPrivacy(t *testing.T) {
 		func(b []byte) []byte { return bytes.Replace(b, []byte(`"version":2`), []byte(`"version":2e999`), 1) },
 		func(b []byte) []byte { return append(b, bytes.Repeat([]byte(" "), DescriptorLimit)...) },
 	} {
-		if _, e := Parse(mutate(bytes.Clone(b)), func() time.Time { return now }); e != contract.Invalid {
+		if _, e := Parse(mutate(bytes.Clone(b)), func() time.Time { return now }); e != playback.Invalid {
 			t.Fatal("malformed descriptor accepted or unsafe error", e)
 		}
 	}
@@ -78,7 +78,7 @@ func TestStrictDescriptorAndPrivacy(t *testing.T) {
 				m[k] = v
 			}
 		}
-		if _, e := Parse(encoded(m), func() time.Time { return now }); e != contract.Invalid {
+		if _, e := Parse(encoded(m), func() time.Time { return now }); e != playback.Invalid {
 			t.Fatal("missing field", key, e)
 		}
 	}
@@ -97,7 +97,7 @@ func TestTrustedIdentityRoleHeadersAndExpiry(t *testing.T) {
 			d := validDescriptor(now)
 			mutate(&d)
 			_, e := Parse(encoded(d), func() time.Time { return now })
-			if e != contract.Invalid {
+			if e != playback.Invalid {
 				t.Fatal(e)
 			}
 		})
@@ -109,10 +109,10 @@ func TestTrustedIdentityRoleHeadersAndExpiry(t *testing.T) {
 		t.Fatal(e)
 	}
 	now = now.Add(time.Second)
-	if p.Validate(p.Input()) != contract.Timeout {
+	if p.Validate(p.Input()) != playback.Timeout {
 		t.Fatal("expired input accepted")
 	}
-	if _, e := Parse(encoded(d), func() time.Time { return now }); e != contract.Timeout {
+	if _, e := Parse(encoded(d), func() time.Time { return now }); e != playback.Timeout {
 		t.Fatal("expired parse", e)
 	}
 }
@@ -127,7 +127,7 @@ func TestPolicyCopiesAndRejectsChangedInput(t *testing.T) {
 	}
 	in := p.Input()
 	in.Headers["Referer"] = "changed"
-	if p.Validate(in) != contract.Invalid || p.Validate(p.Input()) != nil {
+	if p.Validate(in) != playback.Invalid || p.Validate(p.Input()) != nil {
 		t.Fatal("mutated metadata accepted or retained")
 	}
 	m := p.Metadata()
@@ -137,23 +137,23 @@ func TestPolicyCopiesAndRejectsChangedInput(t *testing.T) {
 	}
 	in = p.Input()
 	in.URL += "changed"
-	if p.Validate(in) != contract.Invalid {
+	if p.Validate(in) != playback.Invalid {
 		t.Fatal("locator changed")
 	}
 	in = p.Input()
 	in.FilePath = "local"
-	if p.Validate(in) != contract.Invalid {
+	if p.Validate(in) != playback.Invalid {
 		t.Fatal("file path accepted")
 	}
 }
 func TestLocatorUnicodeAndEscapes(t *testing.T) {
 	for _, suffix := range []string{"?x=%zz", "?x=%00", "%0a", "?x=%C2%85", "%C2%85", "?x=%ff", "%ff", "?x=\u0085", "#", "?x=\r"} {
-		if e := ValidateMediaURL("https://video.example.test/x" + suffix); e != contract.Invalid {
+		if e := ValidateMediaURL("https://video.example.test/x" + suffix); e != playback.Invalid {
 			t.Fatal("bad locator accepted")
 		}
 	}
 	for _, u := range []string{"https:///x", "https://:443/x", "https://host.example:/x", "https://host.example:0/x", "https://host.example:65536/x", "https://host.example:abc/x", "https://[bad]/x", "https://[127.0.0.1]/x", "https://::1/x", "https://%C2%85.example/x", "https://%ff.example/x"} {
-		if e := ValidateMediaURL(u); e != contract.Invalid {
+		if e := ValidateMediaURL(u); e != playback.Invalid {
 			t.Fatal("malformed URL accepted")
 		}
 	}
@@ -176,13 +176,13 @@ func (r *blockingReader) Close() error {
 func TestBoundedInputDeadlineAndClosure(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	if _, e := ReadDescriptor(ctx, io.NopCloser(strings.NewReader(strings.Repeat("x", DescriptorLimit+1)))); e != contract.Invalid {
+	if _, e := ReadDescriptor(ctx, io.NopCloser(strings.NewReader(strings.Repeat("x", DescriptorLimit+1)))); e != playback.Invalid {
 		t.Fatal(e)
 	}
 	r := &blockingReader{make(chan struct{})}
 	ctx2, cancel2 := context.WithCancel(ctx)
 	cancel2()
-	if _, e := ReadDescriptor(ctx2, r); e != contract.Canceled {
+	if _, e := ReadDescriptor(ctx2, r); e != playback.Canceled {
 		t.Fatal(e)
 	}
 	select {
@@ -192,7 +192,7 @@ func TestBoundedInputDeadlineAndClosure(t *testing.T) {
 	}
 	ctx3, cancel3 := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 	defer cancel3()
-	if _, e := ReadDescriptor(ctx3, io.NopCloser(strings.NewReader("x"))); e != contract.Timeout {
+	if _, e := ReadDescriptor(ctx3, io.NopCloser(strings.NewReader("x"))); e != playback.Timeout {
 		t.Fatal(e)
 	}
 }

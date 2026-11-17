@@ -21,7 +21,7 @@ Follow [agent convergence](../agent-convergence.md) R1–R9 for scope, review/fi
 - Human escalation/resumption: decision needed, evidence packet, explicit human
   direction and additional round allowance (or not applicable):
 - Checkout/worktree and base revision:
-- Exact candidate commit, or uncommitted manifest/archive and hashes:
+- Exact candidate commit SHA (or uncommitted base SHA plus diff hash):
 - Spec path/version/hash and task-graph hash:
 - Contract review status; separate human policy approval status:
 - Task IDs and satisfied dependency evidence:
@@ -34,8 +34,8 @@ Follow [agent convergence](../agent-convergence.md) R1–R9 for scope, review/fi
 - For closure: original finding, reproduction, and required verification:
 - For reviewer succession (otherwise not applicable): original reviewer and
   report/finding IDs, unavailability reason, explicit human designation and
-  successor independence, prior review/fix counts; follow the proposed
-  procedure in docs/workflow.md#reviewer-succession-proposed-clarification:
+  successor independence, prior review/fix counts; follow the
+  procedure in docs/workflow.md#reviewer-succession:
 
 Do not substitute the author's chat or desired verdict for review inputs.
 

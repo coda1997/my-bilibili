@@ -1,6 +1,7 @@
 package previewbundle
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,12 +28,13 @@ func TestBundleResourcesOutsideWorkingDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	video, err := source.Detail()
+	video, err := source.Detail(context.Background())
 	if err != nil || video.CoverID != "preview-cover" {
 		t.Fatal(video, err)
 	}
 	for _, part := range video.Parts {
-		in, err := source.Resolve(part.ID)
+		r, err := source.Resolve(context.Background(), part.ID)
+		in := r.Input
 		if err != nil || !filepath.IsAbs(in.FilePath) {
 			t.Fatal(in, err)
 		}

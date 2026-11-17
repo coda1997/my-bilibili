@@ -1,4 +1,4 @@
-package mpvprobe
+package mpv
 
 import (
 	"image"
@@ -7,7 +7,7 @@ import (
 	"unsafe"
 
 	gui "github.com/egoist/mygo/ui"
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 func frame() *image.RGBA {
@@ -58,7 +58,7 @@ func (e *engine) renderLoop(a *nativeAPI, core uintptr, stop <-chan struct{}, do
 			skip, block := int32(1), int32(0)
 			params := []renderParam{{Kind: 13, Data: unsafe.Pointer(&skip)}, {Kind: 12, Data: unsafe.Pointer(&block)}, {}}
 			if a.render(render, unsafe.Pointer(&params[0])) < 0 {
-				e.fail(contract.Media)
+				e.fail(playback.Media)
 			}
 			runtime.KeepAlive(params)
 			continue
@@ -75,7 +75,7 @@ func (e *engine) renderLoop(a *nativeAPI, core uintptr, stop <-chan struct{}, do
 		runtime.KeepAlive(target)
 		if result < 0 {
 			e.framesMu.Unlock()
-			e.fail(contract.Media)
+			e.fail(playback.Media)
 			discard = true
 			continue
 		}
@@ -89,13 +89,13 @@ func (e *engine) renderLoop(a *nativeAPI, core uintptr, stop <-chan struct{}, do
 }
 
 // Draw is UI-thread-only. It never waits for native rendering or decoding.
-func Draw(c *gui.Context, plain contract.Engine) {
+func Draw(c *gui.Context, plain playback.Engine) {
 	DrawSized(c, plain, width, height)
 }
 
 // DrawSized scales presentation only. The native render buffers remain 640x360,
 // with the same UI-thread ownership and non-blocking frame acquisition as Draw.
-func DrawSized(c *gui.Context, plain contract.Engine, displayWidth, displayHeight float32) {
+func DrawSized(c *gui.Context, plain playback.Engine, displayWidth, displayHeight float32) {
 	e, ok := plain.(*engine)
 	if !ok {
 		return

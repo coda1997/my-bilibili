@@ -8,9 +8,9 @@ import (
 	"time"
 
 	gui "github.com/egoist/mygo/ui"
-	"my-bilibili/experiments/playback/contract"
 	"my-bilibili/internal/app"
 	"my-bilibili/internal/catalog"
+	"my-bilibili/internal/playback"
 )
 
 type call struct {
@@ -70,7 +70,7 @@ func newHarness() *harness {
 	h := &harness{player: &fakePlayer{state: app.State{
 		Video:        catalog.Video{ID: "preview-video", Title: "Fixture preview", Creator: "Preview creator", Description: "Original local fixture description", CoverID: "preview-cover", Parts: []catalog.Part{{ID: "part-1", Title: "First", Duration: 10 * time.Second}, {ID: "part-2", Title: "Second", Duration: 10 * time.Second}}},
 		SelectedPart: "part-1", PlaybackPart: "part-1", Volume: .2, Rate: 1,
-		Playback: contract.Snapshot{State: contract.Paused, Generation: 1, Duration: 10 * time.Second, Position: time.Second},
+		Playback: playback.Snapshot{State: playback.Paused, Generation: 1, Duration: 10 * time.Second, Position: time.Second},
 	}}}
 	h.view = &View{Player: h.player, DoubleClickInterval: 500 * time.Millisecond, Fullscreen: func() bool { return h.full }, SetFullscreen: func(b bool) { h.full = b; h.fullscreenCalls++ }, Surface: func(c *gui.Context, w, hgt float32) {
 		h.surfaceW, h.surfaceH = w, hgt
@@ -201,9 +201,9 @@ func TestControlsMenusAndErrors(t *testing.T) {
 		t.Fatal("controls bubbled to video")
 	}
 	h.player.state.SelectedPart = "part-2"
-	h.player.state.SelectionError = contract.Media
-	h.player.state.Playback.State = contract.Failed
-	h.player.state.Playback.Error = contract.Unsupported
+	h.player.state.SelectionError = playback.Media
+	h.player.state.Playback.State = playback.Failed
+	h.player.state.Playback.Error = playback.Unsupported
 	h.ui.Frame()
 	rect(t, h, "Playing: P1 · First")
 	rect(t, h, "P2 · Second · requested")
@@ -217,7 +217,7 @@ func TestControlsMenusAndErrors(t *testing.T) {
 	}
 	h.player.err = errors.New("private locator must not be shown")
 	click(t, h, "Play")
-	rect(t, h, "Action unavailable · "+string(contract.Media))
+	rect(t, h, "Action unavailable · "+string(playback.Media))
 	if h.ui.HasText("private locator must not be shown") {
 		t.Fatal("raw error exposed")
 	}
@@ -343,17 +343,17 @@ func TestSliderCaptureSamplesAndReplacement(t *testing.T) {
 }
 
 func TestOverlayClockAndState(t *testing.T) {
-	for _, state := range []contract.State{contract.Playing, contract.Paused, contract.Loading, contract.Failed, contract.Ended} {
+	for _, state := range []playback.State{playback.Playing, playback.Paused, playback.Loading, playback.Failed, playback.Ended} {
 		t.Run(string(state), func(t *testing.T) {
 			h := newHarness()
 			h.player.state.Playback.State = state
 			h.ui.Frame()
 			h.ui.Advance(3100 * time.Millisecond)
 			_, visible := h.ui.Find("Seek position")
-			if visible != (state != contract.Playing) {
+			if visible != (state != playback.Playing) {
 				t.Fatalf("visible=%v", visible)
 			}
-			if state == contract.Playing {
+			if state == playback.Playing {
 				r := rect(t, h, "Video surface")
 				h.ui.Move(r.X+20, r.Y+20)
 				h.ui.Frame()
@@ -364,7 +364,7 @@ func TestOverlayClockAndState(t *testing.T) {
 	for _, keep := range []string{"hover", "focus", "drag", "popup"} {
 		t.Run(keep, func(t *testing.T) {
 			h := newHarness()
-			h.player.state.Playback.State = contract.Playing
+			h.player.state.Playback.State = playback.Playing
 			h.ui.Frame()
 			switch keep {
 			case "hover":
@@ -398,17 +398,17 @@ func TestSampledUpdatesAndDisabledControls(t *testing.T) {
 	if access(t, h, "Seek position").Now != 2.5 || access(t, h, "Volume").Now != .75 {
 		t.Fatal("sample not presented")
 	}
-	for _, state := range []contract.State{contract.Idle, contract.Loading, contract.Ready, contract.Paused, contract.Playing, contract.Ended, contract.Failed, contract.Closed} {
+	for _, state := range []playback.State{playback.Idle, playback.Loading, playback.Ready, playback.Paused, playback.Playing, playback.Ended, playback.Failed, playback.Closed} {
 		for _, duration := range []time.Duration{0, 10 * time.Second} {
 			h.player.state.Playback.State = state
 			h.player.state.Playback.Duration = duration
 			h.ui.Frame()
-			seekEnabled := duration > 0 && (state == contract.Ready || state == contract.Paused || state == contract.Playing)
+			seekEnabled := duration > 0 && (state == playback.Ready || state == playback.Paused || state == playback.Playing)
 			if access(t, h, "Seek position").Disabled == seekEnabled {
 				t.Fatalf("seek disabled state=%s duration=%s", state, duration)
 			}
 			for _, label := range []string{"Play", "Mute", "Volume", "Playback speed"} {
-				if access(t, h, label).Disabled != (state == contract.Idle || state == contract.Closed) {
+				if access(t, h, label).Disabled != (state == playback.Idle || state == playback.Closed) {
 					t.Fatalf("%s disabled in %s", label, state)
 				}
 			}

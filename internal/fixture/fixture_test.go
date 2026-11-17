@@ -1,6 +1,7 @@
 package fixture
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -10,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
 	"my-bilibili/internal/catalog"
+	"my-bilibili/internal/playback"
 )
 
 func copyAssets(t *testing.T) string {
@@ -39,7 +40,7 @@ func TestOriginalResourcesAndCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	video, err := s.Detail()
+	video, err := s.Detail(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,14 +56,18 @@ func TestOriginalResourcesAndCatalog(t *testing.T) {
 		if part.Duration != 30*time.Second {
 			t.Fatal(part)
 		}
-		in, err := s.Resolve(part.ID)
+		r, err := s.Resolve(context.Background(), part.ID)
+		in := r.Input
+		if !r.ExpiresAt.IsZero() {
+			t.Fatal("bundled fixture input must not expire")
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
 		if err := in.Validate(); err != nil {
 			t.Fatal(err)
 		}
-		if !filepath.IsAbs(in.FilePath) || filepath.Dir(in.FilePath) != dir || in.URL != "" || in.AudioURL != "" || len(in.Headers) != 0 {
+		if !filepath.IsAbs(in.FilePath) || filepath.Dir(in.FilePath) != dir || r.Input.URL != "" {
 			t.Fatal("incorrect resource mapping")
 		}
 		data, err := os.ReadFile(in.FilePath)
@@ -75,7 +80,7 @@ func TestOriginalResourcesAndCatalog(t *testing.T) {
 		t.Fatal("parts do not resolve to distinct media")
 	}
 	video.Parts[0].Title = "mutated"
-	again, _ := s.Detail()
+	again, _ := s.Detail(context.Background())
 	if again.Parts[0].Title == "mutated" {
 		t.Fatal("catalog slice alias")
 	}
@@ -98,7 +103,8 @@ func TestRelativeDirectoryCapturedAtConstruction(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Chdir(t.TempDir())
-	in, err := s.Resolve("part-1")
+	r, err := s.Resolve(context.Background(), "part-1")
+	in := r.Input
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +121,7 @@ func TestMissingMalformedAndTamperedResources(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, err := New(dir)
-			if err != contract.Media {
+			if err != playback.Media {
 				t.Fatalf("%v", err)
 			}
 		})
@@ -131,7 +137,7 @@ func TestMissingMalformedAndTamperedResources(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, err = New(dir)
-			if err != contract.Media {
+			if err != playback.Media {
 				t.Fatalf("%v", err)
 			}
 		})
@@ -141,15 +147,15 @@ func TestMissingMalformedAndTamperedResources(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, err := New(dir)
-			if err != contract.Media {
+			if err != playback.Media {
 				t.Fatalf("%v", err)
 			}
 		})
 	}
-	if _, err := New(""); err != contract.Invalid {
+	if _, err := New(""); err != playback.Invalid {
 		t.Fatal(err)
 	}
-	if _, err := New(filepath.Join(t.TempDir(), "missing-private-directory")); err != contract.Media {
+	if _, err := New(filepath.Join(t.TempDir(), "missing-private-directory")); err != playback.Media {
 		t.Fatal(err)
 	}
 }
@@ -185,7 +191,7 @@ func TestAdjacentManifestCannotAuthorizeChangedMedia(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), encoded, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := New(dir); err != contract.Media {
+	if _, err := New(dir); err != playback.Media {
 		t.Fatal("manifest replacement authorized changed asset", err)
 	}
 }
@@ -197,7 +203,7 @@ func TestResolveRechecksFileAndRejectsUnknownIDs(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"", "../part-1.mp4", "part-3", "PART-1"} {
-		if in, err := s.Resolve(catalog.PartID(id)); err != contract.Invalid || in.FilePath != "" || in.URL != "" || in.AudioURL != "" || len(in.Headers) != 0 {
+		if r, err := s.Resolve(context.Background(), catalog.PartID(id)); err != playback.Invalid || !r.ExpiresAt.IsZero() || r.Input.FilePath != "" || r.Input.URL != "" || r.Input.AudioURL != "" || len(r.Input.Headers) != 0 {
 			t.Fatalf("unknown ID accepted: %v", err)
 		}
 	}
@@ -205,10 +211,10 @@ func TestResolveRechecksFileAndRejectsUnknownIDs(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Resolve("part-1"); err != contract.Media {
+	if _, err := s.Resolve(context.Background(), "part-1"); err != playback.Media {
 		t.Fatal("missing resource was not rechecked", err)
 	}
-	if _, err := s.Resolve("part-2"); err != nil {
+	if _, err := s.Resolve(context.Background(), "part-2"); err != nil {
 		t.Fatal("unrelated part affected", err)
 	}
 }
@@ -225,7 +231,7 @@ func TestResourceSymlinksAreNotRegularAssets(t *testing.T) {
 			if err := os.Symlink(target, path); err != nil {
 				t.Skipf("symlink creation unavailable: %v", err)
 			}
-			if _, err := New(dir); err != contract.Media {
+			if _, err := New(dir); err != playback.Media {
 				t.Fatalf("symlinked resource accepted: %v", err)
 			}
 		})

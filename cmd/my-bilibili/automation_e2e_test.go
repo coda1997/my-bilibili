@@ -22,11 +22,12 @@ func TestControlledDelayedRequestIsObservedAndCanceled(t *testing.T) {
 	}
 	defer cleanup()
 	delayed := got.(*delayedSource)
-	in, err := got.Resolve("part-1")
+	r, err := got.Resolve(context.Background(), "part-1")
+	in := r.Input
 	if err != nil || in.Validate() != nil {
 		t.Fatal(err)
 	}
-	if _, err := got.Resolve("unknown"); err == nil {
+	if _, err := got.Resolve(context.Background(), "unknown"); err == nil {
 		t.Fatal("unknown ID accepted")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)

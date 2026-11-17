@@ -1,4 +1,4 @@
-package mpvprobe
+package mpv
 
 import (
 	"runtime"
@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 // mpv_node's C union is eight bytes, followed by a four-byte format and padding.
@@ -51,7 +51,7 @@ func (a *nativeAPI) stringList(core uintptr, name string, values []string) int32
 	return result
 }
 
-func (a *nativeAPI) transport(core uintptr, in contract.Input) bool {
+func (a *nativeAPI) transport(core uintptr, in playback.Input) bool {
 	keys := make([]string, 0, len(in.Headers))
 	for key := range in.Headers {
 		keys = append(keys, key)
@@ -87,7 +87,7 @@ func (a *nativeAPI) transport(core uintptr, in contract.Input) bool {
 // Tracks is sanitized selected-track evidence, not proof of audible/synced output.
 type Tracks struct{ Video, Audio, ExternalAudio bool }
 
-func Inspect(plain contract.Engine) Tracks {
+func Inspect(plain playback.Engine) Tracks {
 	if e, ok := plain.(*engine); ok {
 		e.mu.RLock()
 		defer e.mu.RUnlock()

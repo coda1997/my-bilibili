@@ -4,55 +4,55 @@ import (
 	"context"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 // Session is confined to the same UI thread as Controller. Deadline handling
 // requests complete synchronous disposal there, never native calls on a timer goroutine.
 type Session struct {
-	controller   *contract.Controller
+	controller   *playback.Controller
 	policy       *Policy
 	now          func() time.Time
 	cancel       context.CancelFunc
-	terminal     *contract.Snapshot
-	controlError contract.ErrorCode
+	terminal     *playback.Snapshot
+	controlError playback.ErrorCode
 	retryAllowed bool
 	attempted    bool
 	ctx          context.Context
 }
 type Status struct {
-	contract.Snapshot
+	playback.Snapshot
 	Owned        bool               `json:"owned"`
-	ControlError contract.ErrorCode `json:"control_error"`
+	ControlError playback.ErrorCode `json:"control_error"`
 }
 
-func NewSession(opener contract.Opener, p *Policy, now func() time.Time) *Session {
+func NewSession(opener playback.Opener, p *Policy, now func() time.Time) *Session {
 	if now == nil {
 		now = time.Now
 	}
-	return &Session{controller: contract.NewWithPolicy(opener, now, p), policy: p, now: now}
+	return &Session{controller: playback.NewWithPolicy(opener, now, p), policy: p, now: now}
 }
-func safe(err error) contract.ErrorCode {
+func safe(err error) playback.ErrorCode {
 	if err == nil {
-		return contract.NoError
+		return playback.NoError
 	}
-	if e, ok := err.(contract.ErrorCode); ok {
+	if e, ok := err.(playback.ErrorCode); ok {
 		switch e {
-		case contract.Invalid, contract.Unsupported, contract.Canceled, contract.Timeout, contract.Media, contract.IsClosed:
+		case playback.Invalid, playback.Unsupported, playback.Canceled, playback.Timeout, playback.Media, playback.IsClosed:
 			return e
 		}
 	}
-	return contract.Media
+	return playback.Media
 }
 func (s *Session) Open(ctx context.Context) error {
 	if s.attempted {
-		return contract.IsClosed
+		return playback.IsClosed
 	}
 	return s.open(ctx)
 }
 func (s *Session) open(ctx context.Context) error {
 	if s == nil || s.policy == nil || ctx == nil {
-		return contract.Invalid
+		return playback.Invalid
 	}
 	// Validation precedes cancellation/disposal of any existing valid input.
 	if e := s.policy.Validate(s.policy.Input()); e != nil {
@@ -63,7 +63,7 @@ func (s *Session) open(ctx context.Context) error {
 		s.cancel()
 	}
 	s.terminal = nil
-	s.controlError = contract.NoError
+	s.controlError = playback.NoError
 	deadline := minTime(s.policy.Deadline(), s.now().Add(SessionLimit))
 	s.attempted = true
 	child, cancel := context.WithDeadline(ctx, deadline)
@@ -82,17 +82,17 @@ func minTime(a, b time.Time) time.Time {
 }
 func (s *Session) Retry(ctx context.Context) error {
 	s.Tick()
-	if !s.retryAllowed || s.controller.Snapshot().State == contract.Loading {
-		return contract.IsClosed
+	if !s.retryAllowed || s.controller.Snapshot().State == playback.Loading {
+		return playback.IsClosed
 	}
 	// Never retry Media/Timeout/restriction failures. Explicit operator cancel/close
 	// and an otherwise successful session may reuse only this identical fresh input.
-	if s.terminal != nil && s.terminal.Error != contract.NoError && s.terminal.Error != contract.Canceled {
-		return contract.IsClosed
+	if s.terminal != nil && s.terminal.Error != playback.NoError && s.terminal.Error != playback.Canceled {
+		return playback.IsClosed
 	}
 	return s.open(ctx)
 }
-func (s *Session) finish(state contract.State, code contract.ErrorCode) {
+func (s *Session) finish(state playback.State, code playback.ErrorCode) {
 	snap := s.controller.Snapshot()
 	if s.cancel != nil {
 		s.cancel()
@@ -101,7 +101,7 @@ func (s *Session) finish(state contract.State, code contract.ErrorCode) {
 	_ = s.controller.Close()
 	snap.State, snap.Error = state, code
 	s.terminal = &snap
-	if code != contract.NoError && code != contract.Canceled {
+	if code != playback.NoError && code != playback.Canceled {
 		s.retryAllowed = false
 	}
 }
@@ -110,41 +110,41 @@ func (s *Session) Tick() {
 		return
 	}
 	if s.policy == nil {
-		s.finish(contract.Failed, contract.Invalid)
+		s.finish(playback.Failed, playback.Invalid)
 		return
 	}
 	if !s.now().Before(s.policy.Deadline()) {
-		s.finish(contract.Failed, contract.Timeout)
+		s.finish(playback.Failed, playback.Timeout)
 		return
 	}
 	if s.ctx != nil && s.ctx.Err() != nil {
 		code := contextCode(s.ctx)
-		state := contract.Closed
-		if code == contract.Timeout {
-			state = contract.Failed
+		state := playback.Closed
+		if code == playback.Timeout {
+			state = playback.Failed
 		}
 		s.finish(state, code)
 		return
 	}
 	s.controller.Tick()
 	snap := s.controller.Snapshot()
-	if snap.State == contract.Failed {
+	if snap.State == playback.Failed {
 		s.retryAllowed = false
 	}
 	if s.controller.Active() && snap.Position >= time.Duration(s.policy.d.Grant.EndMS)*time.Millisecond {
-		s.finish(contract.Ended, contract.NoError)
+		s.finish(playback.Ended, playback.NoError)
 	}
 }
-func (s *Session) Command(cmd contract.Command) error {
+func (s *Session) Command(cmd playback.Command) error {
 	s.Tick()
 	if s.terminal != nil || !s.controller.Active() {
-		return contract.IsClosed
+		return playback.IsClosed
 	}
 	if cmd.Validate() != nil {
-		return contract.Invalid
+		return playback.Invalid
 	}
-	if cmd.Kind == contract.Seek && (cmd.Position < time.Duration(s.policy.d.Grant.StartMS)*time.Millisecond || cmd.Position > time.Duration(s.policy.d.Grant.EndMS)*time.Millisecond) {
-		return contract.Invalid
+	if cmd.Kind == playback.Seek && (cmd.Position < time.Duration(s.policy.d.Grant.StartMS)*time.Millisecond || cmd.Position > time.Duration(s.policy.d.Grant.EndMS)*time.Millisecond) {
+		return playback.Invalid
 	}
 	e := s.controller.Command(cmd)
 	s.controlError = safe(e)
@@ -160,7 +160,7 @@ func (s *Session) Snapshot() Status {
 	}
 	return Status{snap, s.controller.Active(), s.controlError}
 }
-func (s *Session) Engine() contract.Engine { return s.controller.Engine() }
-func (s *Session) Cancel()                 { s.finish(contract.Closed, contract.Canceled) }
-func (s *Session) Close()                  { s.finish(contract.Closed, contract.NoError) }
+func (s *Session) Engine() playback.Engine { return s.controller.Engine() }
+func (s *Session) Cancel()                 { s.finish(playback.Closed, playback.Canceled) }
+func (s *Session) Close()                  { s.finish(playback.Closed, playback.NoError) }
 func (s *Session) Expired() bool           { return !s.now().Before(s.policy.Deadline()) }

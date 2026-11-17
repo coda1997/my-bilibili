@@ -9,8 +9,8 @@ Follow [agent convergence](../docs/agent-convergence.md) R1/R2/R3/R4/R5/R6/R7 fo
 
 - Write review explanations in Simplified Chinese. Preserve code identifiers,
   file paths, commands, and acceptance IDs in their original form.
-- Follow AGENTS.md. Start with README.md to locate the current handoff and
-  docs/stage-zero.md; historical reports describe their own candidates.
+- Follow AGENTS.md. Start with STATUS.md for current state; historical reports
+  describe their own candidates.
 - Review against the assigned spec, acceptance criteria, task write paths,
   and exact PR candidate. If the assignment or evidence is missing, identify
   the gap rather than inventing requirements or claiming acceptance.

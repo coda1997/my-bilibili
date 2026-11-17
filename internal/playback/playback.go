@@ -1,5 +1,6 @@
-// Package contract contains the framework-free boundary for the M1 experiment.
-package contract
+// Package playback contains the framework-free playback boundary: inputs, engine,
+// controller, snapshots and safe error codes.
+package playback
 
 import (
 	"context"

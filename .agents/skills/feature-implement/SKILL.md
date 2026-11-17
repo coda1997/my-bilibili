@@ -7,7 +7,7 @@ description: Implement an assigned my-bilibili task or repair within a reviewed 
 
 Follow [agent convergence](../../../docs/agent-convergence.md) R3/R4/R5/R7/R9 for scope, repair budgets, issue triage, observed contracts and re-orientation.
 
-Read the current handoff from [README](../../../README.md), the role packet,
+Read [STATUS](../../../STATUS.md), the role packet,
 frozen spec/tasks, and relevant code. Use [development](../../../docs/development.md)
 and the canonical [workflow](../../../docs/workflow.md) for the execution rules.
 

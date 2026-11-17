@@ -7,7 +7,7 @@ description: Prepare a my-bilibili PR description or durable continuation handof
 
 Follow [agent convergence](../../../docs/agent-convergence.md) R2/R5/R6/R7/R8/R9 for dispositions, issue filing/batching, rulings, fix evidence and re-orientation.
 
-Read the current handoff from [README](../../../README.md) and follow
+Read [STATUS](../../../STATUS.md) and follow
 [PR/handoff guidance](../../../docs/pull-requests.md) and the canonical
 [workflow](../../../docs/workflow.md). Check the requested authority before any
 commit, push, PR creation, remote setting change, merge, or release.

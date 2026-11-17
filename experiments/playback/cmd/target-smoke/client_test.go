@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
-	"my-bilibili/experiments/playback/mpvprobe"
+	"my-bilibili/internal/adapters/mpv"
+	"my-bilibili/internal/playback"
 )
 
 type fakeRequest struct {
@@ -63,11 +63,11 @@ func mustJSON(v any) string {
 	}
 	return string(b)
 }
-func fakeNodes(s observed, image, external bool, resources mpvprobe.Resources) any {
+func fakeNodes(s observed, image, external bool, resources mpv.Resources) any {
 	ns := []map[string]any{
 		{"label": "snapshot " + mustJSON(s)},
 		{"label": "resources " + mustJSON(resources)},
-		{"label": "tracks " + mustJSON(mpvprobe.Tracks{Video: true, Audio: true, ExternalAudio: external})},
+		{"label": "tracks " + mustJSON(mpv.Tracks{Video: true, Audio: true, ExternalAudio: external})},
 	}
 	if image {
 		ns = append(ns, map[string]any{"key": "target-video", "role": "image", "bounds": map[string]any{"width": 640, "height": 360}})
@@ -75,7 +75,7 @@ func fakeNodes(s observed, image, external bool, resources mpvprobe.Resources) a
 	return map[string]any{"nodes": ns}
 }
 func TestControlSequenceNoCaptureOrRetry(t *testing.T) {
-	s := observed{Snapshot: contract.Snapshot{State: contract.Idle, Rate: 1, Volume: 1}}
+	s := observed{Snapshot: playback.Snapshot{State: playback.Idle, Rate: 1, Volume: 1}}
 	var keys []string
 	c, r := pipeClient(t, func(q fakeRequest) any {
 		switch q.Method {
@@ -87,12 +87,12 @@ func TestControlSequenceNoCaptureOrRetry(t *testing.T) {
 			case "open":
 				s.Generation++
 				s.Owned = true
-				s.State = contract.Ready
+				s.State = playback.Ready
 				s.Duration = 596624 * time.Millisecond
 			case "play":
-				s.State = contract.Playing
+				s.State = playback.Playing
 			case "pause":
-				s.State = contract.Paused
+				s.State = playback.Paused
 			case "seek":
 				s.Position = 3 * time.Second
 			case "volume":
@@ -101,19 +101,19 @@ func TestControlSequenceNoCaptureOrRetry(t *testing.T) {
 				s.Rate = 1.5
 			case "cancel":
 				s.Owned = false
-				s.State = contract.Closed
-				s.Error = contract.Canceled
+				s.State = playback.Closed
+				s.Error = playback.Canceled
 			default:
 				t.Errorf("unexpected action %q", q.Params.Key)
 			}
 			return map[string]bool{"ok": true}
 		case "tree":
-			if s.State == contract.Playing {
+			if s.State == playback.Playing {
 				s.Position += 400 * time.Millisecond
 			}
-			resources := mpvprobe.Resources{}
+			resources := mpv.Resources{}
 			if s.Owned {
-				resources = mpvprobe.Resources{Cores: 1, Renderers: 1, Workers: 1}
+				resources = mpv.Resources{Cores: 1, Renderers: 1, Workers: 1}
 			}
 			return fakeNodes(s, s.Owned, true, resources)
 		default:
@@ -143,10 +143,10 @@ func TestControlSequenceNoCaptureOrRetry(t *testing.T) {
 			t.Fatal(check)
 		}
 	}
-	if err := c.act(ctx, "retry"); !errors.Is(err, contract.Invalid) {
+	if err := c.act(ctx, "retry"); !errors.Is(err, playback.Invalid) {
 		t.Fatal(err)
 	}
-	if err := c.call(ctx, "capture", nil, nil); !errors.Is(err, contract.Invalid) {
+	if err := c.call(ctx, "capture", nil, nil); !errors.Is(err, playback.Invalid) {
 		t.Fatal(err)
 	}
 }
@@ -175,7 +175,7 @@ func TestRPCCancellationWakesBlockedRead(t *testing.T) {
 	if time.Since(start) > 300*time.Millisecond {
 		t.Fatal("late cancellation")
 	}
-	if r.Automation[0].Result != contract.Canceled {
+	if r.Automation[0].Result != playback.Canceled {
 		t.Fatal(r.Automation)
 	}
 }
@@ -185,11 +185,11 @@ func TestActionBudgetIncludesRPC(t *testing.T) {
 			time.Sleep(250 * time.Millisecond)
 			return map[string]bool{"ok": true}
 		}
-		return fakeNodes(observed{Snapshot: contract.Snapshot{Generation: 1, State: contract.Closed, Error: contract.Canceled}}, false, true, mpvprobe.Resources{})
+		return fakeNodes(observed{Snapshot: playback.Snapshot{Generation: 1, State: playback.Closed, Error: playback.Canceled}}, false, true, mpv.Resources{})
 	})
 	start := time.Now()
-	_, err := c.actionUntil(context.Background(), "cancel", 200*time.Millisecond, func(s observed) bool { return s.State == contract.Closed })
-	if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, contract.Timeout) {
+	_, err := c.actionUntil(context.Background(), "cancel", 200*time.Millisecond, func(s observed) bool { return s.State == playback.Closed })
+	if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, playback.Timeout) {
 		t.Fatal(err)
 	}
 	if time.Since(start) > 350*time.Millisecond {
@@ -236,13 +236,13 @@ func TestProtocolFailuresAreSanitized(t *testing.T) {
 }
 func TestSnapshotRejectsUntrustedStringsAndValues(t *testing.T) {
 	for _, s := range []observed{
-		{Snapshot: contract.Snapshot{State: "SECRET_RAW_LOCATOR"}},
-		{Snapshot: contract.Snapshot{State: contract.Failed, Error: "SECRET_RAW_LOCATOR"}},
-		{Snapshot: contract.Snapshot{State: contract.Ready}, ControlError: "SECRET_RAW_LOCATOR"},
-		{Snapshot: contract.Snapshot{State: contract.Ready, Position: -1}},
-		{Snapshot: contract.Snapshot{State: contract.Ready, Volume: 2}},
+		{Snapshot: playback.Snapshot{State: "SECRET_RAW_LOCATOR"}},
+		{Snapshot: playback.Snapshot{State: playback.Failed, Error: "SECRET_RAW_LOCATOR"}},
+		{Snapshot: playback.Snapshot{State: playback.Ready}, ControlError: "SECRET_RAW_LOCATOR"},
+		{Snapshot: playback.Snapshot{State: playback.Ready, Position: -1}},
+		{Snapshot: playback.Snapshot{State: playback.Ready, Volume: 2}},
 	} {
-		c, r := pipeClient(t, func(fakeRequest) any { return fakeNodes(s, false, true, mpvprobe.Resources{}) })
+		c, r := pipeClient(t, func(fakeRequest) any { return fakeNodes(s, false, true, mpv.Resources{}) })
 		got, err := c.snapshot(context.Background())
 		if err == nil || got != (observed{}) {
 			t.Fatal("unsafe snapshot accepted")
@@ -255,7 +255,7 @@ func TestSnapshotRejectsUntrustedStringsAndValues(t *testing.T) {
 func TestPictureRequiresRenderedImageAndExternalAudio(t *testing.T) {
 	for _, tc := range []struct{ image, audio bool }{{false, true}, {true, false}, {true, true}} {
 		c, _ := pipeClient(t, func(fakeRequest) any {
-			return fakeNodes(observed{Snapshot: contract.Snapshot{Generation: 1, State: contract.Ready}, Owned: true}, tc.image, tc.audio, mpvprobe.Resources{})
+			return fakeNodes(observed{Snapshot: playback.Snapshot{Generation: 1, State: playback.Ready}, Owned: true}, tc.image, tc.audio, mpv.Resources{})
 		})
 		_, err := c.pictureTracks(context.Background(), 1)
 		if (err == nil) != (tc.image && tc.audio) {
@@ -265,10 +265,10 @@ func TestPictureRequiresRenderedImageAndExternalAudio(t *testing.T) {
 }
 func TestFailureAndDeadlineNeverPassUntil(t *testing.T) {
 	c, _ := pipeClient(t, func(fakeRequest) any {
-		return fakeNodes(observed{Snapshot: contract.Snapshot{State: contract.Failed, Error: contract.Timeout}}, false, true, mpvprobe.Resources{})
+		return fakeNodes(observed{Snapshot: playback.Snapshot{State: playback.Failed, Error: playback.Timeout}}, false, true, mpv.Resources{})
 	})
 	_, err := c.until(context.Background(), func(observed) bool { return true })
-	if !errors.Is(err, contract.Timeout) {
+	if !errors.Is(err, playback.Timeout) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -281,11 +281,11 @@ func TestFailureAndDeadlineNeverPassUntil(t *testing.T) {
 
 func TestPictureAndVisibleGenerationComeFromSameTree(t *testing.T) {
 	for _, s := range []observed{
-		{Snapshot: contract.Snapshot{Generation: 2, State: contract.Ready}, Owned: true},
-		{Snapshot: contract.Snapshot{Generation: 1, State: contract.Ready}, Owned: true, WindowHidden: true},
-		{Snapshot: contract.Snapshot{Generation: 1, State: contract.Closed}},
+		{Snapshot: playback.Snapshot{Generation: 2, State: playback.Ready}, Owned: true},
+		{Snapshot: playback.Snapshot{Generation: 1, State: playback.Ready}, Owned: true, WindowHidden: true},
+		{Snapshot: playback.Snapshot{Generation: 1, State: playback.Closed}},
 	} {
-		c, _ := pipeClient(t, func(fakeRequest) any { return fakeNodes(s, true, true, mpvprobe.Resources{}) })
+		c, _ := pipeClient(t, func(fakeRequest) any { return fakeNodes(s, true, true, mpv.Resources{}) })
 		if _, err := c.pictureTracks(context.Background(), 1); err == nil {
 			t.Fatal("wrong generation, invisible or unowned picture passed")
 		}

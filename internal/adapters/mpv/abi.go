@@ -1,6 +1,6 @@
-// Package mpvprobe is the opt-in, fixture-only replacement feasibility adapter.
+// Package mpv is the libmpv playback adapter behind the playback boundary.
 // It never loads a native library during package initialization or ordinary tests.
-package mpvprobe
+package mpv
 
 import (
 	"runtime"

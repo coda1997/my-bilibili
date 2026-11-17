@@ -1,4 +1,4 @@
-package mpvprobe
+package mpv
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"time"
 	"unsafe"
 
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 // Own every allocation referenced through the C union throughout each fake call.
@@ -112,7 +112,7 @@ func TestTypedListsCopyHeadersBeforeAsyncInitialization(t *testing.T) {
 		}
 		return plainOption(core, name, value)
 	}
-	in := contract.Input{URL: "http://127.0.0.1/video", AudioURL: "http://127.0.0.1/audio,one", Headers: map[string]string{"X-Test": "one,two", "rEfErEr": "http://127.0.0.1/ref,one"}}
+	in := playback.Input{URL: "http://127.0.0.1/video", AudioURL: "http://127.0.0.1/audio,one", Headers: map[string]string{"X-Test": "one,two", "rEfErEr": "http://127.0.0.1/ref,one"}}
 	e, err := (Opener{loader: func(string) (*nativeAPI, error) { close(entered); <-release; return f.a, nil }}).Open(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)
@@ -154,7 +154,7 @@ func TestMissingAudioFailsAndDisposesBeforeTerminalState(t *testing.T) {
 				return 0
 			}
 			f.a.freeNode = func(unsafe.Pointer) { freed = true }
-			plain, err := (Opener{loader: func(string) (*nativeAPI, error) { return f.a, nil }}).Open(context.Background(), contract.Input{URL: "http://127.0.0.1/video", AudioURL: "http://127.0.0.1/audio"})
+			plain, err := (Opener{loader: func(string) (*nativeAPI, error) { return f.a, nil }}).Open(context.Background(), playback.Input{URL: "http://127.0.0.1/video", AudioURL: "http://127.0.0.1/audio"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -173,7 +173,7 @@ func TestMissingAudioFailsAndDisposesBeforeTerminalState(t *testing.T) {
 				case <-time.After(time.Second):
 					t.Fatal("missing track did not dispose")
 				}
-				if e.Snapshot().Error != contract.Media || Owned() != (Resources{}) || e.Command(contract.Command{Kind: contract.Play}) != contract.IsClosed {
+				if e.Snapshot().Error != playback.Media || Owned() != (Resources{}) || e.Command(playback.Command{Kind: playback.Play}) != playback.IsClosed {
 					t.Fatal(e.Snapshot(), Owned())
 				}
 			} else {
@@ -214,7 +214,7 @@ func TestExplicitExternalAudioSelectionKeepsDiscoveryDisabled(t *testing.T) {
 				*(*nodeValue)(p) = tracks.root
 				return 0
 			}
-			in := contract.Input{URL: "http://127.0.0.1/video"}
+			in := playback.Input{URL: "http://127.0.0.1/video"}
 			if separate {
 				in.AudioURL = "http://127.0.0.1/audio"
 			}
@@ -234,8 +234,8 @@ func TestExplicitExternalAudioSelectionKeepsDiscoveryDisabled(t *testing.T) {
 			f.events <- &event{ID: 5, Reply: 1}
 			f.events <- &event{ID: 8}
 			f.events <- &event{ID: 22, Reply: 2, Data: unsafe.Pointer(&p)}
-			await(t, func() bool { return e.Snapshot().State != contract.Loading })
-			if s := e.Snapshot(); s.State != contract.Ready || Inspect(e) != (Tracks{true, true, separate}) {
+			await(t, func() bool { return e.Snapshot().State != playback.Loading })
+			if s := e.Snapshot(); s.State != playback.Ready || Inspect(e) != (Tracks{true, true, separate}) {
 				t.Errorf("explicit input did not become ready: %+v tracks=%+v", s, Inspect(e))
 			}
 			_ = e.Close()
@@ -274,7 +274,7 @@ func TestEventLossAndBudgetOverflowDispose(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Fatal("lost events not fatal")
 			}
-			if e.Snapshot().Error != contract.Media || Owned() != (Resources{}) {
+			if e.Snapshot().Error != playback.Media || Owned() != (Resources{}) {
 				t.Fatal(e.Snapshot(), Owned())
 			}
 			// No registered native callbacks; events after disposal are never polled.
@@ -290,7 +290,7 @@ func TestLaterExternalAudioLossFailsWithoutRetainingNativePayload(t *testing.T) 
 	initial := trackNode(true, true, true)
 	later := trackNode(true, false, false)
 	f.a.getProperty = func(_ uintptr, _ string, _ int32, p unsafe.Pointer) int32 { *(*nodeValue)(p) = initial.root; return 0 }
-	e0, err := (Opener{loader: func(string) (*nativeAPI, error) { return f.a, nil }}).Open(context.Background(), contract.Input{URL: "http://127.0.0.1/video", AudioURL: "http://127.0.0.1/audio"})
+	e0, err := (Opener{loader: func(string) (*nativeAPI, error) { return f.a, nil }}).Open(context.Background(), playback.Input{URL: "http://127.0.0.1/video", AudioURL: "http://127.0.0.1/audio"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +311,7 @@ func TestLaterExternalAudioLossFailsWithoutRetainingNativePayload(t *testing.T) 
 	case <-time.After(time.Second):
 		t.Fatal("audio loss did not dispose")
 	}
-	if e.Snapshot().Error != contract.Media || Owned() != (Resources{}) {
+	if e.Snapshot().Error != playback.Media || Owned() != (Resources{}) {
 		t.Fatal(e.Snapshot(), Owned())
 	}
 	runtime.KeepAlive(initial)
@@ -334,7 +334,7 @@ func TestTransportConfigurationFailureDisposes(t *testing.T) {
 				}
 				return 0
 			}
-			plain, err := (Opener{loader: func(string) (*nativeAPI, error) { return f.a, nil }}).Open(context.Background(), contract.Input{URL: "http://127.0.0.1/video", AudioURL: "http://127.0.0.1/audio", Headers: map[string]string{"X-Test": "one,two"}})
+			plain, err := (Opener{loader: func(string) (*nativeAPI, error) { return f.a, nil }}).Open(context.Background(), playback.Input{URL: "http://127.0.0.1/video", AudioURL: "http://127.0.0.1/audio", Headers: map[string]string{"X-Test": "one,two"}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -345,7 +345,7 @@ func TestTransportConfigurationFailureDisposes(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Fatal("option failure did not dispose")
 			}
-			if e.Snapshot().Error != contract.Media || Owned() != (Resources{}) {
+			if e.Snapshot().Error != playback.Media || Owned() != (Resources{}) {
 				t.Fatal(e.Snapshot(), Owned())
 			}
 			f.mu.Lock()

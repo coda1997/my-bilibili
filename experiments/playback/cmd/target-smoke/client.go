@@ -10,15 +10,15 @@ import (
 	"strings"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
-	"my-bilibili/experiments/playback/mpvprobe"
+	"my-bilibili/internal/adapters/mpv"
+	"my-bilibili/internal/playback"
 )
 
 type automationCall struct {
 	ID      int                `json:"id"`
 	Method  string             `json:"method"`
 	Elapsed time.Duration      `json:"elapsed_ns"`
-	Result  contract.ErrorCode `json:"result"`
+	Result  playback.ErrorCode `json:"result"`
 }
 type client struct {
 	conn       net.Conn
@@ -34,7 +34,7 @@ func newClient(conn net.Conn, r *report) *client {
 }
 func (c *client) call(ctx context.Context, method string, params, result any) (err error) {
 	if method != "windows" && method != "tree" && method != "act" {
-		return contract.Invalid
+		return playback.Invalid
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
@@ -56,7 +56,7 @@ func (c *client) call(ctx context.Context, method string, params, result any) (e
 		}
 	}()
 	if c.conn.SetDeadline(deadline) != nil {
-		return contract.Media
+		return playback.Media
 	}
 	// Wake an in-flight socket read/write on cancellation, and quiesce the
 	// callback before the next request can reset the connection's deadline.
@@ -72,9 +72,9 @@ func (c *client) call(ctx context.Context, method string, params, result any) (e
 			return ctx.Err()
 		}
 		if !time.Now().Before(deadline) {
-			return contract.Timeout
+			return playback.Timeout
 		}
-		return contract.Media
+		return playback.Media
 	}
 	b, e := json.Marshal(struct {
 		ID     int    `json:"id"`
@@ -82,7 +82,7 @@ func (c *client) call(ctx context.Context, method string, params, result any) (e
 		Params any    `json:"params,omitempty"`
 	}{id, method, params})
 	if e != nil {
-		return contract.Invalid
+		return playback.Invalid
 	}
 	n, e := c.conn.Write(append(b, '\n'))
 	if e != nil || n != len(b)+1 {
@@ -97,16 +97,16 @@ func (c *client) call(ctx context.Context, method string, params, result any) (e
 		Error  json.RawMessage `json:"error"`
 	}
 	if json.Unmarshal(c.scan.Bytes(), &response) != nil || response.ID != id || (len(response.Error) > 0 && string(response.Error) != "null") {
-		return contract.Media
+		return playback.Media
 	}
 	if result != nil && json.Unmarshal(response.Result, result) != nil {
-		return contract.Media
+		return playback.Media
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
 	if !time.Now().Before(deadline) {
-		return contract.Timeout
+		return playback.Timeout
 	}
 	return nil
 }
@@ -123,22 +123,22 @@ type node struct {
 	} `json:"bounds"`
 }
 type observed struct {
-	contract.Snapshot
+	playback.Snapshot
 	Owned        bool               `json:"owned"`
-	ControlError contract.ErrorCode `json:"control_error"`
+	ControlError playback.ErrorCode `json:"control_error"`
 	WindowHidden bool               `json:"window_hidden"`
 }
 
-func validCode(c contract.ErrorCode) bool {
+func validCode(c playback.ErrorCode) bool {
 	switch c {
-	case contract.NoError, contract.Invalid, contract.Unsupported, contract.Canceled, contract.Timeout, contract.Media, contract.IsClosed:
+	case playback.NoError, playback.Invalid, playback.Unsupported, playback.Canceled, playback.Timeout, playback.Media, playback.IsClosed:
 		return true
 	}
 	return false
 }
 func validSnapshot(s observed) bool {
 	switch s.State {
-	case contract.Idle, contract.Loading, contract.Ready, contract.Playing, contract.Paused, contract.Ended, contract.Failed, contract.Closed:
+	case playback.Idle, playback.Loading, playback.Ready, playback.Playing, playback.Paused, playback.Ended, playback.Failed, playback.Closed:
 	default:
 		return false
 	}
@@ -153,7 +153,7 @@ func (c *client) tree(ctx context.Context) ([]node, error) {
 		return nil, err
 	}
 	if len(r.Nodes) > 4096 {
-		return nil, contract.Media
+		return nil, playback.Media
 	}
 	if c.report != nil {
 		c.report.observe(r.Nodes)
@@ -171,7 +171,7 @@ func (c *client) identify(ctx context.Context) error {
 		return err
 	}
 	if len(r.Windows) != 1 || r.Windows[0].ID <= 0 || r.Windows[0].Title != "Authorized Target Playback Probe" {
-		return contract.Media
+		return playback.Media
 	}
 	c.window = r.Windows[0].ID
 	return nil
@@ -180,7 +180,7 @@ func (c *client) act(ctx context.Context, key string) error {
 	switch key {
 	case "open", "play", "pause", "seek", "volume", "rate", "cancel", "close", "quit":
 	default:
-		return contract.Invalid
+		return playback.Invalid
 	}
 	return c.call(ctx, "act", map[string]any{"window": c.window, "key": key, "action": "press"}, nil)
 }
@@ -197,13 +197,13 @@ func snapshotNodes(nodes []node) (observed, error) {
 	for _, n := range nodes {
 		if strings.HasPrefix(n.Label, "snapshot ") {
 			if found || !completeObject(strings.TrimPrefix(n.Label, "snapshot "), []string{"generation", "state", "position", "duration", "rate", "volume", "error", "owned", "control_error", "window_hidden"}, &s) || !validSnapshot(s) {
-				return observed{}, contract.Media
+				return observed{}, playback.Media
 			}
 			found = true
 		}
 	}
 	if !found {
-		return observed{}, contract.Media
+		return observed{}, playback.Media
 	}
 	return s, nil
 }
@@ -234,12 +234,12 @@ func (c *client) until(ctx context.Context, predicate func(observed) bool) (obse
 		if end, ok := ctx.Deadline(); ok && !time.Now().Before(end) {
 			return s, context.DeadlineExceeded
 		}
-		if s.State == contract.Closed && s.Error == contract.Canceled && predicate(s) {
+		if s.State == playback.Closed && s.Error == playback.Canceled && predicate(s) {
 			return s, nil
 		}
-		if s.State == contract.Failed || s.Error != contract.NoError {
-			if s.Error == contract.NoError {
-				return s, contract.Media
+		if s.State == playback.Failed || s.Error != playback.NoError {
+			if s.Error == playback.NoError {
+				return s, playback.Media
 			}
 			return s, s.Error
 		}
@@ -259,26 +259,26 @@ func (c *client) actionUntil(ctx context.Context, key string, limit time.Duratio
 	}
 	return c.until(ctx, predicate)
 }
-func (c *client) resources(ctx context.Context) (mpvprobe.Resources, error) {
+func (c *client) resources(ctx context.Context) (mpv.Resources, error) {
 	nodes, err := c.tree(ctx)
 	if err != nil {
-		return mpvprobe.Resources{}, err
+		return mpv.Resources{}, err
 	}
 	return resourceNodes(nodes)
 }
-func resourceNodes(nodes []node) (mpvprobe.Resources, error) {
-	var result mpvprobe.Resources
+func resourceNodes(nodes []node) (mpv.Resources, error) {
+	var result mpv.Resources
 	found := false
 	for _, n := range nodes {
 		if strings.HasPrefix(n.Label, "resources ") {
 			if found || !completeObject(strings.TrimPrefix(n.Label, "resources "), []string{"Cores", "Renderers", "Workers"}, &result) || result.Cores < 0 || result.Renderers < 0 || result.Workers < 0 {
-				return mpvprobe.Resources{}, contract.Media
+				return mpv.Resources{}, playback.Media
 			}
 			found = true
 		}
 	}
 	if !found {
-		return result, contract.Media
+		return result, playback.Media
 	}
 	return result, nil
 }
@@ -294,8 +294,8 @@ func (c *client) pictureTracks(ctx context.Context, generation uint64) (observed
 	if err != nil {
 		return observed{}, err
 	}
-	if !active(s, generation) || s.State != contract.Ready {
-		return observed{}, contract.Media
+	if !active(s, generation) || s.State != playback.Ready {
+		return observed{}, playback.Media
 	}
 	image, tracks := false, false
 	for _, n := range nodes {
@@ -304,17 +304,17 @@ func (c *client) pictureTracks(ctx context.Context, generation uint64) (observed
 		}
 		if strings.HasPrefix(n.Label, "tracks ") {
 			if tracks {
-				return observed{}, contract.Media
+				return observed{}, playback.Media
 			}
-			var t mpvprobe.Tracks
+			var t mpv.Tracks
 			if json.Unmarshal([]byte(strings.TrimPrefix(n.Label, "tracks ")), &t) != nil || !t.Video || !t.Audio || !t.ExternalAudio {
-				return observed{}, contract.Media
+				return observed{}, playback.Media
 			}
 			tracks = true
 		}
 	}
 	if !tracks {
-		return observed{}, contract.Media
+		return observed{}, playback.Media
 	}
 	if !image {
 		return observed{}, errPicturePending
