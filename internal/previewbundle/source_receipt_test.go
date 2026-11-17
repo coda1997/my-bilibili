@@ -2,9 +2,39 @@ package previewbundle
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestSourceReceiptPreservesDanmakuAndRejectsInvalidNestedState(t *testing.T) {
+	want := SourceReceipt{Event: SourceWindowMinimized, Observation: activeDanmakuObservation()}
+	data, err := json.Marshal(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := ParseSourceReceipt(data)
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatal("danmaku evidence lost in the source receipt", got, err)
+	}
+	for _, mutate := range []func(*Observation){
+		func(o *Observation) { o.Danmaku.Layouts = 17 },
+		func(o *Observation) { o.Danmaku.Settings.Visible = false },
+		func(o *Observation) { o.Danmaku.Generation++ },
+		func(o *Observation) { o.Danmaku.Error = "private-sentinel" },
+	} {
+		bad := want
+		mutate(&bad.Observation)
+		data, err := json.Marshal(bad)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := ParseSourceReceipt(data)
+		if err == nil || err.Error() != "invalid source receipt" || !reflect.DeepEqual(got, SourceReceipt{}) {
+			t.Fatal("invalid danmaku accepted, partially returned or disclosed", got, err)
+		}
+	}
+}
 
 func TestSourceReceiptRetainsStrictObservationBoundary(t *testing.T) {
 	want := SourceReceipt{Event: SourceWindowClosed, Observation: validObservation()}

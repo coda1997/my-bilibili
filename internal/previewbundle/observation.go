@@ -24,6 +24,7 @@ type Observation struct {
 	DisposalError playback.ErrorCode
 	Delay         DelayObservation
 	Source        SourceObservation
+	Danmaku       DanmakuObservation
 }
 type DelayObservation struct{ Requests, Active int64 }
 type SourceObservation struct{ DetailRequests, ResolveRequests, Active, PeakActive int64 }
@@ -71,6 +72,9 @@ func ParseObservation(data []byte) (Observation, error) {
 	}
 	source := o.Source
 	if source.DetailRequests < 0 || source.ResolveRequests < 0 || source.Active < 0 || source.PeakActive < source.Active || source.PeakActive > source.DetailRequests+source.ResolveRequests {
+		return Observation{}, invalid
+	}
+	if !validDanmakuObservation(o.Danmaku, s) {
 		return Observation{}, invalid
 	}
 	return o, nil

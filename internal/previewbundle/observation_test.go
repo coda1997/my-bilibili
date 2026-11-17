@@ -8,14 +8,15 @@ import (
 
 	"my-bilibili/internal/app"
 	"my-bilibili/internal/catalog"
+	"my-bilibili/internal/danmaku"
 	"my-bilibili/internal/playback"
 )
 
 func validObservation() Observation {
-	return Observation{State: app.State{DetailPhase: app.DetailReady, Video: catalog.Video{ID: "preview-video", Title: "Synthetic", Creator: "Local", Description: "Synthetic fixtures", CoverID: "preview-cover", Parts: []catalog.Part{{ID: "part-1", Title: "One", Duration: 30 * time.Second}, {ID: "part-2", Title: "Two", Duration: 30 * time.Second}}}, SelectedPart: "part-1", PlaybackPart: "part-1", Rate: 1, Volume: 1, Playback: playback.Snapshot{Generation: 1, State: playback.Closed, Rate: 1, Volume: 1}}}
+	return Observation{State: app.State{DetailPhase: app.DetailReady, Video: catalog.Video{ID: "preview-video", Title: "Synthetic", Creator: "Local", Description: "Synthetic fixtures", CoverID: "preview-cover", Parts: []catalog.Part{{ID: "part-1", Title: "One", Duration: 30 * time.Second}, {ID: "part-2", Title: "Two", Duration: 30 * time.Second}}}, SelectedPart: "part-1", PlaybackPart: "part-1", Rate: 1, Volume: 1, Playback: playback.Snapshot{Generation: 1, State: playback.Closed, Rate: 1, Volume: 1}}, Danmaku: DanmakuObservation{Settings: danmaku.DefaultSettings(), Items: []DanmakuItemObservation{}}}
 }
-func TestObservationRequiresEveryFieldExactlyOnce(t *testing.T) {
-	data, _ := json.Marshal(validObservation())
+func testRequiredObservationFields(t *testing.T, data []byte) {
+	t.Helper()
 	if _, err := ParseObservation(data); err != nil {
 		t.Fatal(err)
 	}
@@ -55,6 +56,11 @@ func TestObservationRequiresEveryFieldExactlyOnce(t *testing.T) {
 		}
 	}
 	walk(tree, "")
+}
+
+func TestObservationRequiresEveryFieldExactlyOnce(t *testing.T) {
+	data, _ := json.Marshal(validObservation())
+	testRequiredObservationFields(t, data)
 	text := string(data)
 	for _, bad := range []string{
 		"null", "{}", text + " {}", text[:len(text)-1],
