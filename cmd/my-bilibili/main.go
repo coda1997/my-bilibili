@@ -11,20 +11,23 @@ import (
 	"my-bilibili/internal/adapters/mpv"
 	"my-bilibili/internal/app"
 	"my-bilibili/internal/desktop"
+	danmakuview "my-bilibili/internal/desktop/danmaku"
 	"my-bilibili/internal/fixture"
 	"my-bilibili/internal/playback"
 	"my-bilibili/internal/previewbundle"
 )
 
 type application struct {
-	session    *app.Session
-	cancel     context.CancelFunc
-	window     *mygo.Window
-	view       *desktop.View
-	closeError error
-	source     app.Source
-	fullscreen fullscreenTelemetry
-	closing    sourceCloseObserver
+	session           *app.Session
+	cancel            context.CancelFunc
+	window            *mygo.Window
+	view              *desktop.View
+	danmaku           *danmakuview.View
+	danmakuGeneration uint64
+	closeError        error
+	source            app.Source
+	fullscreen        fullscreenTelemetry
+	closing           sourceCloseObserver
 }
 
 func main() {
@@ -67,7 +70,7 @@ func run() error {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	a := &application{session: session, cancel: cancel, source: source}
+	a := &application{session: session, cancel: cancel, source: source, danmaku: danmakuview.New()}
 	mygo.App.WhenReady(func() {
 		interval, err := doubleClickInterval()
 		if err != nil {
@@ -75,7 +78,7 @@ func run() error {
 			mygo.App.Quit()
 			return
 		}
-		a.view = &desktop.View{Player: session, DoubleClickInterval: interval,
+		a.view = &desktop.View{Player: session, Danmaku: a.danmaku, DoubleClickInterval: interval,
 			Surface: func(c *gui.Context, w, h float32) { mpv.DrawSized(c, session.Engine(), w, h) },
 			Cover: func(c *gui.Context, id string) {
 				if id == "preview-cover" {
@@ -89,6 +92,7 @@ func run() error {
 			},
 		}
 		a.window = mygo.NewWindow(mygo.WindowOptions{Title: "My Bilibili Preview", Width: 1120, Height: 760, MinWidth: 800, MinHeight: 600, Content: gui.View(func(c *gui.Context) {
+			a.bindDanmaku(a.session.State())
 			a.view.Render(c)
 			a.automationRender(c)
 		})})
@@ -132,6 +136,9 @@ func run() error {
 }
 
 func (a *application) dispose() error {
+	if a.danmaku != nil {
+		a.danmaku.Close()
+	}
 	if err := a.session.Close(); err != nil {
 		return err
 	}

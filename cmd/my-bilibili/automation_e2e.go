@@ -111,6 +111,7 @@ func (a *application) automationRender(c *gui.Context) {
 
 func (a *application) automationObservation(fullscreen, minimized bool) previewbundle.Observation {
 	observation := previewbundle.Observation{State: a.session.State(), Fullscreen: fullscreen, Minimized: minimized, Resources: mpv.Owned(), Tracks: mpv.Inspect(a.session.Engine())}
+	observation.Danmaku = observeDanmaku(a.danmaku.State())
 	if delayed, ok := a.source.(*delayedSource); ok {
 		active := delayed.active.Load()
 		observation.Delay = previewbundle.DelayObservation{Requests: delayed.requests.Load(), Active: active}
