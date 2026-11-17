@@ -19,6 +19,49 @@ import (
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
+func TestCatalogScopeIdentityIsExactLiveAndMemoryOnly(t *testing.T) {
+	var calls atomic.Int32
+	rt := roundTripFunc(func(*http.Request) (*http.Response, error) {
+		calls.Add(1)
+		return nil, domain.Network
+	})
+	a, b := transport.New(rt), transport.New(rt)
+	t.Cleanup(func() { a.Close(); b.Close(); <-a.Done(); <-b.Done() })
+	first, err := a.Bind()
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := b.Bind()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.State() != second.State() {
+		t.Fatal("test requires equal counters in independent scopes")
+	}
+	details := New(first, rt)
+	t.Cleanup(details.Close)
+	if !details.MatchesScope(first) || details.MatchesScope(second) || details.MatchesScope(nil) || (*Client)(nil).MatchesScope(first) {
+		t.Fatal("scope identity confused with counters or missing dependency")
+	}
+	a.Close()
+	if details.MatchesScope(first) {
+		t.Fatal("retired scope accepted as live")
+	}
+	other := New(second, rt)
+	originalCancel := other.cancel
+	cancelEntered, finishCancel := make(chan struct{}), make(chan struct{})
+	other.cancel = func() { close(cancelEntered); <-finishCancel; originalCancel() }
+	closed := make(chan struct{})
+	go func() { other.Close(); close(closed) }()
+	<-cancelEntered
+	accepted := other.MatchesScope(second)
+	close(finishCancel)
+	<-closed
+	if accepted || calls.Load() != 0 {
+		t.Fatal("closed adapter accepted or identity query performed I/O")
+	}
+}
+
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 func response(body []byte) *http.Response {
 	return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(body))}

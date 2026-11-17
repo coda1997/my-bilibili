@@ -186,6 +186,18 @@ func (c *Client) rememberCover(location string) string {
 	return id
 }
 
+// MatchesScope lets a composed media source verify this adapter's actual bound
+// lifetime. Revisions alone are not identities across independent clients.
+// This is a memory-only query and reveals no credential or request data.
+func (c *Client) MatchesScope(scope *transport.Scope) bool {
+	if c == nil || scope == nil {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.scope == scope && !c.closed && c.ctx.Err() == nil
+}
+
 func (c *Client) Close() {
 	c.mu.Lock()
 	if c.closed {
