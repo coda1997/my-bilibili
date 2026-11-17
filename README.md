@@ -58,16 +58,26 @@ retained. This does not measure physical sync/rate.
 
 ## Start here
 
-The owner-selected issue #10 repair now has local independent technical approval:
-rapid opposite play/pause actions preserve the last intent despite stale samples.
-New regressions and full local race checks pass; restoring the old source fails
-all six new cases. See [the issue #10 handoff](reports/0029-playback-intent.md)
-and [publication notes](reports/0029-playback-intent-pr.md). The owner authorized
-publication as Draft [PR #12](https://github.com/coda1997/my-bilibili/pull/12);
-see that PR for current exact-candidate CI. Merge, issue closure and M3 acceptance
-remain separate owner decisions.
-PR #9 is confirmed merged with passing three-platform CI; the older M2 narrative
-below records its premerge continuation, not current remote status.
+**M3's scoped issue-to-PR loop is completed and owner-accepted on 2026-11-17.**
+After independent review and passing Linux/macOS/Windows CI, the owner approved
+[PR #12](https://github.com/coda1997/my-bilibili/pull/12), authorized its merge
+and requested issue closure/status updates. PR #12 is merged as `15e3530`;
+[issue #10](https://github.com/coda1997/my-bilibili/issues/10) is closed as completed.
+Rapid opposite play/pause actions now preserve the last intent despite stale
+samples; restoring the old source fails all six new regression cases.
+See [the acceptance handoff](reports/0029-playback-intent.md) for exact identities,
+review and CI evidence. This demonstrates a manually initiated issue loop, not
+an automatic scheduler or release system.
+
+The next existing repair candidate is
+[issue #11](https://github.com/coda1997/my-bilibili/issues/11), rapid seek queue
+overload; it remains open and outside this completed work. P0 and the full
+client shell remain pending.
+
+### Historical M2 continuation
+
+PR #9 is confirmed merged with passing three-platform CI. The narrative below
+preserves its earlier premerge continuation, not current remote status.
 
 M2's fullscreen repair now has scoped independent approval. On 2026-11-16,
 the original reviewer closed REV-002 after verifying four complete native suites
