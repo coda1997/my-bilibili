@@ -306,15 +306,22 @@ transitions; do not start by implementing a general-purpose agent platform.
 
 ## M3. One issue-to-PR loop
 
-Trial continuation, 2026-11-17: the owner selected existing issue #10 and
-authorized the reproduced play/pause-intent repair. Its first implementation
-passes local race checks and independent code review; old-source controls fail.
-PR #9's merge and three-platform CI were checked remotely. The owner then
-authorized commit/push and Draft [PR #12](https://github.com/coda1997/my-bilibili/pull/12).
-See its checks and [handoff](../reports/0029-playback-intent.md) for publication
-evidence; exact-candidate CI and owner milestone disposition remain separate. This is
-one manually initiated issue/run, with no bot/event scheduler or recursive
-trigger path. It does not declare M2 or M3 accepted or waive milestone gates.
+Status: **completed and owner-accepted for the scoped manual issue-to-PR loop
+on 2026-11-17**. The owner approved PR #12 after the proposed acceptance step,
+authorized merge and issue closure, and requested status updates.
+
+Existing issue #10 was triaged and independently reproduced. The minimal
+play/pause-intent repair passed six discriminating regression cases, local race
+checks, independent architecture/code review, and all three CI platforms for
+the exact PR candidate. [PR #12](https://github.com/coda1997/my-bilibili/pull/12)
+is merged as `15e353089408d369ee740382f41f8e129ada5707`; issue #10 is closed as
+completed. See [the acceptance handoff](../reports/0029-playback-intent.md).
+
+The execution/publication/merge steps were explicitly owner-authorized and
+manually invoked. One controller owned the issue; its implementation run was
+finished before this status-only continuation. No bot/event scheduler exists
+to recursively trigger new work. This records the demonstrated manual loop,
+not an automated controller or a new interpretation of historical M2 evidence.
 
 After a remote and execution policy exist, use one authorized reproducible
 issue to demonstrate triage, a failing regression test, a minimal fix, review,
@@ -329,16 +336,13 @@ signing, notarization, and public releases are deliberately not implemented.
 
 ## Next action
 
-M0 and M1 are completed and accepted. The owner-requested concentrated
-fullscreen investigation is complete; read the
-[M2 cause-and-experiment handoff](../reports/0028-m2-fixture-preview.md).
-Preserve the callback-based completion requirement, existing geometry/layout
-and picture checks, exact artifacts, and all failed controls. The investigation
-ran no formal review loop and does not close REV-002 or accept M2. A later M2
-continuation must address the remaining manual evidence, independent disposition
-and exact-commit/CI requirements recorded there; no new repair loop is requested
-by this handoff. P0 and the full shell remain pending. No commit, push or release
-was performed or authorized by this investigation.
+The issue #10 / M3 loop is completed, accepted and merged. The remaining known
+repair candidate is [issue #11](https://github.com/coda1997/my-bilibili/issues/11),
+rapid seek queue overload. Select and reproduce it under its own bounded scope
+before implementation; this status update does not start that repair. P0 and
+the full shell remain pending. Current continuation:
+[M3 acceptance](../reports/0029-playback-intent.md). Historical M2 investigation
+and review evidence remains in [report 0028](../reports/0028-m2-fixture-preview.md).
 
 Preserve the 200ms cancellation bound, complete teardown contract, evidence and
 all historical failures. Any future service/native invocation needs its own

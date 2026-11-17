@@ -1,5 +1,53 @@
 # Issue #10: preserve the last playback intent
 
+## Owner acceptance, merge and closure — 2026-11-17
+
+Following the proposed next step to accept PR #12, merge it, close #10 and
+record M3 acceptance, the owner replied: “Yes, I approve this PR. and I think
+you can merge it, close the issue, and update the status as well.” This is
+recorded as acceptance of the scoped manual M3 issue-to-PR loop and authority
+for the requested merge, closure and status publication. It grants no authority
+to start #11, merge unrelated work, change policy or release a package.
+
+The controller rechecked the live PR head, all three successful checks, merge
+eligibility, public repository identity and protected-branch settings. No
+review findings were open. Copilot's earlier static-only review reported no
+open issues and asked for final CI/candidate confirmation; those checks had
+subsequently completed and their identities were verified. The exact approved
+head `a8be7810a87eb2a1e0345e21982b5d68e25d5240` was marked ready and squash
+merged without bypassing protection or changing settings.
+
+- [PR #12](https://github.com/coda1997/my-bilibili/pull/12): MERGED at
+  `2026-11-17T02:33:47Z`, commit `15e353089408d369ee740382f41f8e129ada5707`.
+- [Issue #10](https://github.com/coda1997/my-bilibili/issues/10): CLOSED,
+  reason COMPLETED, at `2026-11-17T02:34:16Z`.
+- [Final PR CI run 44002412720](https://github.com/coda1997/my-bilibili/actions/runs/44002412720):
+  Linux/macOS race and Windows ordinary checks PASS. Tested merge
+  `167ba9c3f9e4697adbcf0a67b814d0b4a0e54077` has the same tree as the approved
+  head; downloaded manifests, input/log hashes and successful outcomes were
+  verified for all three platforms. This is PR-candidate evidence, not a claim
+  about later status-only commits or a new native playback experiment.
+
+Independent architecture/code review and the old-source failing controls remain
+the technical basis recorded below. Counts stay architecture 1/code 1/product
+fix 1, failed repairs 0, issue filing budget 2/5 with no new issues. The original
+implementation run `20261117T021320Z-8c1485126a67` is finished and unchanged.
+Status-only continuation run `20261117T023419Z-2ca8c00d02e9` records the owner
+decision, remote receipts and documentation publication separately. Its write
+scope is README, stage-zero and this report under the existing INTENT-002
+handoff task; no product source, tests, frozen inputs or policies change.
+
+M3 is completed and accepted for the demonstrated manual loop. No automated
+event handler or scheduler was introduced; issue ownership was serialized and
+bot-generated events did not initiate new work. This does not claim automatic
+orchestration, native playback revalidation, public release, or acceptance of
+unrelated outstanding work. Next candidate: existing #11, still open and not
+started here. No systemic follow-up warranted by this status-only continuation.
+
+The sections below preserve earlier publication and prepublication states.
+Their then-pending permissions/results are historical, superseded by this
+acceptance record; the original reviews and closed-run events are not rewritten.
+
 ## Publication continuation — 2026-11-17
 
 After the local handoff below, the owner explicitly authorized commit, push,
