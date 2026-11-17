@@ -1,5 +1,25 @@
 # Issue #10: preserve the last playback intent
 
+## Publication continuation — 2026-11-17
+
+After the local handoff below, the owner explicitly authorized commit, push,
+Draft PR creation and new CI verification. Initial publication commit
+`271b4fd68cc40636acb4d18b5090c093b8464119` matches the final local manifest
+`05c0376d1171e4398eddae5ac7174bc8d6b81c98a686a3c5a40e09e34e802441`.
+Draft [PR #12](https://github.com/coda1997/my-bilibili/pull/12) targets `master`
+in the verified public repository `coda1997/my-bilibili`. Receipt confirmed
+the intended branch/head, draft/open state and still-open issue #10.
+
+This publication follow-up changes documentation only; the independently
+reviewed implementation, tests and frozen spec/tasks remain byte-identical.
+See the PR for the latest head, tested merge revision and three-platform CI
+results; the controller run retains their receipts. There is no claim of CI
+success before its completion. Remote merge, issue closure and M3 milestone
+acceptance are not authorized. Counts stay architecture 1/code 1/fix 1, with
+no new product fix, review round or issue caused by publication.
+
+## Preserved local handoff before publication
+
 Date: 2026-11-17. Run: `20261117T021320Z-8c1485126a67`.
 Branch: `codex/issue-10-playback-intent`. Base:
 `ff27f1db5946eb9ebccbee8c3548a971dd112e85`. The repair is local and uncommitted;

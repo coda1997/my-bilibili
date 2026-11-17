@@ -1,6 +1,9 @@
 # Draft PR: preserve the last rapid play/pause action
 
-Prepared locally; not published. Related issue: #10 (M2-EXT-001).
+Published as Draft [PR #12](https://github.com/coda1997/my-bilibili/pull/12)
+after explicit owner authority. The PR contains current publication/CI identity;
+the text below preserves the local prepublication draft. Related issue: #10
+(M2-EXT-001). No merge or remote issue closure is authorized.
 
 ## Why and scope
 

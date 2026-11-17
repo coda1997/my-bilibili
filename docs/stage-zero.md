@@ -309,9 +309,10 @@ transitions; do not start by implementing a general-purpose agent platform.
 Trial continuation, 2026-11-17: the owner selected existing issue #10 and
 authorized the reproduced play/pause-intent repair. Its first implementation
 passes local race checks and independent code review; old-source controls fail.
-PR #9's merge and three-platform CI were checked remotely. The issue #10 repair
-remains local/uncommitted with [handoff and PR draft](../reports/0029-playback-intent.md);
-remote publication/CI and owner milestone disposition remain pending. This is
+PR #9's merge and three-platform CI were checked remotely. The owner then
+authorized commit/push and Draft [PR #12](https://github.com/coda1997/my-bilibili/pull/12).
+See its checks and [handoff](../reports/0029-playback-intent.md) for publication
+evidence; exact-candidate CI and owner milestone disposition remain separate. This is
 one manually initiated issue/run, with no bot/event scheduler or recursive
 trigger path. It does not declare M2 or M3 accepted or waive milestone gates.
 
