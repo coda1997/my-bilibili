@@ -58,6 +58,16 @@ Done through the native dispatcher before window disposal. Done alone does
 not request window close. The default input policy remains fixture-only;
 real service adapters require their separately reviewed integration contract.
 
+The native danmaku model owns a copied, bounded window and deterministic lane
+admission using only sampled playback position. Its retained mygo view shapes
+the active set before painting, clips to the fitted video/lane bounds, preserves
+pointer and keyboard routing, and releases owned layouts on terminal Close.
+Composition binds the accepted playback part/native generation before the
+desktop Tick; a generation mismatch hides old text until the next rebuild.
+Settings remain process-local. This fixture-native seam is verified in
+[0038](../reports/0038-p0-native-danmaku.md); real segment fetching remains a
+separate adapter/worker contract.
+
 ## Async contract requirements
 
 Specify cancellation, timeout, state transitions, goroutine ownership, callback

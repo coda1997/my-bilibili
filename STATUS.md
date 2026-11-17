@@ -18,8 +18,8 @@ read reports by default.
 | P0 service probes, QR-host compatibility and empty-text danmaku handling | Scoped implementation and independent review complete before rebase; anonymous five-step probe passed | [0033](reports/0033-p0-qr-host-fix.md), [0034](reports/0034-p0-empty-danmaku.md) |
 | QR login and Keychain session (P0) | Real scan, Keychain save/readback, service verification and same-binary restart restoration passed on 2026-11-17. Session retained; branch not merged, no PR | [real login and restore](reports/0036-p0-login-restored.md) |
 | Asynchronous detail/media loading | Implemented and independently approved at `371428b`; full race and fresh macOS full/source native suites pass (30 + 25 checks) | [0037](reports/0037-p0-async-source.md) |
-| Native Chinese danmaku | Reviewed contract published for implementation; glyph/timebase evidence still required | [spec 0026](specs/0026-p0-native-danmaku/spec.md) |
-| Real Bilibili content and local history/resume | Complete integration proposal prepared; awaits native overlay prerequisite and independent architecture review. Personalized feed remains outside P0 | [P0 scope draft](specs/0004-client-p0/spec.md) |
+| Native Chinese danmaku | Implemented and independently approved at cebd417; full race, native full/source/danmaku stages (30+25+30 checks) and independent Chinese pixel/timebase verification pass | [0038](reports/0038-p0-native-danmaku.md) |
+| Real Bilibili content and local history/resume | Revised integration contract independently approved; native prerequisite complete, ready for freeze and implementation. Personalized feed remains outside P0 | [P0 scope draft](specs/0004-client-p0/spec.md) |
 | libmpv distribution (bundling, licence, signing) | Not designed; a development library path is hardcoded | — |
 | Windows | P2, not tested | [ADR 0005](docs/adr/0005-platform-priority.md) |
 
@@ -31,23 +31,23 @@ read reports by default.
 | M1 macOS playback feasibility | Accepted 2026-11-13 |
 | M2 one complete development loop | Merged (PR #9). Owner functional feedback recorded; formal milestone acceptance not recorded |
 | M3 one issue-to-PR loop | Accepted 2026-11-17 |
-| P0 client | In progress; real login/restoration complete, overlay and integrated client pending |
+| P0 client | In progress; real login/restoration and native Chinese overlay complete, real-content/history integration pending |
 
 Exit criteria are in [stage zero](docs/stage-zero.md).
 
 ## Next actions
 
-1. Continue native Chinese danmaku overlay/timebase and full client integration.
+1. Continue real content and local history/resume in the complete client.
    Real sign-in and same-binary restart restoration now pass; preserve the
    Keychain session without real Logout/Delete. See the
    [login completion](reports/0036-p0-login-restored.md).
 2. Open a PR for `codex/p0-login-foundation` when authorized. This branch is
    rebased onto merged PR #15; only README conflicted, and its P0 checkpoint
    now lives here with the upstream STATUS-first navigation retained.
-3. Freeze and implement the independently approved native Chinese overlay
-   proposal. Async detail/resolution and its exact-candidate review/native
-   checks are complete; see [0037](reports/0037-p0-async-source.md).
-4. Review the prepared real-client contract, then connect search/link/details,
+3. Freeze the approved revised real-client contract. Async source and native
+   Chinese overlay prerequisites are complete; see [0037](reports/0037-p0-async-source.md)
+   and [0038](reports/0038-p0-native-danmaku.md).
+4. Connect search/link/details,
    available-quality playback, segmented danmaku and local history/resume in
    one normal app, reusing the preserved login.
 5. Write an ADR on libmpv distribution.
@@ -60,7 +60,7 @@ P0 verification and confirmed the execution Mac unlocked on 2026-11-17.
 | Action | Prepared | Time | Unblocks | Report back |
 | --- | --- | --- | --- | --- |
 | Authorize a PR for `codex/p0-login-foundation` when ready | Rebased branch and scoped evidence in the login handoff | 2 min | PR review and candidate CI | "Open the login PR" |
-| Keep the execution Mac unlocked for native verification | Login and restart restore complete; overlay/fixture scenarios will follow reviewed contracts | During native checks | Native P0 verification | Report any native authorization prompt or failure |
+| Keep the execution Mac unlocked for native verification | Login/restore and overlay/fixture scenarios complete; real-client scenarios follow the approved contract | During native checks | Native P0 verification | Report any native authorization prompt or failure |
 
 Done 2026-11-17: the owner approved the spec 0024 policy changes (lanes,
 evidence identity, adopted clauses, owner queue) and local commit authority.
@@ -79,5 +79,5 @@ publication of the P0 branch. No P0 PR, merge or release has been performed.
 
 ## Blockers
 
-- No remaining real-login or async-loading blocker. Native overlay evidence
-  and reviewed real-content/history integration remain prerequisites for full P0.
+- No remaining real-login, async-loading or native-overlay blocker. Real-content
+  and history/resume integration and actual combined verification remain for full P0.
