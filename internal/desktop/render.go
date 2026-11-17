@@ -28,6 +28,9 @@ func (v *View) Render(c *gui.Context) {
 	if !usable(s) {
 		v.speedOpen = false
 	}
+	if v.Danmaku == nil || closed(s) {
+		v.danmakuOpen = false
+	}
 	if v.lastActivity.IsZero() {
 		v.active()
 	}
@@ -82,7 +85,7 @@ func (v *View) Render(c *gui.Context) {
 
 func (v *View) player(c *gui.Context, s app.State, w, h float32, fullscreen bool) {
 	video := gui.Box(c.Key("preview-video")).Size(w, h).Background(gui.RGB(0, 0, 0)).Role(gui.RoleGroup).Label("Video surface")
-	popupWasOpen := v.partsOpen || v.speedOpen
+	popupWasOpen := v.partsOpen || v.speedOpen || v.danmakuOpen
 	video.Children(func() {
 		sw, sh := w, h
 		if fullscreen {
@@ -92,6 +95,9 @@ func (v *View) player(c *gui.Context, s app.State, w, h float32, fullscreen bool
 		gui.Box(c).Absolute().Left((w-sw)/2).Top((h-sh)/2).Size(sw, sh).Children(func() {
 			if v.Surface != nil {
 				v.Surface(c, sw, sh)
+			}
+			if v.Danmaku != nil {
+				v.Danmaku.Render(c, s.Playback, sw, sh)
 			}
 		})
 		if v.overlayVisible(s) {
@@ -107,14 +113,14 @@ func (v *View) player(c *gui.Context, s app.State, w, h float32, fullscreen bool
 	})
 	// Popover dismisses on outside press and lets that press reach its target.
 	// Swallow only a captured video press, not Escape or another control.
-	if popupWasOpen && !v.partsOpen && !v.speedOpen {
+	if popupWasOpen && !v.partsOpen && !v.speedOpen && !v.danmakuOpen {
 		if button, pressed := video.PressedButton(); pressed && button == 0 {
 			v.pendingClick = time.Time{}
 			v.suppressClick = true
 		}
 	}
 	v.videoInput(c, s, video)
-	if !v.controlsHeld && !v.partsOpen && !v.speedOpen && s.Playback.State == playback.Playing {
+	if !v.controlsHeld && !v.partsOpen && !v.speedOpen && !v.danmakuOpen && s.Playback.State == playback.Playing {
 		if remaining := overlayDelay - v.now().Sub(v.lastActivity); remaining > 0 {
 			c.After(remaining)
 		}
@@ -203,7 +209,7 @@ func (v *View) transport(c *gui.Context, s app.State, w float32) {
 		parts := gui.Button(c.Key("parts-menu"), "Parts").Height(32).Tooltip("Choose a part").HasPopup(gui.PopupMenu).Disabled(!partsReady(s))
 		if parts.Clicked() {
 			v.partsOpen = !v.partsOpen
-			v.speedOpen = false
+			v.speedOpen, v.danmakuOpen = false, false
 			v.pendingClick = time.Time{}
 			v.active()
 			c.Invalidate()
@@ -212,7 +218,7 @@ func (v *View) transport(c *gui.Context, s app.State, w float32) {
 		speed := gui.Button(c.Key("speed-menu"), strconv.FormatFloat(s.Rate, 'f', -1, 64)+"×").Height(32).MinWidth(48).Label("Playback speed").Tooltip("Playback speed").HasPopup(gui.PopupMenu).Disabled(!usable(s))
 		if speed.Clicked() {
 			v.speedOpen = !v.speedOpen
-			v.partsOpen = false
+			v.partsOpen, v.danmakuOpen = false, false
 			v.pendingClick = time.Time{}
 			v.active()
 			c.Invalidate()
@@ -250,7 +256,26 @@ func (v *View) transport(c *gui.Context, s app.State, w float32) {
 			v.fullscreen(c, !v.Fullscreen())
 		}
 	})
-	gui.Text(c.Key("playback-part"), "Playing: "+partTitle(s, s.PlaybackPart)).FontSize(11).TextColor(gui.RGB(187, 196, 210))
+	gui.Row(c).Gap(8).AlignItems(gui.Center).Children(func() {
+		gui.Text(c.Key("playback-part"), "Playing: "+partTitle(s, s.PlaybackPart)).FontSize(11).TextColor(gui.RGB(187, 196, 210)).SingleLine().Grow(1)
+		if v.Danmaku != nil {
+			menu := gui.Button(c.Key("danmaku-menu"), "Danmaku").Height(32).Tooltip("Show or configure danmaku").HasPopup(gui.PopupMenu).Disabled(closed(s))
+			if menu.Clicked() {
+				v.danmakuOpen = !v.danmakuOpen
+				v.partsOpen, v.speedOpen = false, false
+				v.pendingClick = time.Time{}
+				v.active()
+				c.Invalidate()
+			}
+			gui.Popover(c.Key("danmaku-popup"), menu, &v.danmakuOpen, func() {
+				if v.Danmaku.Controls(c, closed(s)) {
+					v.pendingClick = time.Time{}
+					v.active()
+					c.Invalidate()
+				}
+			})
+		}
+	})
 }
 
 func (v *View) parts(c *gui.Context, s app.State, w float32) {

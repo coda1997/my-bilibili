@@ -37,6 +37,7 @@ type View struct {
 	generation           uint64
 	seek, volume         sliderState
 	partsOpen, speedOpen bool
+	danmakuOpen          bool
 	controlsHeld         bool
 	lastError            playback.ErrorCode
 }
@@ -89,7 +90,7 @@ func (v *View) fullscreen(c *gui.Context, enabled bool) {
 }
 
 func (v *View) overlayVisible(s app.State) bool {
-	return s.Closing || s.ResolvingPart != "" || s.Playback.State != playback.Playing || v.controlsHeld || v.seek.pressed || v.volume.pressed || v.partsOpen || v.speedOpen || v.now().Sub(v.lastActivity) < overlayDelay
+	return s.Closing || s.ResolvingPart != "" || s.Playback.State != playback.Playing || v.controlsHeld || v.seek.pressed || v.volume.pressed || v.partsOpen || v.speedOpen || v.danmakuOpen || v.now().Sub(v.lastActivity) < overlayDelay
 }
 
 func (v *View) videoInput(c *gui.Context, s app.State, video gui.Element) {
@@ -135,8 +136,8 @@ func (v *View) shortcuts(c *gui.Context, s app.State) {
 	// Built after the controls, so their focused native input handlers and popup
 	// scopes get first refusal (slider arrows, button Space, text input, Escape).
 	if c.Shortcut(0, gui.KeyEscape) {
-		if v.partsOpen || v.speedOpen {
-			v.partsOpen, v.speedOpen = false, false
+		if v.partsOpen || v.speedOpen || v.danmakuOpen {
+			v.partsOpen, v.speedOpen, v.danmakuOpen = false, false, false
 			v.active()
 			c.Invalidate()
 		} else if v.Fullscreen() {
