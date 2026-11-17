@@ -15,10 +15,12 @@ import (
 )
 
 type ownedProcess struct {
-	cmd    *exec.Cmd
-	done   chan error
-	reaped bool
-	exit   error
+	cmd            *exec.Cmd
+	done           chan error
+	reaped         bool
+	exit           error
+	closeRequested bool
+	sourceReceipts *sourceReceipts
 }
 
 func childEnvironment(in []string, socket, scenario string) []string {
@@ -47,10 +49,14 @@ func startOwned(app, cwd, socket, scenario string) (*ownedProcess, error) {
 	cmd := exec.Command(app)
 	cmd.Dir, cmd.Env = cwd, childEnvironment(os.Environ(), socket, scenario)
 	cmd.Stdout, cmd.Stderr, cmd.WaitDelay = io.Discard, io.Discard, time.Second
+	p := &ownedProcess{cmd: cmd, done: make(chan error, 1)}
+	if strings.HasPrefix(scenario, "source-") {
+		p.sourceReceipts = newSourceReceipts()
+		cmd.Stdout = p.sourceReceipts
+	}
 	if cmd.Start() != nil {
 		return nil, errors.New("owned preview process did not start")
 	}
-	p := &ownedProcess{cmd: cmd, done: make(chan error, 1)}
 	go func() { p.done <- cmd.Wait() }()
 	return p, nil
 }
@@ -95,19 +101,23 @@ func connect(ctx context.Context, socket string, p *ownedProcess) (*client, erro
 	}
 }
 func closeOwned(p *ownedProcess, socket string, r *report) error {
-	if p.exited() {
-		return errors.New("owned preview exited before actual window close")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	c, err := connect(ctx, socket, p)
-	if err == nil {
-		c.report, c.phase = r, "cleanup"
-		_, err = c.identify(ctx)
-		if err == nil {
-			err = c.act(ctx, "e2e-close-window")
+	var err error
+	if !p.closeRequested {
+		if p.exited() {
+			return errors.New("owned preview exited before actual window close")
 		}
-		_ = c.conn.Close()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		var c *client
+		c, err = connect(ctx, socket, p)
+		if err == nil {
+			c.report, c.phase = r, "cleanup"
+			_, err = c.identify(ctx)
+			if err == nil {
+				err = c.act(ctx, "e2e-close-window")
+			}
+			_ = c.conn.Close()
+		}
 	}
 	if !p.await(5 * time.Second) {
 		r.ForcedCleanup = true
@@ -147,13 +157,20 @@ func invocation(ctx context.Context, app, name, seam, dir string, r *report, exe
 			r.PrimaryFailure = name + ": " + err.Error()
 		}
 		cleanupErr := closeOwned(p, socket, r)
+		if cleanupErr == nil && p.sourceReceipts != nil {
+			var closed observed
+			closed, cleanupErr = sourceClosed(p)
+			if cleanupErr == nil {
+				r.pass(name+"-source-ownership-ended", "closed receipt has no active source call or native ownership; source peak concurrency at most one", &closed)
+			}
+		}
 		if cleanupErr != nil {
 			r.CleanupFailure = name + ": " + cleanupErr.Error()
 			if err == nil {
 				err = cleanupErr
 			}
 		} else {
-			r.pass(name+"-actual-window-close", "zero exit, socket removed; synchronous app disposal verified zero ownership", nil)
+			r.pass(name+"-actual-window-close", "zero exit and socket removed after an explicit window-close request", nil)
 		}
 	}()
 	startup, cancel := context.WithTimeout(ctx, 20*time.Second)

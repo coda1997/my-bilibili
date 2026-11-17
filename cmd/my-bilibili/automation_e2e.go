@@ -39,6 +39,11 @@ func automationSource(source app.Source) (app.Source, func(), error) {
 	if mode == "" {
 		return source, func() {}, nil
 	}
+	switch mode {
+	case "source-detail", "source-detail-failure", "source-resolve", "source-resolve-failure", "source-timeout":
+		controlled := &controlledSource{Source: source, mode: mode, gate: make(chan struct{})}
+		return controlled, controlled.release, nil
+	}
 	if mode != "delayed" {
 		return nil, nil, playback.Invalid
 	}
@@ -88,16 +93,33 @@ func (a *application) automationRender(c *gui.Context) {
 		if gui.Button(c.Key("e2e-wide"), "Wide window").Clicked() {
 			a.window.SetContentSize(1120, 760)
 		}
+		if controlled, ok := a.source.(*controlledSource); ok {
+			if gui.Button(c.Key("e2e-release-source"), "Release source").Clicked() {
+				controlled.release()
+			}
+			if gui.Button(c.Key("e2e-minimized-close"), "Close after native minimize").Clicked() {
+				controlled.closeOnMinimize = true
+				a.window.Minimize()
+			}
+		}
 	})
-	observation := previewbundle.Observation{State: a.session.State(), Fullscreen: a.window.IsFullScreen(), Resources: mpv.Owned(), Tracks: mpv.Inspect(a.session.Engine()), DisposalError: ""}
+	observation := a.automationObservation(a.window.IsFullScreen(), a.window.IsMinimized())
+	b, _ := json.Marshal(observation)
+	gui.Text(c.Key("e2e-observation"), string(b)).Absolute().Left(-20000).Top(-20000).Size(1, 1)
+	a.renderFullscreen(c)
+}
+
+func (a *application) automationObservation(fullscreen, minimized bool) previewbundle.Observation {
+	observation := previewbundle.Observation{State: a.session.State(), Fullscreen: fullscreen, Minimized: minimized, Resources: mpv.Owned(), Tracks: mpv.Inspect(a.session.Engine())}
 	if delayed, ok := a.source.(*delayedSource); ok {
 		active := delayed.active.Load()
 		observation.Delay = previewbundle.DelayObservation{Requests: delayed.requests.Load(), Active: active}
 	}
+	if controlled, ok := a.source.(*controlledSource); ok {
+		observation.Source = controlled.snapshot()
+	}
 	if a.closeError != nil {
 		observation.DisposalError = playback.Media
 	}
-	b, _ := json.Marshal(observation)
-	gui.Text(c.Key("e2e-observation"), string(b)).Absolute().Left(-20000).Top(-20000).Size(1, 1)
-	a.renderFullscreen(c)
+	return observation
 }

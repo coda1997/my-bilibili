@@ -24,6 +24,7 @@ type application struct {
 	closeError error
 	source     app.Source
 	fullscreen fullscreenTelemetry
+	closing    sourceCloseObserver
 }
 
 func main() {
@@ -52,7 +53,7 @@ func run() error {
 		return err
 	}
 	defer cleanup()
-	session, err := app.New(context.Background(), source, playback.New(mpv.Opener{Library: previewbundle.Library}, nil))
+	session, err := app.New(source, playback.New(mpv.Opener{Library: previewbundle.Library}, nil))
 	if err != nil {
 		return err
 	}
@@ -91,6 +92,7 @@ func run() error {
 			a.view.Render(c)
 			a.automationRender(c)
 		})})
+		a.automationSetup()
 		a.window.OnEnterFullScreen(func() {
 			a.recordFullscreen("did-enter", nil)
 			a.window.Invalidate()
@@ -99,8 +101,12 @@ func run() error {
 			a.recordFullscreen("did-exit", nil)
 			a.window.Invalidate()
 		})
-		a.window.OnClose(func(*mygo.CloseEvent) { a.onClose() })
-		a.window.OnClosed(func() { mygo.App.Quit() })
+		a.window.OnClose(func(e *mygo.CloseEvent) {
+			if !a.onClose() {
+				e.PreventDefault()
+			}
+		})
+		a.window.OnClosed(func() { a.automationClosed(); mygo.App.Quit() })
 		if err := session.Start(ctx); err != nil {
 			a.closeError = err
 			a.window.Close()
@@ -110,11 +116,17 @@ func run() error {
 		mygo.App.Focus()
 		a.window.Focus()
 	})
-	if err := mygo.App.Run(); err != nil {
+	runErr := mygo.App.Run()
+	disposeErr := a.dispose()
+	// Normal window close already joined source ownership before disposal. The
+	// event loop has ended here; also finish cleanup after a native run failure.
+	<-a.session.Done()
+	a.closing.wait()
+	if runErr != nil {
 		return playback.Media
 	}
-	if err := a.dispose(); err != nil {
-		return err
+	if disposeErr != nil {
+		return disposeErr
 	}
 	return a.closeError
 }
@@ -129,9 +141,12 @@ func (a *application) dispose() error {
 	return nil
 }
 
-func (a *application) onClose() {
+func (a *application) onClose() bool {
 	err := a.dispose()
 	if a.closeError == nil {
 		a.closeError = err
 	}
+	return a.closing.ready(a.session.Done(), func() {
+		a.window.Update(func() { a.window.Close() })
+	})
 }

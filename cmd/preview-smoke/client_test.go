@@ -26,7 +26,7 @@ func completeObservation(t *testing.T) observed {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return observed{State: app.State{Video: video, SelectedPart: "part-1", PlaybackPart: "part-1", Volume: 1, Rate: 1, Playback: playback.Snapshot{Generation: 1, State: playback.Closed, Error: playback.Canceled, Volume: 1, Rate: 1}}}
+	return observed{State: app.State{DetailPhase: app.DetailReady, Video: video, SelectedPart: "part-1", PlaybackPart: "part-1", Volume: 1, Rate: 1, Playback: playback.Snapshot{Generation: 1, State: playback.Closed, Error: playback.Canceled, Volume: 1, Rate: 1}}}
 }
 func TestObservationNodesAreUniqueAndStrict(t *testing.T) {
 	o := completeObservation(t)

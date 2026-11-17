@@ -9,6 +9,8 @@ import (
 
 func automationSource(source app.Source) (app.Source, func(), error) { return source, func() {}, nil }
 func (a *application) automationRender(*gui.Context)                 {}
+func (*application) automationSetup()                                {}
+func (*application) automationClosed()                               {}
 
 // Normal builds retain neither fullscreen diagnostic events nor an e2e node.
 type fullscreenTelemetry struct{}

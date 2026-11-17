@@ -12,7 +12,7 @@ import (
 )
 
 func validObservation() Observation {
-	return Observation{State: app.State{Video: catalog.Video{ID: "preview-video", Title: "Synthetic", Creator: "Local", Description: "Synthetic fixtures", CoverID: "preview-cover", Parts: []catalog.Part{{ID: "part-1", Title: "One", Duration: 30 * time.Second}, {ID: "part-2", Title: "Two", Duration: 30 * time.Second}}}, SelectedPart: "part-1", PlaybackPart: "part-1", Rate: 1, Volume: 1, Playback: playback.Snapshot{Generation: 1, State: playback.Closed, Rate: 1, Volume: 1}}}
+	return Observation{State: app.State{DetailPhase: app.DetailReady, Video: catalog.Video{ID: "preview-video", Title: "Synthetic", Creator: "Local", Description: "Synthetic fixtures", CoverID: "preview-cover", Parts: []catalog.Part{{ID: "part-1", Title: "One", Duration: 30 * time.Second}, {ID: "part-2", Title: "Two", Duration: 30 * time.Second}}}, SelectedPart: "part-1", PlaybackPart: "part-1", Rate: 1, Volume: 1, Playback: playback.Snapshot{Generation: 1, State: playback.Closed, Rate: 1, Volume: 1}}}
 }
 func TestObservationRequiresEveryFieldExactlyOnce(t *testing.T) {
 	data, _ := json.Marshal(validObservation())

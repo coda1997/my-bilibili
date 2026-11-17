@@ -64,15 +64,15 @@ func command(args []string, out, stderr io.Writer) error {
 	appHash := f.String("app-sha256", "", "assigned exact app SHA256")
 	driverHash := f.String("driver-sha256", "", "assigned exact driver SHA256")
 	dir := f.String("output", "", "fresh absolute evidence directory")
-	stage := f.String("stage", "full", "full acceptance or fullscreen diagnostic prefix")
+	stage := f.String("stage", "full", "full acceptance, fullscreen diagnostic prefix, or synthetic source scenarios")
 	if err := f.Parse(args); err != nil {
 		return err
 	}
 	if f.NArg() != 0 || !filepath.IsAbs(*app) || !filepath.IsAbs(*dir) || !validDigest(*appHash) || !validDigest(*driverHash) {
 		return errors.New("require absolute -app/-output and exact -app-sha256/-driver-sha256")
 	}
-	if *stage != "full" && *stage != "fullscreen" {
-		return errors.New("stage must be full or fullscreen")
+	if *stage != "full" && *stage != "fullscreen" && *stage != "source" {
+		return errors.New("stage must be full, fullscreen or source")
 	}
 	if runtime.GOOS != "darwin" {
 		return errors.New("native preview smoke requires macOS")

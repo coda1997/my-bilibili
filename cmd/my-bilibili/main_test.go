@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -15,7 +14,7 @@ func TestWindowClosePreservesStartupFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := app.New(context.Background(), source, playback.New(nil, nil))
+	session, err := app.New(source, playback.New(nil, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +33,7 @@ func TestDisposeBeforeStartIsTerminalAndIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := app.New(context.Background(), source, playback.New(nil, nil))
+	session, err := app.New(source, playback.New(nil, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
