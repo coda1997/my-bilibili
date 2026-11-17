@@ -14,6 +14,10 @@ import (
 	"time"
 )
 
+const materialLimit = 2560
+
+var names = []string{"SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5"}
+
 const testKey = "0123456789abcdef0123456789abcdef"
 const secret = "PRIVATE_SYNTHETIC_SECRET"
 const cookieLine = "SESSDATA=" + secret + "%2F%3D; Domain=.bilibili.com; Path=/; HttpOnly; Secure"
@@ -350,7 +354,11 @@ func TestCredentialSchemaRejectsDuplicateRecordsAndScopeFields(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var value session
+	var value struct {
+		Version int               `json:"version"`
+		Scope   string            `json:"scope"`
+		Cookies []json.RawMessage `json:"cookies"`
+	}
 	if json.Unmarshal(m.Bytes(), &value) != nil {
 		t.Fatal("fixture decode")
 	}

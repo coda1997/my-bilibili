@@ -3,6 +3,8 @@ package account
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"sync"
 	"time"
 )
@@ -15,6 +17,9 @@ type Manager struct {
 	mu              sync.Mutex
 	gateway         Gateway
 	store           Store
+	publisher       SessionPublisher
+	nextEpoch       uint64
+	doneC           chan struct{}
 	state           State
 	material        Material
 	cancel          context.CancelFunc
@@ -25,8 +30,14 @@ type Manager struct {
 }
 
 func New(gateway Gateway, store Store) *Manager {
-	return &Manager{gateway: gateway, store: store, state: State{Phase: Initial}, now: time.Now, wait: waitFor}
+	return NewWithPublisher(gateway, store, nil)
 }
+func NewWithPublisher(gateway Gateway, store Store, publisher SessionPublisher) *Manager {
+	return &Manager{gateway: gateway, store: store, publisher: publisher, doneC: make(chan struct{}), state: State{Phase: Initial}, now: time.Now, wait: waitFor}
+}
+func (m *Manager) Done() <-chan struct{}      { return m.doneC }
+func (*Manager) Format(s fmt.State, _ rune)   { _, _ = io.WriteString(s, "[private account manager]") }
+func (*Manager) MarshalJSON() ([]byte, error) { return []byte("null"), nil }
 func waitFor(ctx context.Context, d time.Duration) error {
 	timer := time.NewTimer(d)
 	defer timer.Stop()
@@ -58,7 +69,7 @@ func (m *Manager) start(phase Phase, limit time.Duration, fn func(context.Contex
 		ctx, m.cancel = context.WithCancel(context.Background())
 	}
 	cancel := m.cancel
-	go func() { defer cancel(); fn(ctx, generation); m.finish() }()
+	go func() { fn(ctx, generation); cancel(); m.finish() }()
 }
 func (m *Manager) finish() {
 	m.mu.Lock()
@@ -74,12 +85,54 @@ func (m *Manager) finish() {
 	}
 }
 func (m *Manager) done() {
+	m.revoke()
 	m.state.Generation++
 	m.state.Phase = Done
 	m.state.QR = QR{}
 	m.state.ExpiresAt = time.Time{}
 	m.state.Error = None
 	m.material = Material{}
+	close(m.doneC)
+}
+
+// Called only under m.mu. Publisher operations are memory-only leaf calls;
+// they must never call this manager or wait for one of its workers.
+func (m *Manager) revoke() {
+	if epoch := m.state.SessionEpoch; epoch != 0 {
+		if m.publisher != nil {
+			m.publisher.Revoke(epoch)
+		}
+		m.state.SessionEpoch = 0
+	}
+}
+func (m *Manager) SessionExpired(expectedEpoch uint64) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if expectedEpoch == 0 || m.state.SessionEpoch != expectedEpoch || m.state.Phase != SignedIn || m.state.CloseRequested {
+		return false
+	}
+	m.revoke()
+	m.material = Material{}
+	m.state.Phase, m.state.Error, m.state.Restored = Expired, ExpiredSession, false
+	return true
+}
+func (m *Manager) DiscardUnsaved() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err := m.available(); err != nil {
+		return err
+	}
+	if !m.state.Unsaved {
+		return Invalid
+	}
+	m.material = Material{}
+	m.restoreMaterial = false
+	m.state.Unsaved, m.state.Restored = false, false
+	m.state.Phase, m.state.Error = SignedOut, None
+	if m.state.Stored {
+		m.state.Phase = Expired
+	}
+	return nil
 }
 func (m *Manager) current(g uint64) bool { return m.state.Generation == g && !m.state.CloseRequested }
 func gatewayCode(err error) Code {
@@ -286,6 +339,18 @@ func (m *Manager) verify(ctx context.Context, g uint64) {
 		}
 		return
 	}
+	if m.nextEpoch == ^uint64(0) {
+		m.state.Phase, m.state.Error = VerifyFailed, Invalid
+		return
+	}
+	m.nextEpoch++
+	if m.publisher != nil {
+		if err := m.publisher.Activate(m.nextEpoch, material); err != nil {
+			m.state.Phase, m.state.Error = VerifyFailed, Invalid
+			return
+		}
+	}
+	m.state.SessionEpoch = m.nextEpoch
 	m.state.Phase, m.state.Error = SignedIn, None
 	m.state.Restored = m.restoreMaterial
 }
@@ -353,6 +418,7 @@ func (m *Manager) Logout() error {
 	if !(m.state.Stored && (phase == SignedIn || phase == VerifyFailed || phase == Expired || phase == DeleteFailed)) {
 		return Invalid
 	}
+	m.revoke()
 	m.material = Material{}
 	m.state.QR = QR{}
 	m.state.Restored = false
@@ -374,10 +440,8 @@ func (m *Manager) RequestClose(discardUnsaved bool) bool {
 	if m.state.Phase == Done {
 		return true
 	}
-	if discardUnsaved && m.state.Busy {
-		return false
-	}
 	m.state.CloseRequested = true
+	m.revoke()
 	m.state.QR = QR{}
 	m.state.ExpiresAt = time.Time{}
 	if m.state.Busy {
