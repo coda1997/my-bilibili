@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "spec_id": "0026-p0-native-danmaku",
+  "tasks": [
+    {
+      "id": "DMK-001",
+      "title": "Implement the bounded media-time timeline and regression tests",
+      "depends_on": [],
+      "write_paths": ["internal/danmaku"],
+      "acceptance": ["DMK-AC-01", "DMK-AC-02"],
+      "checks": ["GOTOOLCHAIN=local GOWORK=off go test -count=1 -race ./internal/danmaku", "Record individually restored compiling negative controls for validation, generation, replacement, timing and lane guards"]
+    },
+    {
+      "id": "DMK-002",
+      "title": "Draw retained Chinese text and provide isolated settings controls",
+      "depends_on": ["DMK-001"],
+      "write_paths": ["internal/desktop/danmaku"],
+      "acceptance": ["DMK-AC-03", "DMK-AC-04"],
+      "checks": ["GOTOOLCHAIN=local GOWORK=off go test -count=1 -race ./internal/desktop/danmaku", "Record gui.Tester pixel, clipping, active-layout ownership and input-pass-through regressions"]
+    },
+    {
+      "id": "DMK-003",
+      "title": "Add original copied danmaku data for both fixture parts",
+      "depends_on": ["DMK-001"],
+      "write_paths": ["internal/fixture/danmaku.go", "internal/fixture/danmaku_test.go", "internal/fixture/README.md"],
+      "acceptance": ["DMK-AC-01", "DMK-AC-05"],
+      "checks": ["GOTOOLCHAIN=local GOWORK=off go test -count=1 -race ./internal/fixture", "Verify exact part IDs, independent returned data, mode/timestamp coverage and no asset/hash-policy change"]
+    },
+    {
+      "id": "DMK-004",
+      "title": "Mount the overlay in the fixture app and extend native evidence",
+      "depends_on": ["DMK-002", "DMK-003"],
+      "write_paths": ["internal/desktop/view.go", "internal/desktop/render.go", "internal/desktop/view_test.go", "internal/desktop/danmaku_test.go", "cmd/my-bilibili", "cmd/preview-smoke", "internal/previewbundle"],
+      "acceptance": ["DMK-AC-03", "DMK-AC-04", "DMK-AC-05", "DMK-AC-06"],
+      "checks": ["GOTOOLCHAIN=local GOWORK=off go test -count=1 -race ./internal/desktop ./cmd/my-bilibili ./cmd/preview-smoke ./internal/previewbundle", "GOTOOLCHAIN=local GOWORK=off go test -count=1 -race -tags e2e ./cmd/my-bilibili ./cmd/preview-smoke ./internal/previewbundle", "GOTOOLCHAIN=local GOWORK=off go run ./cmd/dev check --race", "Rebuild exact normal/e2e bundles and driver; execute macOS preview-smoke stages full, source and danmaku with actual artifact hashes and fresh output directories", "Independent review inspects native Chinese glyph captures and existing cancellation/fullscreen/source/cleanup evidence"]
+    },
+    {
+      "id": "DMK-005",
+      "title": "Record native overlay evidence and the remaining real-client work",
+      "depends_on": ["DMK-004"],
+      "write_paths": ["reports/0038-p0-native-danmaku.md", "STATUS.md", "docs/architecture.md"],
+      "acceptance": ["DMK-AC-06"],
+      "checks": ["GOTOOLCHAIN=local GOWORK=off go run ./cmd/dev check --race", "Bind evidence/review to the exact final commit; retain failed attempts and bounded review/fix history", "Confirm real-service parsing, search/details/quality and local history remain explicit follow-on work, with Windows native not-tested/P2"]
+    }
+  ]
+}

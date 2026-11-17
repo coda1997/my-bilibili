@@ -1,6 +1,6 @@
 # Status
 
-Updated 2026-11-17. Branch: `codex/p0-async-source`. Base: `master` at
+Updated 2026-11-17. Branch: `codex/p0-native-danmaku`. Base: `master` at
 `34e6faf` (merged PR #15).
 
 This is the only file that carries current state. Update it in the same change
@@ -18,7 +18,7 @@ read reports by default.
 | P0 service probes, QR-host compatibility and empty-text danmaku handling | Scoped implementation and independent review complete before rebase; anonymous five-step probe passed | [0033](reports/0033-p0-qr-host-fix.md), [0034](reports/0034-p0-empty-danmaku.md) |
 | QR login and Keychain session (P0) | Real scan, Keychain save/readback, service verification and same-binary restart restoration passed on 2026-11-17. Session retained; branch not merged, no PR | [real login and restore](reports/0036-p0-login-restored.md) |
 | Asynchronous detail/media loading | Implemented and independently approved at `371428b`; full race and fresh macOS full/source native suites pass (30 + 25 checks) | [0037](reports/0037-p0-async-source.md) |
-| Native Chinese danmaku | Architecture proposal independently approved; implementation and glyph/timebase evidence next | [P0 scope draft](specs/0004-client-p0/spec.md) |
+| Native Chinese danmaku | Reviewed contract published for implementation; glyph/timebase evidence still required | [spec 0026](specs/0026-p0-native-danmaku/spec.md) |
 | Real Bilibili content and local history/resume | Complete integration proposal prepared; awaits native overlay prerequisite and independent architecture review. Personalized feed remains outside P0 | [P0 scope draft](specs/0004-client-p0/spec.md) |
 | libmpv distribution (bundling, licence, signing) | Not designed; a development library path is hardcoded | — |
 | Windows | P2, not tested | [ADR 0005](docs/adr/0005-platform-priority.md) |
