@@ -58,6 +58,15 @@ retained. This does not measure physical sync/rate.
 
 ## Start here
 
+The owner-selected issue #10 repair now has local independent technical approval:
+rapid opposite play/pause actions preserve the last intent despite stale samples.
+New regressions and full local race checks pass; restoring the old source fails
+all six new cases. See [the issue #10 handoff](reports/0029-playback-intent.md)
+and [prepared PR body](reports/0029-playback-intent-pr.md). The repair remains
+uncommitted and unpublished, with new remote CI and M3 acceptance pending.
+PR #9 is confirmed merged with passing three-platform CI; the older M2 narrative
+below records its premerge continuation, not current remote status.
+
 M2's fullscreen repair now has scoped independent approval. On 2026-11-16,
 the original reviewer closed REV-002 after verifying four complete native suites
 with 30 passing checks each, 51 complete fixed fullscreen cycles, and independent

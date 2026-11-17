@@ -306,6 +306,15 @@ transitions; do not start by implementing a general-purpose agent platform.
 
 ## M3. One issue-to-PR loop
 
+Trial continuation, 2026-11-17: the owner selected existing issue #10 and
+authorized the reproduced play/pause-intent repair. Its first implementation
+passes local race checks and independent code review; old-source controls fail.
+PR #9's merge and three-platform CI were checked remotely. The issue #10 repair
+remains local/uncommitted with [handoff and PR draft](../reports/0029-playback-intent.md);
+remote publication/CI and owner milestone disposition remain pending. This is
+one manually initiated issue/run, with no bot/event scheduler or recursive
+trigger path. It does not declare M2 or M3 accepted or waive milestone gates.
+
 After a remote and execution policy exist, use one authorized reproducible
 issue to demonstrate triage, a failing regression test, a minimal fix, review,
 and a PR. Do not bypass the M2 gates. Deduplicate active runs per issue and do

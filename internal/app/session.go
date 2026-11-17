@@ -227,8 +227,9 @@ func (s *Session) play(intent bool) error {
 	alreadyRequested := s.intent == intent
 	s.intent, s.retryIntent = intent, intent
 	// Tick may have just applied the pending intent at first readiness. The
-	// native snapshot is sampled, so it can still say Ready after Play succeeds.
-	if state == contract.Loading || alreadyRequested || intent && state == contract.Playing || !intent && state == contract.Paused {
+	// sampled state can also lag queued commands, so only unchanged intent
+	// can suppress a command once ready.
+	if state == contract.Loading || alreadyRequested {
 		return nil
 	}
 	kind := contract.Pause
