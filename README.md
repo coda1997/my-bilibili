@@ -69,10 +69,14 @@ See [the acceptance handoff](reports/0029-playback-intent.md) for exact identiti
 review and CI evidence. This demonstrates a manually initiated issue loop, not
 an automatic scheduler or release system.
 
-The next existing repair candidate is
-[issue #11](https://github.com/coda1997/my-bilibili/issues/11), rapid seek queue
-overload; it remains open and outside this completed work. P0 and the full
-client shell remain pending.
+The subsequent repair for [issue #11](https://github.com/coda1997/my-bilibili/issues/11),
+rapid seek queue overload, is implemented and independently approved. Consecutive
+unsent Seek requests now retain only the latest target, preserving control order
+and the bounded queue. See [the repair handoff](reports/0030-seek-queue.md) for
+reproduction, regression and review evidence, and
+[PR #14](https://github.com/coda1997/my-bilibili/pull/14) for the live CI/merge
+record. The owner authorized publication, passing CI and merge for this repair.
+P0 and the full client shell remain pending.
 
 ### Historical M2 continuation
 
