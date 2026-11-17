@@ -96,8 +96,24 @@ func Draw(c *gui.Context, plain playback.Engine) {
 // DrawSized scales presentation only. The native render buffers remain 640x360,
 // with the same UI-thread ownership and non-blocking frame acquisition as Draw.
 func DrawSized(c *gui.Context, plain playback.Engine, displayWidth, displayHeight float32) {
+	drawSurface(c, plain, displayWidth, displayHeight, "replacement-video", "Synthetic replacement fixture video")
+}
+
+// DrawTargetSized changes presentation size only; native frame ownership is
+// identical to DrawSized. It presents the accepted real target without capture.
+func DrawTargetSized(c *gui.Context, plain playback.Engine, displayWidth, displayHeight float32) {
+	drawSurface(c, plain, displayWidth, displayHeight, "target-video", "Authorized target video")
+}
+
+func drawSurface(c *gui.Context, plain playback.Engine, displayWidth, displayHeight float32, key, label string) {
 	e, ok := plain.(*engine)
-	if !ok {
+	if !ok || e == nil || !presentationSize(displayWidth, displayHeight) {
+		return
+	}
+	e.mu.RLock()
+	closed := e.closed
+	e.mu.RUnlock()
+	if closed {
 		return
 	}
 	if e.framesMu.TryLock() {
@@ -113,6 +129,7 @@ func DrawSized(c *gui.Context, plain playback.Engine, displayWidth, displayHeigh
 		e.framesMu.Unlock()
 	}
 	if e.bitmap != nil {
-		gui.Image(c.Key("replacement-video"), e.bitmap).Width(displayWidth).Height(displayHeight).Fit(gui.Contain).Label("Synthetic replacement fixture video")
+		gui.Image(c.Key(key), e.bitmap).Width(displayWidth).Height(displayHeight).
+			Fit(gui.Contain).Label(label).DrawOver(e.presentationCallback(e.bitmap))
 	}
 }

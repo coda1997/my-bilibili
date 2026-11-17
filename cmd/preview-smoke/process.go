@@ -21,6 +21,7 @@ type ownedProcess struct {
 	exit           error
 	closeRequested bool
 	sourceReceipts *sourceReceipts
+	clientReceipts *clientReceipts
 }
 
 func childEnvironment(in []string, socket, scenario string) []string {
@@ -46,19 +47,45 @@ func childEnvironment(in []string, socket, scenario string) []string {
 	return env
 }
 func startOwned(app, cwd, socket, scenario string) (*ownedProcess, error) {
+	return startScenario(app, cwd, socket, scenario, "", "")
+}
+
+func startScenario(app, cwd, socket, scenario, clientScenario, historyDir string) (*ownedProcess, error) {
+	env, err := scenarioEnvironment(os.Environ(), socket, scenario, clientScenario, historyDir)
+	if err != nil {
+		return nil, err
+	}
 	cmd := exec.Command(app)
-	cmd.Dir, cmd.Env = cwd, childEnvironment(os.Environ(), socket, scenario)
+	cmd.Dir, cmd.Env = cwd, env
 	cmd.Stdout, cmd.Stderr, cmd.WaitDelay = io.Discard, io.Discard, time.Second
 	p := &ownedProcess{cmd: cmd, done: make(chan error, 1)}
 	if strings.HasPrefix(scenario, "source-") {
 		p.sourceReceipts = newSourceReceipts()
 		cmd.Stdout = p.sourceReceipts
 	}
+	if clientScenario != "" {
+		p.clientReceipts = newClientReceipts()
+		cmd.Stdout = p.clientReceipts
+	}
 	if cmd.Start() != nil {
 		return nil, errors.New("owned preview process did not start")
 	}
 	go func() { p.done <- cmd.Wait() }()
 	return p, nil
+}
+
+func scenarioEnvironment(in []string, socket, fixtureScenario, clientScenario, historyDir string) ([]string, error) {
+	if clientScenario == "" {
+		if historyDir != "" {
+			return nil, errors.New("history override requires a synthetic client scenario")
+		}
+		return childEnvironment(in, socket, fixtureScenario), nil
+	}
+	if fixtureScenario != "" || !validClientScenario(clientScenario) || !filepath.IsAbs(historyDir) {
+		return nil, errors.New("invalid synthetic client scenario")
+	}
+	env := childEnvironment(in, socket, "")
+	return append(env, "MY_BILIBILI_E2E_CLIENT_SCENARIO="+clientScenario, "MY_BILIBILI_E2E_HISTORY_DIR="+historyDir), nil
 }
 func (p *ownedProcess) exited() bool {
 	if p.reaped {
@@ -112,6 +139,7 @@ func closeOwned(p *ownedProcess, socket string, r *report) error {
 		c, err = connect(ctx, socket, p)
 		if err == nil {
 			c.report, c.phase = r, "cleanup"
+			c.clientMode = p.clientReceipts != nil
 			_, err = c.identify(ctx)
 			if err == nil {
 				err = c.act(ctx, "e2e-close-window")
@@ -140,13 +168,17 @@ func closeOwned(p *ownedProcess, socket string, r *report) error {
 }
 
 func invocation(ctx context.Context, app, name, seam, dir string, r *report, exercise func(context.Context, *client, *ownedProcess) error) (err error) {
+	return scenarioInvocation(ctx, app, name, seam, "", "", dir, r, exercise)
+}
+
+func scenarioInvocation(ctx context.Context, app, name, seam, clientScenario, historyDir, dir string, r *report, exercise func(context.Context, *client, *ownedProcess) error) (err error) {
 	scratch, err := os.MkdirTemp("", "m2-preview-")
 	if err != nil {
 		return errors.New("preview scratch unavailable")
 	}
 	defer os.RemoveAll(scratch)
 	socket := filepath.Join(scratch, "a.sock")
-	p, err := startOwned(app, scratch, socket, seam)
+	p, err := startScenario(app, scratch, socket, seam, clientScenario, historyDir)
 	if err != nil {
 		return err
 	}
@@ -162,6 +194,13 @@ func invocation(ctx context.Context, app, name, seam, dir string, r *report, exe
 			closed, cleanupErr = sourceClosed(p)
 			if cleanupErr == nil {
 				r.pass(name+"-source-ownership-ended", "closed receipt has no active source call or native ownership; source peak concurrency at most one", &closed)
+			}
+		}
+		if cleanupErr == nil && p.clientReceipts != nil {
+			var closed clientObserved
+			closed, cleanupErr = clientClosed(p)
+			if cleanupErr == nil {
+				r.passClient(name+"-client-ownership-ended", "strict closed receipt: all owners joined and native/HTTP/cache/overlay resources retired", closed)
 			}
 		}
 		if cleanupErr != nil {
@@ -181,6 +220,7 @@ func invocation(ctx context.Context, app, name, seam, dir string, r *report, exe
 	}
 	defer c.conn.Close()
 	c.report, c.phase = r, name
+	c.clientMode = p.clientReceipts != nil
 	// The automation socket starts before App.WhenReady. The first windows RPC
 	// may wait for native initialization, so it has the startup budget, not the
 	// ordinary RPC limit. Cancellation checks below retain their strict 200ms.

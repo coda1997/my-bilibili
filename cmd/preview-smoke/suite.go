@@ -534,6 +534,9 @@ func preservesPaused(before, after observed) bool {
 	return a.Playback.Generation == b.Playback.Generation && b.Playback.State == playback.Paused && !b.DesiredPlaying && a.SelectedPart == b.SelectedPart && a.PlaybackPart == b.PlaybackPart && a.SelectionError == b.SelectionError && a.Playback.Error == b.Playback.Error && a.Volume == b.Volume && a.Rate == b.Rate && b.Playback.Rate == a.Playback.Rate && b.Playback.Volume == a.Playback.Volume && absDuration(a.Playback.Position-b.Playback.Position) < 150*time.Millisecond
 }
 func run(ctx context.Context, app, dir string, r *report) error {
+	if r.Stage == "client" {
+		return runClient(ctx, app, dir, r)
+	}
 	if r.Stage == "danmaku" {
 		return invocation(ctx, app, "danmaku", "", dir, r, func(ctx context.Context, c *client, p *ownedProcess) error { return c.danmaku(ctx, p, dir, r) })
 	}

@@ -15,26 +15,33 @@ import (
 )
 
 type client struct {
-	conn       net.Conn
-	scan       *bufio.Scanner
-	id, window int
-	callLimit  time.Duration
-	report     *report
-	phase      string
-	cycle      int
-	completion fullscreenCompletion
+	conn          net.Conn
+	reader        *bufio.Reader
+	partial       []byte
+	pendingID     int
+	pendingMethod string
+	pendingResult any
+	broken        bool
+	clientMode    bool
+	id, window    int
+	callLimit     time.Duration
+	report        *report
+	phase         string
+	cycle         int
+	completion    fullscreenCompletion
 }
 
 func newClient(conn net.Conn) *client {
-	s := bufio.NewScanner(conn)
-	s.Buffer(make([]byte, 4096), 8<<20)
-	return &client{conn: conn, scan: s, callLimit: 3 * time.Second}
+	return &client{conn: conn, reader: bufio.NewReaderSize(conn, 4096), callLimit: 3 * time.Second}
 }
 func (c *client) call(ctx context.Context, method string, params, result any) (err error) {
 	started := time.Now()
 	defer func() { c.recordRPC(started, method, params, result, err) }()
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if c.broken {
+		return errors.New("automation response stream unavailable")
 	}
 	deadline := time.Now().Add(c.callLimit)
 	if end, ok := ctx.Deadline(); ok && end.Before(deadline) {
@@ -52,6 +59,21 @@ func (c *client) call(ctx context.Context, method string, params, result any) (e
 		}
 		return fmt.Errorf("automation %s %s failed", method, stage)
 	}
+	// A timed-out read still owns exactly one response. Complete and validate
+	// it under this call's existing deadline before writing another request.
+	// In particular, pointerUp must not oppose the server's old reply write.
+	if c.pendingID != 0 {
+		data, err := c.readFrame()
+		if err != nil {
+			return ioFailure("read")
+		}
+		if err := c.acceptReply(data); err != nil {
+			return err
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+	}
 	c.id++
 	data, err := json.Marshal(struct {
 		ID     int    `json:"id"`
@@ -63,17 +85,66 @@ func (c *client) call(ctx context.Context, method string, params, result any) (e
 	}
 	n, err := c.conn.Write(append(data, '\n'))
 	if err != nil || n != len(data)+1 {
+		// Zero bytes leave the stream aligned for a distinct cleanup action.
+		// A partially/uncertainly sent request cannot be retried or reused.
+		if n != 0 {
+			c.broken = true
+		}
 		return ioFailure("write")
 	}
-	if !c.scan.Scan() {
+	c.pendingID, c.pendingMethod, c.pendingResult = c.id, method, result
+	data, err = c.readFrame()
+	if err != nil {
 		return ioFailure("read")
 	}
+	if err := c.acceptReply(data); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !time.Now().Before(deadline) {
+		return context.DeadlineExceeded
+	}
+	return nil
+}
+
+// ReadSlice preserves bounded framing across a timeout. Scanner instead makes
+// an I/O error terminal and can expose a partial last line as a complete token.
+func (c *client) readFrame() ([]byte, error) {
+	for {
+		part, err := c.reader.ReadSlice('\n')
+		if len(part) > (8<<20)-len(c.partial) {
+			c.broken, c.partial = true, nil
+			return nil, errors.New("automation response exceeds bound")
+		}
+		c.partial = append(c.partial, part...)
+		if err == bufio.ErrBufferFull {
+			continue
+		}
+		if err != nil {
+			var timeout net.Error
+			if !errors.As(err, &timeout) || !timeout.Timeout() {
+				c.broken, c.partial = true, nil
+			}
+			return nil, err
+		}
+		data := c.partial
+		c.partial = nil
+		return data, nil
+	}
+}
+
+func (c *client) acceptReply(data []byte) error {
+	id, method, result := c.pendingID, c.pendingMethod, c.pendingResult
+	c.pendingID, c.pendingMethod, c.pendingResult = 0, "", nil
 	var response struct {
 		ID     *int            `json:"id"`
 		Result json.RawMessage `json:"result"`
 		Error  json.RawMessage `json:"error"`
 	}
-	if json.Unmarshal(c.scan.Bytes(), &response) != nil || response.ID == nil || *response.ID != c.id {
+	if json.Unmarshal(data, &response) != nil || response.ID == nil || *response.ID != id {
+		c.broken = true
 		return fmt.Errorf("automation %s response invalid", method)
 	}
 	if len(response.Error) > 0 && string(response.Error) != "null" {
@@ -90,12 +161,6 @@ func (c *client) call(ctx context.Context, method string, params, result any) (e
 	}
 	if result != nil && (len(response.Result) == 0 || string(response.Result) == "null" || json.Unmarshal(response.Result, result) != nil) {
 		return fmt.Errorf("automation %s result invalid", method)
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	if !time.Now().Before(deadline) {
-		return context.DeadlineExceeded
 	}
 	return nil
 }
@@ -131,8 +196,11 @@ func (r *rectangle) UnmarshalJSON(data []byte) error {
 }
 
 type node struct {
+	ID     string    `json:"id"`
+	Parent string    `json:"parent"`
 	Key    any       `json:"key"`
 	Label  string    `json:"label"`
+	Value  string    `json:"value"`
 	Bounds rectangle `json:"bounds"`
 	States []string  `json:"states"`
 	Now    *float64  `json:"now"`
@@ -152,7 +220,11 @@ func (c *client) identify(ctx context.Context) (window, error) {
 	if err := c.call(ctx, "windows", nil, &windows); err != nil {
 		return window{}, err
 	}
-	if len(windows.Windows) != 1 || windows.Windows[0].ID <= 0 || windows.Windows[0].Title != "My Bilibili Preview" || windows.Windows[0].Kind != "content" || !windows.Windows[0].Visible {
+	title := "My Bilibili Preview"
+	if c.clientMode {
+		title = "My Bilibili"
+	}
+	if len(windows.Windows) != 1 || windows.Windows[0].ID <= 0 || windows.Windows[0].Title != title || windows.Windows[0].Kind != "content" || !windows.Windows[0].Visible {
 		return window{}, errors.New("owned preview window unavailable")
 	}
 	c.window = windows.Windows[0].ID
@@ -278,11 +350,19 @@ func (c *client) slider(ctx context.Context, key, value string) (err error) {
 	minimum, maximum := 0.0, 1.0
 	switch key {
 	case "seek-slider":
-		s, err := c.snapshot(ctx)
-		if err != nil {
-			return err
+		if c.clientMode {
+			s, err := c.clientSnapshot(ctx)
+			if err != nil {
+				return err
+			}
+			maximum = s.Playback.Duration.Seconds()
+		} else {
+			s, err := c.snapshot(ctx)
+			if err != nil {
+				return err
+			}
+			maximum = s.State.Playback.Duration.Seconds()
 		}
-		maximum = s.State.Playback.Duration.Seconds()
 	case "danmaku-font-size":
 		minimum, maximum = 16, 40
 	case "danmaku-speed":
