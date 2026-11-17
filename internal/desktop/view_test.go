@@ -31,6 +31,7 @@ func (p *fakePlayer) record(name string) error {
 	return p.err
 }
 func (p *fakePlayer) Start(context.Context) error { return p.record("start") }
+func (p *fakePlayer) RetryDetail() error          { return p.record("retry-detail") }
 func (p *fakePlayer) SelectPart(id catalog.PartID) error {
 	p.calls = append(p.calls, call{name: "part", part: id})
 	return p.err
@@ -68,6 +69,7 @@ type harness struct {
 
 func newHarness() *harness {
 	h := &harness{player: &fakePlayer{state: app.State{
+		DetailPhase:  app.DetailReady,
 		Video:        catalog.Video{ID: "preview-video", Title: "Fixture preview", Creator: "Preview creator", Description: "Original local fixture description", CoverID: "preview-cover", Parts: []catalog.Part{{ID: "part-1", Title: "First", Duration: 10 * time.Second}, {ID: "part-2", Title: "Second", Duration: 10 * time.Second}}},
 		SelectedPart: "part-1", PlaybackPart: "part-1", Volume: .2, Rate: 1,
 		Playback: playback.Snapshot{State: playback.Paused, Generation: 1, Duration: 10 * time.Second, Position: time.Second},

@@ -16,9 +16,18 @@ var (
 	accent = gui.RGB(251, 114, 153)
 )
 
+// Render pumps UI-thread events through Tick, which can accept source results
+// and open media. Outside that pump and explicit user actions, sampling State
+// and rebuilding the layout do not issue player commands or initiate loading.
 func (v *View) Render(c *gui.Context) {
 	v.Player.Tick()
 	s := v.Player.State()
+	if !partsReady(s) {
+		v.partsOpen = false
+	}
+	if !usable(s) {
+		v.speedOpen = false
+	}
 	if v.lastActivity.IsZero() {
 		v.active()
 	}
@@ -29,7 +38,7 @@ func (v *View) Render(c *gui.Context) {
 		v.suppressClick = false
 		v.active()
 	}
-	if s.Playback.State != playback.Closed {
+	if s.Closing || s.Playback.State != playback.Closed {
 		c.After(playback.PollInterval)
 	}
 	w, h := c.Size()
@@ -46,7 +55,7 @@ func (v *View) Render(c *gui.Context) {
 		gui.Scroll(c.Key("preview-page")).Fill().Padding(24).Gap(18).Background(gui.RGB(246, 247, 250)).Children(func() {
 			gui.Row(c).Gap(12).AlignItems(gui.Center).Children(func() {
 				gui.Box(c.Key("preview-cover")).Size(80, 45).Background(gui.RGB(225, 229, 236)).Role(gui.RoleImage).Label("Cover for " + s.Video.Title).Children(func() {
-					if v.Cover != nil {
+					if v.Cover != nil && s.DetailPhase == app.DetailReady {
 						v.Cover(c, s.Video.CoverID)
 					}
 				})
@@ -94,28 +103,7 @@ func (v *View) player(c *gui.Context, s app.State, w, h float32, fullscreen bool
 		} else {
 			v.controlsHeld = false
 		}
-		if s.Playback.State == playback.Loading {
-			gui.Text(c.Key("loading-state"), "Loading…").Absolute().Left(18).Top(18).TextColor(gui.RGB(245, 245, 248)).FontSize(15)
-		}
-		if s.Playback.State == playback.Failed || s.SelectionError != playback.NoError || v.lastError != playback.NoError {
-			gui.Column(c.Key("player-errors")).Absolute().Left(18).Top(18).Gap(7).Padding(10).Background(gui.RGB(44, 30, 38)).Children(func() {
-				if s.SelectionError != playback.NoError {
-					gui.Text(c, "Could not select "+partTitle(s, s.SelectedPart)).FontSize(13).TextColor(gui.RGB(255, 230, 238))
-					if gui.Button(c.Key("retry-selection"), "Retry selection").Height(32).Clicked() {
-						v.action(c, v.Player.RetrySelection)
-					}
-				}
-				if s.Playback.State == playback.Failed {
-					gui.Text(c, "Playback failed · "+string(s.Playback.Error)).TextColor(gui.RGB(255, 230, 238))
-					if gui.Button(c.Key("retry-playback"), "Retry playback").Height(32).Clicked() {
-						v.action(c, v.Player.RetryPlayback)
-					}
-				}
-				if v.lastError != playback.NoError {
-					gui.Text(c, "Action unavailable · "+string(v.lastError)).TextColor(gui.RGB(255, 230, 238))
-				}
-			})
-		}
+		v.status(c, s, w)
 	})
 	// Popover dismisses on outside press and lets that press reach its target.
 	// Swallow only a captured video press, not Escape or another control.
@@ -125,12 +113,63 @@ func (v *View) player(c *gui.Context, s app.State, w, h float32, fullscreen bool
 			v.suppressClick = true
 		}
 	}
-	v.videoInput(c, video)
+	v.videoInput(c, s, video)
 	if !v.controlsHeld && !v.partsOpen && !v.speedOpen && s.Playback.State == playback.Playing {
 		if remaining := overlayDelay - v.now().Sub(v.lastActivity); remaining > 0 {
 			c.After(remaining)
 		}
 	}
+}
+
+func (v *View) status(c *gui.Context, s app.State, w float32) {
+	white := gui.RGB(245, 245, 248)
+	gui.Column(c.Key("player-status")).Absolute().Left(18).Top(18).Width(max(float32(1), w-36)).Gap(7).Children(func() {
+		if s.Closing {
+			gui.Text(c.Key("closing-state"), "Closing…").TextColor(white).FontSize(15)
+		} else {
+			switch s.DetailPhase {
+			case app.DetailInitial:
+				gui.Text(c.Key("detail-state"), "Preparing video…").TextColor(white).FontSize(15)
+			case app.DetailLoading:
+				gui.Text(c.Key("detail-state"), "Loading video details…").TextColor(white).FontSize(15)
+			}
+			if s.ResolvingPart != "" {
+				gui.Text(c.Key("resolving-part"), "Loading playback address for "+partTitle(s, s.ResolvingPart)).TextColor(white).FontSize(15)
+			}
+			if s.Playback.State == playback.Loading {
+				gui.Text(c.Key("loading-state"), "Loading…").TextColor(white).FontSize(15)
+			}
+		}
+		if s.DetailPhase == app.DetailFailed || s.Playback.State == playback.Failed || s.SelectionError != playback.NoError || s.PlaybackRetryError != playback.NoError || v.lastError != playback.NoError {
+			gui.Column(c.Key("player-errors")).Gap(7).Padding(10).Background(gui.RGB(44, 30, 38)).Children(func() {
+				if s.DetailPhase == app.DetailFailed {
+					gui.Text(c, "Could not load video details · "+string(s.DetailError)).TextColor(gui.RGB(255, 230, 238))
+					if gui.Button(c.Key("retry-detail"), "Retry details").Height(32).Disabled(closed(s)).Clicked() {
+						v.action(c, v.Player.RetryDetail)
+					}
+				}
+				if s.SelectionError != playback.NoError {
+					gui.Text(c, "Could not select "+partTitle(s, s.SelectedPart)).FontSize(13).TextColor(gui.RGB(255, 230, 238))
+					if gui.Button(c.Key("retry-selection"), "Retry selection").Height(32).Disabled(!partsReady(s) || s.ResolvingPart != "").Clicked() {
+						v.action(c, v.Player.RetrySelection)
+					}
+				}
+				if s.Playback.State == playback.Failed || s.PlaybackRetryError != playback.NoError {
+					message := "Playback failed · " + string(s.Playback.Error)
+					if s.PlaybackRetryError != playback.NoError {
+						message = "Could not reload playback · " + string(s.PlaybackRetryError)
+					}
+					gui.Text(c, message).TextColor(gui.RGB(255, 230, 238))
+					if gui.Button(c.Key("retry-playback"), "Retry playback").Height(32).Disabled(!partsReady(s) || s.ResolvingPart != "" || s.PlaybackPart == "").Clicked() {
+						v.action(c, v.Player.RetryPlayback)
+					}
+				}
+				if v.lastError != playback.NoError {
+					gui.Text(c, "Action unavailable · "+string(v.lastError)).TextColor(gui.RGB(255, 230, 238))
+				}
+			})
+		}
+	})
 }
 
 func (v *View) transport(c *gui.Context, s app.State, w float32) {
@@ -156,12 +195,12 @@ func (v *View) transport(c *gui.Context, s app.State, w float32) {
 			v.action(c, v.Player.Toggle)
 		}
 		last := len(s.Video.Parts) == 0 || s.SelectedPart == s.Video.Parts[len(s.Video.Parts)-1].ID
-		if gui.Button(c.Key("next-part"), "Next").Height(32).MinWidth(44).Tooltip("Next part").Disabled(last || !usable(s)).Clicked() {
+		if gui.Button(c.Key("next-part"), "Next").Height(32).MinWidth(44).Tooltip("Next part").Disabled(last || !partsReady(s)).Clicked() {
 			v.action(c, v.Player.NextPart)
 		}
 		gui.Text(c, clockText(s.Playback.Position)+" / "+clockText(s.Playback.Duration)).FontSize(12).TextColor(white)
 		gui.Box(c).Grow(1)
-		parts := gui.Button(c.Key("parts-menu"), "Parts").Height(32).Tooltip("Choose a part").HasPopup(gui.PopupMenu)
+		parts := gui.Button(c.Key("parts-menu"), "Parts").Height(32).Tooltip("Choose a part").HasPopup(gui.PopupMenu).Disabled(!partsReady(s))
 		if parts.Clicked() {
 			v.partsOpen = !v.partsOpen
 			v.speedOpen = false
@@ -207,7 +246,7 @@ func (v *View) transport(c *gui.Context, s app.State, w float32) {
 		if v.Fullscreen() {
 			full = "Exit full"
 		}
-		if gui.Button(c.Key("fullscreen-toggle"), full).Height(32).Tooltip("Toggle fullscreen (F)").Clicked() {
+		if gui.Button(c.Key("fullscreen-toggle"), full).Height(32).Tooltip("Toggle fullscreen (F)").Disabled(closed(s)).Clicked() {
 			v.fullscreen(c, !v.Fullscreen())
 		}
 	})
@@ -233,7 +272,7 @@ func (v *View) partButtons(c *gui.Context, s app.State, popup bool) {
 			} else if p.ID == s.SelectedPart {
 				label += " · requested"
 			}
-			b := gui.Button(c.Key(key), label).Height(36).MinWidth(220).Tooltip(label).AccessSelected(p.ID == s.SelectedPart).Disabled(s.Playback.State == playback.Closed)
+			b := gui.Button(c.Key(key), label).Height(36).MinWidth(220).Tooltip(label).AccessSelected(p.ID == s.SelectedPart).Disabled(!partsReady(s))
 			if b.Clicked() {
 				v.action(c, func() error { return v.Player.SelectPart(p.ID) })
 				v.partsOpen = false

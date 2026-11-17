@@ -16,7 +16,8 @@ const overlayDelay = 3 * time.Second
 
 // View is UI-thread-only and lives for the window's lifetime. Composition supplies
 // the native fullscreen state and positive platform double-click interval. Now
-// may be nil to use time.Now; tests inject their clock. Render never opens media.
+// may be nil to use time.Now; tests inject their clock. Render pumps source and
+// playback events on the UI thread before rebuilding the view.
 type View struct {
 	Player              app.Player
 	Surface             func(*gui.Context, float32, float32)
@@ -86,10 +87,15 @@ func (v *View) fullscreen(c *gui.Context, enabled bool) {
 }
 
 func (v *View) overlayVisible(s app.State) bool {
-	return s.Playback.State != playback.Playing || v.controlsHeld || v.seek.pressed || v.volume.pressed || v.partsOpen || v.speedOpen || v.now().Sub(v.lastActivity) < overlayDelay
+	return s.Closing || s.ResolvingPart != "" || s.Playback.State != playback.Playing || v.controlsHeld || v.seek.pressed || v.volume.pressed || v.partsOpen || v.speedOpen || v.now().Sub(v.lastActivity) < overlayDelay
 }
 
-func (v *View) videoInput(c *gui.Context, video gui.Element) {
+func (v *View) videoInput(c *gui.Context, s app.State, video gui.Element) {
+	if closed(s) {
+		v.pendingClick = time.Time{}
+		v.suppressClick = false
+		return
+	}
 	x, y, over := video.PointerPosition()
 	if over && (!v.pointerOver || x != v.pointerX || y != v.pointerY) {
 		v.active()
@@ -103,9 +109,12 @@ func (v *View) videoInput(c *gui.Context, video gui.Element) {
 	} else if doubled {
 		v.suppressClick = !clicked // native double-click arrives on the second press
 		v.fullscreen(c, !v.Fullscreen())
-	} else if clicked {
+	} else if clicked && usable(s) {
 		v.pendingClick = v.now().Add(v.DoubleClickInterval)
 		v.active()
+	}
+	if !usable(s) {
+		v.pendingClick = time.Time{}
 	}
 	if !v.pendingClick.IsZero() {
 		remaining := v.pendingClick.Sub(v.now())
@@ -118,6 +127,9 @@ func (v *View) videoInput(c *gui.Context, video gui.Element) {
 }
 
 func (v *View) shortcuts(c *gui.Context, s app.State) {
+	if closed(s) {
+		return
+	}
 	// Built after the controls, so their focused native input handlers and popup
 	// scopes get first refusal (slider arrows, button Space, text input, Escape).
 	if c.Shortcut(0, gui.KeyEscape) {
@@ -135,9 +147,13 @@ func (v *View) shortcuts(c *gui.Context, s app.State) {
 		}
 		switch key {
 		case gui.KeySpace:
-			v.action(c, v.Player.Toggle)
+			if usable(s) {
+				v.action(c, v.Player.Toggle)
+			}
 		case gui.KeyM:
-			v.action(c, v.Player.ToggleMute)
+			if usable(s) {
+				v.action(c, v.Player.ToggleMute)
+			}
 		case gui.KeyF:
 			v.fullscreen(c, !v.Fullscreen())
 		}
@@ -162,11 +178,17 @@ func (v *View) shortcuts(c *gui.Context, s app.State) {
 	}
 }
 
+func closed(s app.State) bool {
+	return s.Closing || s.Playback.State == playback.Closed
+}
+func partsReady(s app.State) bool {
+	return s.DetailPhase == app.DetailReady && !closed(s)
+}
 func usable(s app.State) bool {
-	return s.Playback.State != playback.Idle && s.Playback.State != playback.Closed
+	return partsReady(s) && (s.ResolvingPart != "" || s.Playback.State != playback.Idle)
 }
 func seekable(s app.State) bool {
-	return s.Playback.Duration > 0 && (s.Playback.State == playback.Ready || s.Playback.State == playback.Paused || s.Playback.State == playback.Playing)
+	return partsReady(s) && s.Playback.Duration > 0 && (s.Playback.State == playback.Ready || s.Playback.State == playback.Paused || s.Playback.State == playback.Playing)
 }
 func partTitle(s app.State, id catalog.PartID) string {
 	for i, p := range s.Video.Parts {
