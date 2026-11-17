@@ -12,19 +12,31 @@ import (
 )
 
 // Session owns application intent on the same UI thread as its Controller.
-// Construction and State never open media or issue playback commands.
+// The source worker only produces results; Tick accepts them on this thread.
+// Construction and State perform no source or playback operations.
 type Session struct {
-	source     Source
-	controller *playback.Controller
-	video      catalog.Video
-	ctx        context.Context
-	started    bool
-	closed     bool
+	source      Source
+	controller  *playback.Controller
+	video       catalog.Video
+	detailPhase DetailPhase
+	detailError playback.ErrorCode
+	ctx         context.Context
+	cancel      context.CancelFunc
+	started     bool
+	closed      bool
+
+	requests         chan sourceRequest
+	results          chan sourceResult
+	done             chan struct{}
+	pending          *sourceAttempt
+	sourceGeneration uint64
+	requestContext   func(context.Context, time.Duration) (context.Context, context.CancelFunc)
 
 	selected, playback  catalog.PartID
 	selectionError      playback.ErrorCode
 	selectionRetry      catalog.PartID
 	selectionIntent     bool
+	playbackRetryError  playback.ErrorCode
 	input               playback.Input
 	expiresAt           time.Time
 	hasInput            bool
@@ -38,33 +50,43 @@ type Session struct {
 
 var _ Player = (*Session)(nil)
 
-// New reads the video detail once with ctx. ctx bounds only that call; Start
-// supplies the context for later resolution and playback.
-func New(ctx context.Context, source Source, controller *playback.Controller) (*Session, error) {
-	if ctx == nil || source == nil || controller == nil {
+// New validates dependencies without invoking Source or starting a worker.
+// Start supplies the lifetime context for both source work and playback.
+func New(source Source, controller *playback.Controller) (*Session, error) {
+	if source == nil || controller == nil {
 		return nil, playback.Invalid
 	}
-	video, err := source.Detail(ctx)
-	if err != nil {
-		return nil, safeError(err)
-	}
+	return &Session{
+		source: source, controller: controller, detailPhase: DetailInitial,
+		requests: make(chan sourceRequest, 1), results: make(chan sourceResult, 1), done: make(chan struct{}),
+		requestContext: context.WithTimeout, now: time.Now,
+		volume: 1, rate: 1, unmutedVolume: 1,
+	}, nil
+}
+
+func validateVideo(video catalog.Video) error {
 	if strings.TrimSpace(string(video.ID)) == "" || strings.TrimSpace(video.Title) == "" ||
 		strings.TrimSpace(video.Creator) == "" || strings.TrimSpace(video.Description) == "" ||
 		strings.TrimSpace(video.CoverID) == "" || len(video.Parts) == 0 {
-		return nil, playback.Invalid
+		return playback.Invalid
 	}
 	seen := make(map[catalog.PartID]bool, len(video.Parts))
 	for _, part := range video.Parts {
 		if strings.TrimSpace(string(part.ID)) == "" || seen[part.ID] || strings.TrimSpace(part.Title) == "" || part.Duration <= 0 {
-			return nil, playback.Invalid
+			return playback.Invalid
 		}
 		seen[part.ID] = true
 	}
-	video.Parts = append([]catalog.Part(nil), video.Parts...)
-	return &Session{source: source, controller: controller, video: video, volume: 1, rate: 1, unmutedVolume: 1, now: time.Now}, nil
+	return nil
 }
 
 func safeError(err error) playback.ErrorCode {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return playback.Timeout
+	}
+	if errors.Is(err, context.Canceled) {
+		return playback.Canceled
+	}
 	var code playback.ErrorCode
 	if errors.As(err, &code) {
 		switch code {
@@ -76,15 +98,29 @@ func safeError(err error) playback.ErrorCode {
 }
 
 func (s *Session) State() State {
-	video := s.video
-	video.Parts = append([]catalog.Part(nil), video.Parts...)
-	return State{Video: video, SelectedPart: s.selected, PlaybackPart: s.playback,
-		SelectionError: s.selectionError, Playback: s.controller.Snapshot(),
+	state := State{DetailPhase: s.detailPhase, DetailError: s.detailError, Video: cloneVideo(s.video),
+		SelectedPart: s.selected, PlaybackPart: s.playback, SelectionError: s.selectionError,
+		PlaybackRetryError: s.playbackRetryError, Playback: s.controller.Snapshot(),
 		DesiredPlaying: s.intent, Volume: s.volume, Rate: s.rate}
+	if s.pending != nil && s.pending.request.purpose != detailRequest {
+		state.ResolvingPart, state.DesiredPlaying = s.pending.request.part, s.pending.intent
+	}
+	if s.closed {
+		select {
+		case <-s.done:
+		default:
+			state.Closing = true
+		}
+	}
+	return state
 }
 
 // Engine exposes the original engine to composition, never through Player.
 func (s *Session) Engine() playback.Engine { return s.controller.Engine() }
+
+// Done signals source-worker termination. Receiving from it is safe off the
+// UI thread; it neither disposes playback nor requests window destruction.
+func (s *Session) Done() <-chan struct{} { return s.done }
 
 func (s *Session) Start(ctx context.Context) error {
 	if s.closed {
@@ -94,10 +130,13 @@ func (s *Session) Start(ctx context.Context) error {
 		return playback.Invalid
 	}
 	if s.started {
-		return nil
+		return s.active()
 	}
-	s.started, s.ctx = true, ctx
-	return s.selectPart(s.video.Parts[0].ID, false)
+	s.started = true
+	s.ctx, s.cancel = context.WithCancel(ctx)
+	s.loadDetail()
+	go runSource(s.ctx, s.source, s.requests, s.results, s.done)
+	return nil
 }
 
 func (s *Session) active() error {
@@ -114,6 +153,56 @@ func (s *Session) active() error {
 	return nil
 }
 
+func (s *Session) detailReady() error {
+	if err := s.active(); err != nil {
+		return err
+	}
+	if s.detailPhase != DetailReady {
+		return playback.Invalid
+	}
+	return nil
+}
+
+func (s *Session) RetryDetail() error {
+	if err := s.active(); err != nil {
+		return err
+	}
+	if s.detailPhase != DetailFailed {
+		return playback.Invalid
+	}
+	s.loadDetail()
+	return nil
+}
+
+func (s *Session) loadDetail() {
+	s.detailPhase, s.detailError = DetailLoading, playback.NoError
+	s.submit(detailRequest, "", false)
+}
+
+// retireRequest also removes queued work. The worker keeps ownership of an
+// in-flight call until it returns, even if cancellation is not cooperative.
+func (s *Session) retireRequest() {
+	s.sourceGeneration++
+	if s.pending != nil {
+		s.pending.cancel()
+		s.pending = nil
+	}
+	select {
+	case <-s.requests:
+	default:
+	}
+}
+
+func (s *Session) submit(purpose sourcePurpose, part catalog.PartID, intent bool) {
+	s.retireRequest()
+	ctx, cancel := s.requestContext(s.ctx, sourceTimeout)
+	request := sourceRequest{generation: s.sourceGeneration, purpose: purpose, part: part, ctx: ctx}
+	s.pending = &sourceAttempt{request: request, cancel: cancel, intent: intent}
+	// There is one UI-thread producer. retireRequest emptied this capacity-one
+	// mailbox, and the worker can only remove from it. Submission cannot wait.
+	s.requests <- request
+}
+
 func (s *Session) partIndex(id catalog.PartID) int {
 	for i, part := range s.video.Parts {
 		if part.ID == id {
@@ -124,58 +213,37 @@ func (s *Session) partIndex(id catalog.PartID) int {
 }
 
 func (s *Session) SelectPart(id catalog.PartID) error {
-	if err := s.active(); err != nil {
+	if err := s.detailReady(); err != nil {
 		return err
 	}
 	if s.partIndex(id) < 0 {
 		return playback.Invalid
 	}
 	s.selected = id
+	s.selectionError, s.selectionRetry = playback.NoError, ""
+	if s.pending != nil && s.pending.request.part == id {
+		s.pending.intent = true
+		return nil
+	}
+	// Invalidate B before any accepted-A fast path, including a no-op/resume
+	// which does not advance the native playback generation.
+	s.retireRequest()
 	if id == s.playback && s.hasInput {
-		s.selectionError, s.selectionRetry = playback.NoError, ""
 		switch s.controller.Snapshot().State {
-		case playback.Loading:
-			s.intent, s.retryIntent = true, true
-			return nil
-		case playback.Playing:
-			return nil
-		case playback.Ready, playback.Paused:
-			return s.play(true)
+		case playback.Loading, playback.Playing, playback.Ready, playback.Paused:
+			return s.playAccepted(true)
 		case playback.Ended, playback.Failed:
 			return s.reopen(true)
 		}
 	}
-	return s.selectPart(id, true)
+	s.selectPart(id, true)
+	return nil
 }
 
-func (s *Session) selectPart(id catalog.PartID, intent bool) error {
+func (s *Session) selectPart(id catalog.PartID, intent bool) {
 	s.selected = id
-	return s.resolveAndOpen(id, intent)
-}
-
-// resolveAndOpen resolves id and opens it. A failure is recorded as a
-// selection error that RetrySelection repeats; the current selection is kept.
-func (s *Session) resolveAndOpen(id catalog.PartID, intent bool) error {
-	r, err := s.resolve(id)
-	if err != nil {
-		s.selectionError = safeError(err)
-		s.selectionRetry, s.selectionIntent = id, intent
-		return s.selectionError
-	}
 	s.selectionError, s.selectionRetry = playback.NoError, ""
-	return s.open(id, r.Input, r.ExpiresAt, intent)
-}
-
-// resolve returns a validated resolution that is usable now.
-func (s *Session) resolve(id catalog.PartID) (Resolution, error) {
-	r, err := s.source.Resolve(s.ctx, id)
-	if err == nil {
-		err = r.Input.Validate()
-	}
-	if err == nil && !s.usable(r.ExpiresAt) {
-		err = playback.Media
-	}
-	return r, err
+	s.submit(selectionRequest, id, intent)
 }
 
 // usable reports whether an input with this expiry may still be opened.
@@ -183,33 +251,46 @@ func (s *Session) usable(expiresAt time.Time) bool {
 	return expiresAt.IsZero() || s.now().Before(expiresAt.Add(-ResolutionMargin))
 }
 
-// reopen restarts the accepted playback part, resolving it again when the
-// cached input has expired. Selection state belongs to the selected part: when
-// a different part is selected, its pending error and retry are left intact
-// and a failed re-resolution is returned without becoming a selection retry.
+// reopen targets accepted playback. A different selected part's failure and
+// retry intent remain intact, including while an expired input is refreshed.
 func (s *Session) reopen(intent bool) error {
-	if s.usable(s.expiresAt) {
-		return s.open(s.playback, s.input, s.expiresAt, intent)
-	}
+	s.playbackRetryError = playback.NoError
 	if s.playback == s.selected {
-		return s.resolveAndOpen(s.playback, intent)
+		s.selectionError, s.selectionRetry = playback.NoError, ""
 	}
-	r, err := s.resolve(s.playback)
-	if err != nil {
-		return safeError(err)
+	if s.usable(s.expiresAt) {
+		err := s.open(s.playback, s.input, s.expiresAt, intent)
+		if err != nil && !s.closed && s.playback != s.selected {
+			s.playbackRetryError = safeError(err)
+		}
+		return err
 	}
-	return s.open(s.playback, r.Input, r.ExpiresAt, intent)
+	s.submit(playbackRequest, s.playback, intent)
+	return nil
 }
 
 func (s *Session) open(id catalog.PartID, in playback.Input, expiresAt time.Time, intent bool) error {
+	if s.closed {
+		return playback.IsClosed
+	}
+	if err := sourceContextError(s.ctx); err != nil {
+		s.cancelSession(safeError(err))
+		return safeError(err)
+	}
+	if !s.usable(expiresAt) {
+		return playback.Media
+	}
 	in.Headers = maps.Clone(in.Headers)
 	before := s.controller.Snapshot().Generation
+	// The completed request's context is canceled by result consumption. The
+	// native engine must instead inherit the whole session lifetime.
 	err := s.controller.Open(s.ctx, in)
 	after := s.controller.Snapshot()
 	if after.Generation != before {
 		s.playback, s.input, s.expiresAt, s.hasInput = id, in, expiresAt, true
 		s.intent, s.retryIntent = intent, intent
 		s.generation, s.initializing = after.Generation, true
+		s.playbackRetryError = playback.NoError
 		s.observeTerminal(after)
 	}
 	if err != nil {
@@ -219,7 +300,7 @@ func (s *Session) open(id catalog.PartID, in playback.Input, expiresAt time.Time
 }
 
 func (s *Session) NextPart() error {
-	if err := s.active(); err != nil {
+	if err := s.detailReady(); err != nil {
 		return err
 	}
 	i := s.partIndex(s.selected)
@@ -230,22 +311,36 @@ func (s *Session) NextPart() error {
 }
 
 func (s *Session) RetrySelection() error {
-	if err := s.active(); err != nil {
+	if err := s.detailReady(); err != nil {
 		return err
+	}
+	if s.pending != nil {
+		if s.pending.request.part == s.selected && s.selectionRetry == "" {
+			return nil
+		}
+		return playback.Invalid
 	}
 	if s.selectionRetry == "" {
 		return playback.Invalid
 	}
-	return s.selectPart(s.selectionRetry, s.selectionIntent)
+	s.selectPart(s.selectionRetry, s.selectionIntent)
+	return nil
 }
 
 func (s *Session) RetryPlayback() error {
-	if err := s.active(); err != nil {
+	if err := s.detailReady(); err != nil {
 		return err
 	}
 	if !s.hasInput {
 		return playback.Invalid
 	}
+	if s.pending != nil {
+		if s.pending.request.part == s.playback {
+			return nil
+		}
+		return playback.Invalid
+	}
+	s.playbackRetryError = playback.NoError
 	if s.controller.Snapshot().State == playback.Loading {
 		return nil
 	}
@@ -256,21 +351,36 @@ func (s *Session) Play() error  { return s.play(true) }
 func (s *Session) Pause() error { return s.play(false) }
 
 func (s *Session) play(intent bool) error {
-	if err := s.active(); err != nil {
+	if err := s.detailReady(); err != nil {
 		return err
 	}
+	return s.setPlaying(intent)
+}
+
+func (s *Session) setPlaying(intent bool) error {
 	state := s.controller.Snapshot().State
-	if state == playback.Ended && intent {
+	if s.pending != nil {
+		s.pending.intent = intent
+		// Do not replay an old ended/failed engine over a pending target, or
+		// issue commands before the first native engine has been opened.
+		if state != playback.Loading && state != playback.Ready && state != playback.Paused && state != playback.Playing {
+			return nil
+		}
+	} else if state == playback.Ended && intent {
 		return s.reopen(true)
 	}
+	return s.playAccepted(intent)
+}
+
+func (s *Session) playAccepted(intent bool) error {
+	state := s.controller.Snapshot().State
 	if state != playback.Loading && state != playback.Ready && state != playback.Paused && state != playback.Playing {
 		return playback.Invalid
 	}
 	alreadyRequested := s.intent == intent
 	s.intent, s.retryIntent = intent, intent
-	// Tick may have just applied the pending intent at first readiness. The
-	// sampled state can also lag queued commands, so only unchanged intent
-	// can suppress a command once ready.
+	// Native snapshots can lag commands. Suppression follows accepted intent,
+	// never the separate intent of the part which is still resolving.
 	if state == playback.Loading || alreadyRequested {
 		return nil
 	}
@@ -282,17 +392,20 @@ func (s *Session) play(intent bool) error {
 }
 
 func (s *Session) Toggle() error {
-	if err := s.active(); err != nil {
+	if err := s.detailReady(); err != nil {
 		return err
+	}
+	if s.pending != nil {
+		return s.setPlaying(!s.pending.intent)
 	}
 	if s.controller.Snapshot().State == playback.Ended {
 		return s.reopen(true)
 	}
-	return s.play(!s.intent)
+	return s.setPlaying(!s.intent)
 }
 
 func (s *Session) Seek(position time.Duration) error {
-	if err := s.active(); err != nil {
+	if err := s.detailReady(); err != nil {
 		return err
 	}
 	state := s.controller.Snapshot()
@@ -326,7 +439,7 @@ func (s *Session) setting(cmd playback.Command) error {
 		s.rate = cmd.Value
 	}
 	state := s.controller.Snapshot().State
-	if state == playback.Loading || state == playback.Failed || state == playback.Ended {
+	if state != playback.Ready && state != playback.Paused && state != playback.Playing {
 		return nil
 	}
 	return s.command(cmd)
@@ -356,7 +469,79 @@ func (s *Session) observeTerminal(state playback.Snapshot) {
 	case playback.Ended:
 		s.intent, s.retryIntent, s.initializing = false, false, false
 	case playback.Closed:
-		s.intent, s.retryIntent, s.initializing, s.closed = false, false, false, true
+		s.stopSource()
+		if s.controller.Engine() != nil {
+			_ = s.controller.Close()
+		}
+	}
+}
+
+// failAttempt attributes failure to the requested target, not the old native
+// engine. A playback refresh must not erase a different selection's failure.
+func (s *Session) failAttempt(attempt *sourceAttempt, code playback.ErrorCode) {
+	switch attempt.request.purpose {
+	case detailRequest:
+		s.detailPhase, s.detailError = DetailFailed, code
+	case playbackRequest:
+		if attempt.request.part != s.selected {
+			s.playbackRetryError = code
+			return
+		}
+		fallthrough
+	case selectionRequest:
+		s.selectionError = code
+		s.selectionRetry, s.selectionIntent = attempt.request.part, attempt.intent
+	}
+}
+
+func (s *Session) matches(request sourceRequest) bool {
+	return !s.closed && sourceContextError(s.ctx) == nil && s.pending != nil &&
+		s.pending.request.generation == request.generation &&
+		s.pending.request.purpose == request.purpose && s.pending.request.part == request.part
+}
+
+func (s *Session) accept(result sourceResult) {
+	defer close(result.consumed)
+	if !s.matches(result.request) {
+		return
+	}
+	attempt := s.pending
+	err := result.err
+	if requestErr := sourceContextError(attempt.request.ctx); requestErr != nil {
+		err = requestErr
+	}
+	if err == nil {
+		if result.request.purpose == detailRequest {
+			err = validateVideo(result.video)
+		} else {
+			err = result.resolution.Input.Validate()
+			if err == nil && !s.usable(result.resolution.ExpiresAt) {
+				err = playback.Media
+			}
+		}
+	}
+	if !s.matches(result.request) {
+		return
+	}
+	if requestErr := sourceContextError(attempt.request.ctx); requestErr != nil {
+		err = requestErr
+	}
+	if err != nil {
+		s.failAttempt(attempt, safeError(err))
+		s.retireRequest()
+		return
+	}
+	s.retireRequest()
+	if result.request.purpose == detailRequest {
+		s.video = cloneVideo(result.video)
+		s.detailPhase, s.detailError = DetailReady, playback.NoError
+		s.selectPart(s.video.Parts[0].ID, false)
+		return
+	}
+	before := s.controller.Snapshot().Generation
+	err = s.open(result.request.part, result.resolution.Input, result.resolution.ExpiresAt, attempt.intent)
+	if err != nil && !s.closed && (result.request.purpose == playbackRequest || s.controller.Snapshot().Generation == before) {
+		s.failAttempt(attempt, safeError(err))
 	}
 }
 
@@ -365,8 +550,28 @@ func (s *Session) Tick() {
 		return
 	}
 	s.controller.Tick()
+	if err := sourceContextError(s.ctx); err != nil {
+		s.cancelSession(safeError(err))
+		return
+	}
+	s.observeTerminal(s.controller.Snapshot())
+	if s.closed {
+		return
+	}
+	// Logical timeout is observable even while a source ignores cancellation.
+	// Its worker remains owned and prevents another concurrent source call.
+	if s.pending != nil {
+		if err := sourceContextError(s.pending.request.ctx); err != nil {
+			s.failAttempt(s.pending, safeError(err))
+			s.retireRequest()
+		}
+	}
+	select {
+	case result := <-s.results:
+		s.accept(result)
+	default:
+	}
 	state := s.controller.Snapshot()
-	s.observeTerminal(state)
 	if !s.initializing || state.Generation != s.generation || (state.State != playback.Ready && state.State != playback.Paused && state.State != playback.Playing) {
 		return
 	}
@@ -381,12 +586,53 @@ func (s *Session) Tick() {
 	}
 }
 
-func (s *Session) Close() error {
+func (s *Session) stopSource() {
 	if s.closed {
-		return nil
+		return
 	}
 	s.closed = true
 	s.intent, s.retryIntent, s.initializing = false, false, false
 	s.selectionRetry = ""
+	s.retireRequest()
+	if s.cancel != nil {
+		s.cancel()
+	}
+	if !s.started {
+		close(s.done)
+	}
+}
+
+func (s *Session) cancelSession(code playback.ErrorCode) {
+	if s.pending != nil {
+		s.failAttempt(s.pending, code)
+	}
+	s.stopSource()
+	// Also observe a deadline whose timer had not fired at the earlier Tick.
+	// stopSource has now canceled the native engine's session context.
+	s.controller.Tick()
+	// Preserve its Closed/Canceled observation rather than replacing it with
+	// Closed/NoError. No-engine cancellation still closes without an attempt.
+	if s.controller.Snapshot().State != playback.Closed || s.controller.Engine() != nil {
+		_ = s.controller.Close()
+	}
+}
+
+func (s *Session) Close() error {
+	if s.closed {
+		return nil
+	}
+	// Observe native cancellation without accepting a source result just as
+	// the user closes. Source completion is joined separately through Done.
+	s.controller.Tick()
+	if s.started {
+		if err := sourceContextError(s.ctx); err != nil {
+			s.cancelSession(safeError(err))
+			return nil
+		}
+	}
+	s.stopSource()
+	if s.controller.Snapshot().State == playback.Closed && s.controller.Engine() == nil {
+		return nil
+	}
 	return s.controller.Close()
 }

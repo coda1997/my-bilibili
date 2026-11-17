@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"reflect"
+	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -14,6 +17,7 @@ import (
 )
 
 type fakeSource struct {
+	mu        sync.Mutex
 	video     catalog.Video
 	detailErr error
 	inputs    map[catalog.PartID]playback.Input
@@ -24,13 +28,31 @@ type fakeSource struct {
 }
 
 func (f *fakeSource) Detail(ctx context.Context) (catalog.Video, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.contexts = append(f.contexts, ctx)
-	return f.video, f.detailErr
+	return cloneVideo(f.video), f.detailErr
 }
 func (f *fakeSource) Resolve(ctx context.Context, id catalog.PartID) (Resolution, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.contexts = append(f.contexts, ctx)
 	f.resolved = append(f.resolved, id)
-	return Resolution{Input: f.inputs[id], ExpiresAt: f.expires[id]}, f.errors[id]
+	in := f.inputs[id]
+	in.Headers = maps.Clone(in.Headers)
+	return Resolution{Input: in, ExpiresAt: f.expires[id]}, f.errors[id]
+}
+
+func (f *fakeSource) edit(change func(*fakeSource)) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	change(f)
+}
+
+func (f *fakeSource) history() ([]catalog.PartID, []context.Context) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.resolved), slices.Clone(f.contexts)
 }
 
 type fakeEngine struct {
@@ -105,17 +127,51 @@ func newHarness(t *testing.T) *harness {
 		inputs: map[catalog.PartID]playback.Input{"p1": {FilePath: "/fixture-one.mp4"}, "p2": {FilePath: "/fixture-two.mp4"}}, errors: map[catalog.PartID]error{}, expires: map[catalog.PartID]time.Time{},
 	}}
 	var err error
-	h.s, err = New(context.Background(), h.source, playback.New(h.opener, func() time.Time { return h.now }))
+	h.s, err = New(h.source, playback.New(h.opener, func() time.Time { return h.now }))
 	if err != nil {
 		t.Fatal(err)
 	}
 	h.s.now = func() time.Time { return h.now }
+	t.Cleanup(func() {
+		_ = h.s.Close()
+		waitDone(t, h.s.Done())
+	})
 	return h
 }
 func (h *harness) start(t *testing.T) {
 	t.Helper()
 	if err := h.s.Start(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+	h.settle(t)
+}
+
+func (h *harness) settle(t *testing.T) {
+	t.Helper()
+	for h.s.pending != nil {
+		resultReady(t, h.s)
+		h.s.Tick()
+	}
+}
+
+// Wait for publication, then leave the result for the real UI-thread pump.
+// The worker cannot publish again until Tick acknowledges this exact result.
+func resultReady(t *testing.T, session *Session) {
+	t.Helper()
+	select {
+	case result := <-session.results:
+		session.results <- result
+	case <-time.After(5 * time.Second):
+		t.Fatal("source did not publish its controlled result")
+	}
+}
+
+func waitDone(t *testing.T, done <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("owned source worker did not stop")
 	}
 }
 func (h *harness) engine() *fakeEngine { return h.opener.engines[len(h.opener.engines)-1] }
@@ -124,7 +180,7 @@ func (h *harness) tick(state playback.State) {
 	h.now = h.now.Add(playback.PollInterval)
 	h.s.Tick()
 }
-func requireError(t *testing.T, err error, want playback.ErrorCode) {
+func requireError(t *testing.T, err error, want error) {
 	t.Helper()
 	if err != want {
 		t.Fatalf("error=%v want %v", err, want)
@@ -145,30 +201,49 @@ func TestConstructionAndCopyIsolation(t *testing.T) {
 	if len(h.opener.inputs) != 0 || h.s.Engine() != nil {
 		t.Fatal("construction acquired playback")
 	}
-	h.source.video.Parts[0].Title = "source mutation"
+	if calls, contexts := h.source.history(); len(calls) != 0 || len(contexts) != 0 {
+		t.Fatal("construction called Source")
+	}
 	state := h.s.State()
+	if state.DetailPhase != DetailInitial || state.Video.Parts == nil || len(state.Video.Parts) != 0 {
+		t.Fatal("initial state must have a nonnil empty catalog", state)
+	}
+	h.start(t)
+	h.source.edit(func(src *fakeSource) { src.video.Parts[0].Title = "source mutation" })
+	state = h.s.State()
 	state.Video.Parts[0].Title = "state mutation"
 	if h.s.State().Video.Parts[0].Title != "One" {
 		t.Fatal("mutable catalog alias")
 	}
 	for _, change := range []func(*catalog.Video){
-		func(v *catalog.Video) { v.ID = "" }, func(v *catalog.Video) { v.Title = " " }, func(v *catalog.Video) { v.Creator = "" }, func(v *catalog.Video) { v.Description = "" }, func(v *catalog.Video) { v.CoverID = "" }, func(v *catalog.Video) { v.Parts = nil }, func(v *catalog.Video) { v.Parts[1].ID = v.Parts[0].ID }, func(v *catalog.Video) { v.Parts[0].Title = "" }, func(v *catalog.Video) { v.Parts[0].Duration = 0 },
+		func(v *catalog.Video) { v.ID = "" }, func(v *catalog.Video) { v.Title = " " }, func(v *catalog.Video) { v.Creator = "" }, func(v *catalog.Video) { v.Description = "" }, func(v *catalog.Video) { v.CoverID = "" }, func(v *catalog.Video) { v.Parts = nil }, func(v *catalog.Video) { v.Parts[1].ID = v.Parts[0].ID }, func(v *catalog.Video) { v.Parts[0].ID = " " }, func(v *catalog.Video) { v.Parts[0].Title = "" }, func(v *catalog.Video) { v.Parts[0].Duration = 0 },
 	} {
 		x := newHarness(t)
-		change(&x.source.video)
-		_, err := New(context.Background(), x.source, x.s.controller)
-		requireError(t, err, playback.Invalid)
+		x.source.edit(func(src *fakeSource) { change(&src.video) })
+		x.start(t)
+		state := x.s.State()
+		if state.DetailPhase != DetailFailed || state.DetailError != playback.Invalid || len(state.Video.Parts) != 0 || state.SelectedPart != "" || len(x.opener.inputs) != 0 {
+			t.Fatal("invalid detail published metadata or playback", state)
+		}
 	}
-	_, err := New(context.Background(), nil, h.s.controller)
+	_, err := New(nil, h.s.controller)
 	requireError(t, err, playback.Invalid)
-	_, err = New(context.Background(), h.source, nil)
+	_, err = New(h.source, nil)
 	requireError(t, err, playback.Invalid)
-	h.source.detailErr = errors.New("private detail path")
-	_, err = New(context.Background(), h.source, h.s.controller)
-	requireError(t, err, playback.Media)
-	h.source.detailErr = fmt.Errorf("private: %w", playback.Unsupported)
-	_, err = New(context.Background(), h.source, h.s.controller)
-	requireError(t, err, playback.Unsupported)
+	for _, test := range []struct {
+		err  error
+		code playback.ErrorCode
+	}{
+		{errors.New("private detail path"), playback.Media},
+		{fmt.Errorf("private: %w", playback.Unsupported), playback.Unsupported},
+	} {
+		x := newHarness(t)
+		x.source.edit(func(src *fakeSource) { src.detailErr = test.err })
+		x.start(t)
+		if state := x.s.State(); state.DetailPhase != DetailFailed || state.DetailError != test.code {
+			t.Fatal("detail error was not sanitized", state)
+		}
+	}
 }
 
 func TestStartupPausedOnceAndReadOnlyState(t *testing.T) {
@@ -207,9 +282,11 @@ func TestLoadingIntentSettingsAndReplacement(t *testing.T) {
 			if err := h.s.SelectPart("p1"); err != nil {
 				t.Fatal(err)
 			}
+			h.settle(t)
 			if err := h.s.SelectPart("p1"); err != nil {
 				t.Fatal(err)
 			}
+			h.settle(t)
 			if !finishPlaying {
 				if err := h.s.Pause(); err != nil {
 					t.Fatal(err)
@@ -224,6 +301,7 @@ func TestLoadingIntentSettingsAndReplacement(t *testing.T) {
 			if err := h.s.RetryPlayback(); err != nil {
 				t.Fatal(err)
 			}
+			h.settle(t)
 			if len(h.opener.inputs) != 1 || len(h.engine().commands) != 0 {
 				t.Fatal("loading reopened or commanded")
 			}
@@ -250,6 +328,7 @@ func TestLoadingIntentSettingsAndReplacement(t *testing.T) {
 	if err := h.s.SelectPart("p2"); err != nil {
 		t.Fatal(err)
 	}
+	h.settle(t)
 	if old.closed != 1 || len(old.commands) != 0 || h.s.State().Playback.Generation != 2 || h.s.State().PlaybackPart != "p2" {
 		t.Fatal("replacement lifetime/identity")
 	}
@@ -267,10 +346,12 @@ func TestCurrentPartAndEndedReplay(t *testing.T) {
 	if err := h.s.SelectPart("p1"); err != nil {
 		t.Fatal(err)
 	}
+	h.settle(t)
 	h.tick(playback.Playing)
 	if err := h.s.SelectPart("p1"); err != nil {
 		t.Fatal(err)
 	}
+	h.settle(t)
 	if len(h.opener.inputs) != 1 || countKind(h.engine(), playback.Play) != 1 {
 		t.Fatal("current part reopened or duplicate play")
 	}
@@ -305,9 +386,11 @@ func TestCurrentPartAndEndedReplay(t *testing.T) {
 	if err := h.s.NextPart(); err != nil {
 		t.Fatal(err)
 	}
+	h.settle(t)
 	if err := h.s.NextPart(); err != nil {
 		t.Fatal(err)
 	}
+	h.settle(t)
 	if len(h.opener.inputs) != 2 || h.s.State().SelectedPart != "p2" {
 		t.Fatal("last-part next not no-op")
 	}
@@ -315,14 +398,18 @@ func TestCurrentPartAndEndedReplay(t *testing.T) {
 
 func TestSelectionFailureAndSeparateRetries(t *testing.T) {
 	h := newHarness(t)
-	h.source.inputs["p1"] = playback.Input{URL: "http://127.0.0.1:8080/a", Headers: map[string]string{"X-Test": "original"}}
+	h.source.edit(func(src *fakeSource) {
+		src.inputs["p1"] = playback.Input{URL: "http://127.0.0.1:8080/a", Headers: map[string]string{"X-Test": "original"}}
+	})
 	h.start(t)
 	_ = h.s.Play()
 	h.tick(playback.Ready)
 	h.tick(playback.Playing)
 	old := h.engine()
-	h.source.errors["p2"] = errors.New("secret source URL")
-	requireError(t, h.s.SelectPart("p2"), playback.Media)
+	h.source.edit(func(src *fakeSource) { src.errors["p2"] = errors.New("secret source URL") })
+	requireError(t, h.s.SelectPart("p2"), nil)
+	h.settle(t)
+	requireError(t, h.s.State().SelectionError, playback.Media)
 	state := h.s.State()
 	if state.SelectedPart != "p2" || state.PlaybackPart != "p1" || !state.DesiredPlaying || old.closed != 0 {
 		t.Fatal(state)
@@ -331,23 +418,25 @@ func TestSelectionFailureAndSeparateRetries(t *testing.T) {
 	if h.s.State().SelectedPart != "p2" {
 		t.Fatal("unknown selection changed identity")
 	}
-	h.source.inputs["p1"].Headers["X-Test"] = "changed"
+	h.source.edit(func(src *fakeSource) { src.inputs["p1"].Headers["X-Test"] = "changed" })
 	if err := h.s.Pause(); err != nil {
 		t.Fatal(err)
 	}
 	if err := h.s.RetryPlayback(); err != nil {
 		t.Fatal(err)
 	}
+	h.settle(t)
 	if h.s.State().SelectedPart != "p2" || h.s.State().PlaybackPart != "p1" || h.s.State().SelectionError != playback.Media || h.opener.inputs[1].Headers["X-Test"] != "original" {
 		t.Fatal("retry targets or input aliased")
 	}
 	if h.s.State().DesiredPlaying {
 		t.Fatal("playback retry lost its latest pause intent")
 	}
-	delete(h.source.errors, "p2")
+	h.source.edit(func(src *fakeSource) { delete(src.errors, "p2") })
 	if err := h.s.RetrySelection(); err != nil {
 		t.Fatal(err)
 	}
+	h.settle(t)
 	if h.s.State().SelectedPart != "p2" || h.s.State().PlaybackPart != "p2" || h.s.State().SelectionError != playback.NoError || !h.s.State().DesiredPlaying {
 		t.Fatal(h.s.State())
 	}
@@ -358,14 +447,18 @@ func TestInvalidResolvedInputPreservesEngineAndFailedOpenAdvancesIdentity(t *tes
 	h := newHarness(t)
 	h.start(t)
 	old := h.engine()
-	h.source.inputs["p2"] = playback.Input{URL: "https://unapproved.invalid/video"}
-	requireError(t, h.s.SelectPart("p2"), playback.Invalid)
+	h.source.edit(func(src *fakeSource) { src.inputs["p2"] = playback.Input{URL: "https://unapproved.invalid/video"} })
+	requireError(t, h.s.SelectPart("p2"), nil)
+	h.settle(t)
+	requireError(t, h.s.State().SelectionError, playback.Invalid)
 	if old.closed != 0 || h.s.State().PlaybackPart != "p1" || h.s.State().Playback.Generation != 1 {
 		t.Fatal("validation replaced playback")
 	}
-	h.source.inputs["p2"] = playback.Input{FilePath: "/fixture-two.mp4"}
+	h.source.edit(func(src *fakeSource) { src.inputs["p2"] = playback.Input{FilePath: "/fixture-two.mp4"} })
 	h.opener.err = errors.New("private decoder details")
-	requireError(t, h.s.RetrySelection(), playback.Media)
+	requireError(t, h.s.RetrySelection(), nil)
+	h.settle(t)
+	requireError(t, h.s.State().Playback.Error, playback.Media)
 	if old.closed != 1 || h.s.State().PlaybackPart != "p2" || h.s.State().Playback.Generation != 2 || h.s.State().DesiredPlaying || h.s.State().SelectionError != playback.NoError {
 		t.Fatal(h.s.State())
 	}
@@ -373,6 +466,7 @@ func TestInvalidResolvedInputPreservesEngineAndFailedOpenAdvancesIdentity(t *tes
 	if err := h.s.RetryPlayback(); err != nil {
 		t.Fatal(err)
 	}
+	h.settle(t)
 	h.tick(playback.Ready)
 	if countKind(h.engine(), playback.Play) != 1 {
 		t.Fatal("failed playback lost retry intent")
@@ -381,15 +475,18 @@ func TestInvalidResolvedInputPreservesEngineAndFailedOpenAdvancesIdentity(t *tes
 
 func TestStartupSelectionRetryKeepsPausedIntent(t *testing.T) {
 	h := newHarness(t)
-	h.source.errors["p1"] = playback.Media
-	requireError(t, h.s.Start(context.Background()), playback.Media)
+	h.source.edit(func(src *fakeSource) { src.errors["p1"] = playback.Media })
+	requireError(t, h.s.Start(context.Background()), nil)
+	h.settle(t)
+	requireError(t, h.s.State().SelectionError, playback.Media)
 	if len(h.opener.inputs) != 0 || h.s.State().PlaybackPart != "" {
 		t.Fatal("failed resolve acquired playback")
 	}
-	delete(h.source.errors, "p1")
+	h.source.edit(func(src *fakeSource) { delete(src.errors, "p1") })
 	if err := h.s.RetrySelection(); err != nil {
 		t.Fatal(err)
 	}
+	h.settle(t)
 	h.tick(playback.Ready)
 	if countKind(h.engine(), playback.Play) != 0 || h.s.State().DesiredPlaying {
 		t.Fatal("startup retry autoplays")
@@ -465,6 +562,7 @@ func TestCommandFailureClearsIntentAndInitialCommandsStop(t *testing.T) {
 			if err := h.s.RetryPlayback(); err != nil {
 				t.Fatal(err)
 			}
+			h.settle(t)
 			h.tick(playback.Ready)
 			if countKind(h.engine(), playback.Play) != 1 {
 				t.Fatal("retry lost requested play intent")
@@ -485,6 +583,7 @@ func TestTimeoutCancellationAndTerminalClose(t *testing.T) {
 	if err := h.s.RetryPlayback(); err != nil {
 		t.Fatal(err)
 	}
+	h.settle(t)
 	if len(h.opener.inputs) != 2 || h.s.State().DesiredPlaying {
 		t.Fatal("timeout retry startup intent")
 	}
@@ -493,6 +592,7 @@ func TestTimeoutCancellationAndTerminalClose(t *testing.T) {
 	if err := x.s.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
+	x.settle(t)
 	cancel()
 	x.s.Tick()
 	if x.s.State().Playback.Error != playback.Canceled || x.engine().closed != 1 || x.s.Engine() != nil {
@@ -524,6 +624,7 @@ func TestActionAtFirstReadinessDoesNotDuplicatePendingPlay(t *testing.T) {
 			if err := h.s.Play(); err != nil {
 				t.Fatal(err)
 			}
+			h.settle(t)
 			h.engine().snapshot.State = playback.Ready
 			h.now = h.now.Add(playback.PollInterval)
 			var err error
@@ -548,11 +649,13 @@ func TestCompletionClearsRetryIntentButExplicitReplayPlays(t *testing.T) {
 	if err := h.s.Play(); err != nil {
 		t.Fatal(err)
 	}
+	h.settle(t)
 	h.tick(playback.Ready)
 	h.tick(playback.Ended)
 	if err := h.s.RetryPlayback(); err != nil {
 		t.Fatal(err)
 	}
+	h.settle(t)
 	h.tick(playback.Ready)
 	if h.s.State().DesiredPlaying || countKind(h.engine(), playback.Play) != 0 {
 		t.Fatal("playback retry restored stale pre-completion intent")
@@ -560,6 +663,7 @@ func TestCompletionClearsRetryIntentButExplicitReplayPlays(t *testing.T) {
 	if err := h.s.Play(); err != nil {
 		t.Fatal(err)
 	}
+	h.settle(t)
 	if countKind(h.engine(), playback.Play) != 1 {
 		t.Fatal("explicit play did not request playback")
 	}
@@ -577,6 +681,7 @@ func deferredPlaybackHarness(t *testing.T, playing bool) *harness {
 		if err := h.s.Play(); err != nil {
 			t.Fatal(err)
 		}
+		h.settle(t)
 		h.tick(playback.Playing)
 	}
 	h.engine().commands = nil
@@ -673,29 +778,32 @@ type ctxKey struct{}
 func TestExpiringResolutionIsReusedUntilMarginThenResolvedAgain(t *testing.T) {
 	h := newHarness(t)
 	one, refreshed := playback.Input{URL: "http://127.0.0.1:1/one"}, playback.Input{URL: "http://127.0.0.1:1/one-refreshed"}
-	h.source.inputs["p1"], h.source.expires["p1"] = one, h.now.Add(10*time.Minute)
+	h.source.edit(func(src *fakeSource) { src.inputs["p1"], src.expires["p1"] = one, h.now.Add(10*time.Minute) })
 	startCtx := context.WithValue(context.Background(), ctxKey{}, "start")
 	if err := h.s.Start(startCtx); err != nil {
 		t.Fatal(err)
 	}
-	if got := h.source.contexts[len(h.source.contexts)-1]; got != startCtx {
-		t.Fatal("Resolve did not receive the session context")
+	h.settle(t)
+	if _, contexts := h.source.history(); contexts[len(contexts)-1].Value(ctxKey{}) != "start" {
+		t.Fatal("Resolve did not inherit the session context")
 	}
 	h.tick(playback.Failed)
 	if err := h.s.RetryPlayback(); err != nil {
 		t.Fatal(err)
 	}
+	h.settle(t)
 	if len(h.source.resolved) != 1 || !reflect.DeepEqual(h.opener.inputs[1], one) {
 		t.Fatalf("unexpired input not reused: resolved=%v inputs=%v", h.source.resolved, h.opener.inputs)
 	}
 
 	// At exactly ExpiresAt-ResolutionMargin the cached input is no longer usable.
 	h.now = h.source.expires["p1"].Add(-ResolutionMargin)
-	h.source.inputs["p1"], h.source.expires["p1"] = refreshed, h.now.Add(10*time.Minute)
+	h.source.edit(func(src *fakeSource) { src.inputs["p1"], src.expires["p1"] = refreshed, h.now.Add(10*time.Minute) })
 	h.tick(playback.Failed)
 	if err := h.s.RetryPlayback(); err != nil {
 		t.Fatal(err)
 	}
+	h.settle(t)
 	if len(h.source.resolved) != 2 || !reflect.DeepEqual(h.opener.inputs[2], refreshed) || h.s.State().PlaybackPart != "p1" {
 		t.Fatalf("expired input not resolved again: resolved=%v inputs=%v", h.source.resolved, h.opener.inputs)
 	}
@@ -704,16 +812,19 @@ func TestExpiringResolutionIsReusedUntilMarginThenResolvedAgain(t *testing.T) {
 	h.tick(playback.Ended)
 	engines := len(h.opener.engines)
 	h.now = h.source.expires["p1"]
-	h.source.errors["p1"] = errors.New("private signed URL")
-	requireError(t, h.s.Play(), playback.Media)
+	h.source.edit(func(src *fakeSource) { src.errors["p1"] = errors.New("private signed URL") })
+	requireError(t, h.s.Play(), nil)
+	h.settle(t)
+	requireError(t, h.s.State().SelectionError, playback.Media)
 	if len(h.opener.engines) != engines || h.engine().closed != 0 || h.s.State().SelectionError != playback.Media || h.s.State().PlaybackPart != "p1" {
 		t.Fatal(h.s.State())
 	}
-	delete(h.source.errors, "p1")
-	h.source.expires["p1"] = h.now.Add(10 * time.Minute)
+	h.source.edit(func(src *fakeSource) { delete(src.errors, "p1") })
+	h.source.edit(func(src *fakeSource) { src.expires["p1"] = h.now.Add(10 * time.Minute) })
 	if err := h.s.RetrySelection(); err != nil {
 		t.Fatal(err)
 	}
+	h.settle(t)
 	h.tick(playback.Ready)
 	if len(h.opener.engines) != engines+1 || h.s.State().SelectionError != playback.NoError || countKind(h.engine(), playback.Play) != 1 {
 		t.Fatal("selection retry after failed re-resolution did not replay")
@@ -724,53 +835,73 @@ func TestResolutionAlreadyInsideMarginIsRejectedWithoutOpening(t *testing.T) {
 	h := newHarness(t)
 	h.start(t)
 	old := h.engine()
-	h.source.expires["p2"] = h.now.Add(ResolutionMargin)
-	requireError(t, h.s.SelectPart("p2"), playback.Media)
+	h.source.edit(func(src *fakeSource) { src.expires["p2"] = h.now.Add(ResolutionMargin) })
+	requireError(t, h.s.SelectPart("p2"), nil)
+	h.settle(t)
+	requireError(t, h.s.State().SelectionError, playback.Media)
 	if len(h.opener.engines) != 1 || old.closed != 0 || h.s.State().PlaybackPart != "p1" || h.s.State().SelectionError != playback.Media {
 		t.Fatal(h.s.State())
 	}
-	h.source.expires["p2"] = h.now.Add(ResolutionMargin + time.Nanosecond)
+	h.source.edit(func(src *fakeSource) { src.expires["p2"] = h.now.Add(ResolutionMargin + time.Nanosecond) })
 	if err := h.s.RetrySelection(); err != nil {
 		t.Fatal(err)
 	}
+	h.settle(t)
 	if h.s.State().PlaybackPart != "p2" || old.closed != 1 {
 		t.Fatal(h.s.State())
 	}
 }
 
-func TestNewPassesContextToDetailAndRejectsNilContext(t *testing.T) {
+func TestStartPassesContextToDetailAndResolve(t *testing.T) {
 	h := newHarness(t)
-	ctx := context.WithValue(context.Background(), ctxKey{}, "detail")
-	if _, err := New(ctx, h.source, h.s.controller); err != nil {
+	ctx := context.WithValue(context.Background(), ctxKey{}, "session")
+	requireError(t, h.s.Start(nil), playback.Invalid)
+	if err := h.s.Start(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if h.source.contexts[len(h.source.contexts)-1] != ctx {
-		t.Fatal("Detail did not receive the construction context")
+	h.settle(t)
+	calls, contexts := h.source.history()
+	if len(calls) != 1 || len(contexts) != 2 {
+		t.Fatal("missing detail/resolve calls", calls, len(contexts))
 	}
-	_, err := New(nil, h.source, h.s.controller)
-	requireError(t, err, playback.Invalid)
+	for _, got := range contexts {
+		if got.Value(ctxKey{}) != "session" {
+			t.Fatal("source did not inherit Start values")
+		}
+		if deadline, ok := got.Deadline(); !ok || deadline.After(time.Now().Add(10*time.Second)) {
+			t.Fatal("source request lacked its ten-second deadline")
+		}
+	}
+	if h.opener.contexts[0].Err() != nil || h.opener.contexts[0].Value(ctxKey{}) != "session" {
+		t.Fatal("request cleanup canceled or replaced the engine lifetime")
+	}
 }
 
 func TestExpiredPlaybackRetryKeepsPendingSelectionOfAnotherPart(t *testing.T) {
 	for _, reresolveFails := range []bool{false, true} {
 		t.Run(fmt.Sprintf("reresolveFails=%v", reresolveFails), func(t *testing.T) {
 			h := newHarness(t)
-			h.source.expires["p1"] = h.now.Add(10 * time.Minute)
+			h.source.edit(func(src *fakeSource) { src.expires["p1"] = h.now.Add(10 * time.Minute) })
 			h.start(t)
 			if err := h.s.Play(); err != nil {
 				t.Fatal(err)
 			}
+			h.settle(t)
 			h.tick(playback.Ready)
 			h.tick(playback.Playing)
-			h.source.errors["p2"] = errors.New("private p2 failure")
-			requireError(t, h.s.SelectPart("p2"), playback.Media)
+			h.source.edit(func(src *fakeSource) { src.errors["p2"] = errors.New("private p2 failure") })
+			requireError(t, h.s.SelectPart("p2"), nil)
+			h.settle(t)
+			requireError(t, h.s.State().SelectionError, playback.Media)
 			h.tick(playback.Failed)
 			h.now = h.now.Add(20 * time.Minute)
-			h.source.expires["p1"] = h.now.Add(10 * time.Minute)
+			h.source.edit(func(src *fakeSource) { src.expires["p1"] = h.now.Add(10 * time.Minute) })
 			engines := len(h.opener.engines)
 			if reresolveFails {
-				h.source.errors["p1"] = errors.New("private p1 failure")
-				requireError(t, h.s.RetryPlayback(), playback.Media)
+				h.source.edit(func(src *fakeSource) { src.errors["p1"] = errors.New("private p1 failure") })
+				requireError(t, h.s.RetryPlayback(), nil)
+				h.settle(t)
+				requireError(t, h.s.State().PlaybackRetryError, playback.Media)
 				if len(h.opener.engines) != engines {
 					t.Fatal("failed re-resolution opened media")
 				}
@@ -778,6 +909,7 @@ func TestExpiredPlaybackRetryKeepsPendingSelectionOfAnotherPart(t *testing.T) {
 				if err := h.s.RetryPlayback(); err != nil {
 					t.Fatal(err)
 				}
+				h.settle(t)
 				if len(h.opener.engines) != engines+1 || h.s.State().PlaybackPart != "p1" {
 					t.Fatal("expired playback was not resolved again")
 				}
@@ -786,10 +918,11 @@ func TestExpiredPlaybackRetryKeepsPendingSelectionOfAnotherPart(t *testing.T) {
 			if state.SelectedPart != "p2" || state.SelectionError != playback.Media || h.s.selectionRetry != "p2" {
 				t.Fatalf("pending p2 selection changed: %+v retry=%q", state, h.s.selectionRetry)
 			}
-			delete(h.source.errors, "p2")
+			h.source.edit(func(src *fakeSource) { delete(src.errors, "p2") })
 			if err := h.s.RetrySelection(); err != nil {
 				t.Fatal(err)
 			}
+			h.settle(t)
 			if h.s.State().PlaybackPart != "p2" || h.s.State().SelectionError != playback.NoError {
 				t.Fatal(h.s.State())
 			}
