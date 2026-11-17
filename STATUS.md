@@ -1,6 +1,6 @@
 # Status
 
-Updated 2026-11-17. Branch: `codex/p0-native-danmaku`. Base: `master` at
+Updated 2026-11-17. Branch: `codex/p0-real-client`. Base: `master` at
 `34e6faf` (merged PR #15).
 
 This is the only file that carries current state. Update it in the same change
@@ -19,7 +19,7 @@ read reports by default.
 | QR login and Keychain session (P0) | Real scan, Keychain save/readback, service verification and same-binary restart restoration passed on 2026-11-17. Session retained; branch not merged, no PR | [real login and restore](reports/0036-p0-login-restored.md) |
 | Asynchronous detail/media loading | Implemented and independently approved at `371428b`; full race and fresh macOS full/source native suites pass (30 + 25 checks) | [0037](reports/0037-p0-async-source.md) |
 | Native Chinese danmaku | Implemented and independently approved at cebd417; full race, native full/source/danmaku stages (30+25+30 checks) and independent Chinese pixel/timebase verification pass | [0038](reports/0038-p0-native-danmaku.md) |
-| Real Bilibili content and local history/resume | Revised integration contract independently approved; native prerequisite complete, ready for freeze and implementation. Personalized feed remains outside P0 | [P0 scope draft](specs/0004-client-p0/spec.md) |
+| Real Bilibili content and local history/resume | Revised integration contract independently approved and published; native prerequisite complete, serial interface adaptation starts next. Personalized feed remains outside P0 | [spec 0027](specs/0027-p0-real-client/spec.md), [assignment](specs/0027-p0-real-client/assignment.md) |
 | libmpv distribution (bundling, licence, signing) | Not designed; a development library path is hardcoded | — |
 | Windows | P2, not tested | [ADR 0005](docs/adr/0005-platform-priority.md) |
 
@@ -44,7 +44,8 @@ Exit criteria are in [stage zero](docs/stage-zero.md).
 2. Open a PR for `codex/p0-login-foundation` when authorized. This branch is
    rebased onto merged PR #15; only README conflicted, and its P0 checkpoint
    now lives here with the upstream STATUS-first navigation retained.
-3. Freeze the approved revised real-client contract. Async source and native
+3. Implement the frozen real-client contract, beginning with shared interfaces
+   and existing fixture consumers. Async source and native
    Chinese overlay prerequisites are complete; see [0037](reports/0037-p0-async-source.md)
    and [0038](reports/0038-p0-native-danmaku.md).
 4. Connect search/link/details,
