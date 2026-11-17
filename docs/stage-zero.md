@@ -336,12 +336,14 @@ signing, notarization, and public releases are deliberately not implemented.
 
 ## Next action
 
-The issue #10 / M3 loop is completed, accepted and merged. The remaining known
-repair candidate is [issue #11](https://github.com/coda1997/my-bilibili/issues/11),
-rapid seek queue overload. Select and reproduce it under its own bounded scope
-before implementation; this status update does not start that repair. P0 and
-the full shell remain pending. Current continuation:
-[M3 acceptance](../reports/0029-playback-intent.md). Historical M2 investigation
+The issue #10 / M3 loop is completed, accepted and merged. The owner subsequently
+authorized repair, PR publication, passing CI and merge for
+[issue #11](https://github.com/coda1997/my-bilibili/issues/11). That bounded seek
+queue repair has independent architecture/code approval and passing local race
+checks; [PR #14](https://github.com/coda1997/my-bilibili/pull/14) holds its live
+CI/merge receipt. Read [the current repair handoff](../reports/0030-seek-queue.md)
+and [M3 acceptance](../reports/0029-playback-intent.md). P0 and the full shell
+remain pending and are not started by this repair. Historical M2 investigation
 and review evidence remains in [report 0028](../reports/0028-m2-fixture-preview.md).
 
 Preserve the 200ms cancellation bound, complete teardown contract, evidence and
