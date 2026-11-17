@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "spec_id": "0025-p0-async-source",
+  "tasks": [
+    {
+      "id": "ASY-001",
+      "title": "Define the reviewed asynchronous source state and lifetime interface",
+      "depends_on": [],
+      "write_paths": ["internal/app/contracts.go", "internal/app/contracts_async_test.go"],
+      "acceptance": ["ASY-AC-01", "ASY-AC-03", "ASY-AC-04"],
+      "checks": ["Use the independently reviewed frozen contract; preserve plain business boundaries and immutable state"]
+    },
+    {
+      "id": "ASY-002",
+      "title": "Implement bounded source loading, cancellation, retries and intent preservation",
+      "depends_on": ["ASY-001"],
+      "write_paths": ["internal/app", "internal/fixture"],
+      "acceptance": ["ASY-AC-01", "ASY-AC-02", "ASY-AC-03", "ASY-AC-04"],
+      "checks": ["Run controlled source lifecycle and expiry regressions with the race detector", "Demonstrate stale-result, cancellation, deadline and pending-intent mechanism discrimination"]
+    },
+    {
+      "id": "ASY-003",
+      "title": "Show detail and part loading states with usable retry and playback controls",
+      "depends_on": ["ASY-001"],
+      "write_paths": ["internal/desktop/view.go", "internal/desktop/render.go", "internal/desktop/view_test.go", "internal/desktop/source_test.go"],
+      "acceptance": ["ASY-AC-01", "ASY-AC-03", "ASY-AC-05"],
+      "checks": ["Use frozen Player/State contracts and controlled view tests for loading, retry, pending selection and disabled actions"]
+    },
+    {
+      "id": "ASY-004",
+      "title": "Integrate normal and synthetic native apps and verify owned shutdown",
+      "depends_on": ["ASY-002", "ASY-003"],
+      "write_paths": ["cmd/my-bilibili", "cmd/preview-smoke", "internal/previewbundle"],
+      "acceptance": ["ASY-AC-04", "ASY-AC-05", "ASY-AC-06"],
+      "checks": ["Keep source completion and window close independent of painting", "Run matching rebuilt macOS fixture and delayed-source native scenarios without live accounts", "go run ./cmd/dev check --race"]
+    },
+    {
+      "id": "ASY-005",
+      "title": "Record exact-candidate verification, review and the next P0 action",
+      "depends_on": ["ASY-004"],
+      "write_paths": ["STATUS.md", "docs/architecture.md", "reports/0037-p0-async-source.md"],
+      "acceptance": ["ASY-AC-06"],
+      "checks": ["Bind evidence to the exact commit and actual native artifacts; retain outstanding login/overlay/full-client results and review counts", "Do not claim remote CI, native Windows support or full P0 acceptance without evidence"]
+    }
+  ]
+}

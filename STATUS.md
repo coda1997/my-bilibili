@@ -16,8 +16,9 @@ read reports by default.
 | Rapid play/pause and seek fixes | Merged (PRs #12, #14) | [0029](reports/0029-playback-intent.md), [0030](reports/0030-seek-queue.md) |
 | Playback code promoted out of `experiments/`; expiry-aware `app.Source` | Merged (PR #15, `34e6faf`) | [spec 0024](specs/0024-playback-promotion/spec.md) |
 | P0 service probes, QR-host compatibility and empty-text danmaku handling | Scoped implementation and independent review complete before rebase; anonymous five-step probe passed | [0033](reports/0033-p0-qr-host-fix.md), [0034](reports/0034-p0-empty-danmaku.md) |
-| QR login and Keychain session (P0) | Included on this branch, not on `master`; no PR. Scoped implementation and synthetic native checks approved before rebase. Real sign-in and restart restore pending; feature work paused | [login handoff](reports/0035-p0-persistent-login.md) |
-| Real Bilibili content (feed, search, real video) | Not started | — |
+| QR login and Keychain session (P0) | Real scan, Keychain save/readback, service verification and same-binary restart restoration passed on 2026-11-17. Session retained; branch not merged, no PR | [real login and restore](reports/0036-p0-login-restored.md) |
+| Asynchronous detail/media loading | Proposed spec/task graph; existing-code/schema check passed. Architecture review and implementation pending | [spec 0025](specs/0025-p0-async-source/spec.md) |
+| Real Bilibili content (search/link entry, real video) | Not started; personalized feed remains outside P0 | [P0 scope draft](specs/0004-client-p0/spec.md) |
 | libmpv distribution (bundling, licence, signing) | Not designed; a development library path is hardcoded | — |
 | Windows | P2, not tested | [ADR 0005](docs/adr/0005-platform-priority.md) |
 
@@ -29,37 +30,37 @@ read reports by default.
 | M1 macOS playback feasibility | Accepted 2026-11-13 |
 | M2 one complete development loop | Merged (PR #9). Owner functional feedback recorded; formal milestone acceptance not recorded |
 | M3 one issue-to-PR loop | Accepted 2026-11-17 |
-| P0 client | Paused pending owner unlock; login on an unmerged branch |
+| P0 client | In progress; real login/restoration complete, overlay and integrated client pending |
 
 Exit criteria are in [stage zero](docs/stage-zero.md).
 
 ## Next actions
 
-1. When the owner resumes P0 and confirms the Mac is awake and unlocked,
-   complete real QR sign-in and same-binary restart restoration. Preserve the
-   Keychain session for subsequent development. Then continue the requested
-   Chinese danmaku overlay/timebase and full client integration; see the
-   [login handoff](reports/0035-p0-persistent-login.md).
+1. Continue native Chinese danmaku overlay/timebase and full client integration.
+   Real sign-in and same-binary restart restoration now pass; preserve the
+   Keychain session without real Logout/Delete. See the
+   [login completion](reports/0036-p0-login-restored.md).
 2. Open a PR for `codex/p0-login-foundation` when authorized. This branch is
    rebased onto merged PR #15; only README conflicted, and its P0 checkpoint
    now lives here with the upstream STATUS-first navigation retained.
-3. Move `Source` resolution off the UI thread, with stale-result handling. This
+3. Independently review proposed spec 0025, then move both `Source` detail and
+   resolution off the UI thread, with stale-result handling. This
    is required before any network-backed `Source`
    (see `internal/app/contracts.go`).
-4. First real-content slice: signed-in feed or search → play one real video.
+4. First real-content slice: search or supported video link/identifier → play one real video.
    This covers request signing, the play-URL endpoint, anti-bot errors and cookie
-   refresh.
+   expiry handling.
 5. Write an ADR on libmpv distribution.
 
 ## Owner action queue
 
-Batched per [owner actions](docs/workflow.md#owner-actions). Feature work remains
-paused at the owner's request; the Git rebase does not resume it.
+Batched per [owner actions](docs/workflow.md#owner-actions). The owner resumed
+P0 verification and confirmed the execution Mac unlocked on 2026-11-17.
 
 | Action | Prepared | Time | Unblocks | Report back |
 | --- | --- | --- | --- | --- |
 | Authorize a PR for `codex/p0-login-foundation` when ready | Rebased branch and scoped evidence in the login handoff | 2 min | PR review and candidate CI | "Open the login PR" |
-| Real QR sign-in and restart restore on an unlocked Mac (LOG-AC-06) | Developer build and checklist on `codex/p0-login-foundation` | 10 min | P0 login acceptance | "Signed in and restored" or what failed |
+| Keep the execution Mac unlocked for native verification | Login and restart restore complete; overlay/fixture scenarios will follow reviewed contracts | During native checks | Native P0 verification | Report any native authorization prompt or failure |
 
 Done 2026-11-17: the owner approved the spec 0024 policy changes (lanes,
 evidence identity, adopted clauses, owner queue) and local commit authority.
@@ -78,5 +79,5 @@ publication of the P0 branch. No P0 PR, merge or release has been performed.
 
 ## Blockers
 
-- Real sign-in needs the owner's Mac awake and unlocked. Do not retry until the
-  owner confirms.
+- No remaining real-login blocker. Native overlay evidence and reviewed async/
+  real-content/history integration contracts remain prerequisites for full P0.
