@@ -275,16 +275,21 @@ func (c *client) key(ctx context.Context, key string) error {
 	return c.input(ctx, map[string]any{"type": "key", "key": key})
 }
 func (c *client) slider(ctx context.Context, key, value string) (err error) {
-	maximum := 1.0
-	if key == "seek-slider" {
+	minimum, maximum := 0.0, 1.0
+	switch key {
+	case "seek-slider":
 		s, err := c.snapshot(ctx)
 		if err != nil {
 			return err
 		}
 		maximum = s.State.Playback.Duration.Seconds()
+	case "danmaku-font-size":
+		minimum, maximum = 16, 40
+	case "danmaku-speed":
+		minimum, maximum = .5, 2
 	}
 	v, err := strconv.ParseFloat(value, 64)
-	if err != nil || maximum <= 0 || v < 0 || v > maximum {
+	if err != nil || math.IsNaN(v) || maximum <= minimum || v < minimum || v > maximum {
 		return errors.New("invalid slider target")
 	}
 	nodes, err := c.tree(ctx)
@@ -300,7 +305,7 @@ func (c *client) slider(ctx context.Context, key, value string) (err error) {
 	if n.Bounds.Width <= 20 || n.Bounds.Height <= 0 {
 		return errors.New("slider geometry unavailable")
 	}
-	x, y := sliderCoordinates(n.Bounds, v/maximum)
+	x, y := sliderCoordinates(n.Bounds, (v-minimum)/(maximum-minimum))
 	if err = c.input(ctx, map[string]any{"type": "pointerMove", "x": x, "y": y}, map[string]any{"type": "pointerDown", "x": x, "y": y}); err != nil {
 		return err
 	}

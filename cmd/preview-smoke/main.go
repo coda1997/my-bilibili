@@ -43,9 +43,19 @@ func (r *report) pass(name, detail string, o *previewbundle.Observation) {
 	if o != nil {
 		snapshot := *o
 		snapshot.State.Video.Parts = slices.Clone(o.State.Video.Parts)
+		snapshot.Danmaku.Items = slices.Clone(o.Danmaku.Items)
 		o = &snapshot
 	}
 	r.Checks = append(r.Checks, check{Scenario: r.Scenario, Name: name, Result: "pass", Detail: detail, Observation: o})
+}
+func (r *report) passed() int {
+	count := 0
+	for _, check := range r.Checks {
+		if check.Result == "pass" {
+			count++
+		}
+	}
+	return count
 }
 func main() {
 	if err := command(os.Args[1:], os.Stdout, os.Stderr); err != nil {
@@ -64,15 +74,15 @@ func command(args []string, out, stderr io.Writer) error {
 	appHash := f.String("app-sha256", "", "assigned exact app SHA256")
 	driverHash := f.String("driver-sha256", "", "assigned exact driver SHA256")
 	dir := f.String("output", "", "fresh absolute evidence directory")
-	stage := f.String("stage", "full", "full acceptance, fullscreen diagnostic prefix, or synthetic source scenarios")
+	stage := f.String("stage", "full", "full acceptance, fullscreen diagnostic prefix, synthetic source, or danmaku scenarios")
 	if err := f.Parse(args); err != nil {
 		return err
 	}
 	if f.NArg() != 0 || !filepath.IsAbs(*app) || !filepath.IsAbs(*dir) || !validDigest(*appHash) || !validDigest(*driverHash) {
 		return errors.New("require absolute -app/-output and exact -app-sha256/-driver-sha256")
 	}
-	if *stage != "full" && *stage != "fullscreen" && *stage != "source" {
-		return errors.New("stage must be full, fullscreen or source")
+	if *stage != "full" && *stage != "fullscreen" && *stage != "source" && *stage != "danmaku" {
+		return errors.New("stage must be full, fullscreen, source or danmaku")
 	}
 	if runtime.GOOS != "darwin" {
 		return errors.New("native preview smoke requires macOS")
@@ -124,6 +134,6 @@ func command(args []string, out, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("preview smoke failed: %w", err)
 	}
-	_, err = fmt.Fprintf(out, "preview smoke stage %s passed %d recorded checks; physical audibility remains not-tested\n", r.Stage, len(r.Checks)-1)
+	_, err = fmt.Fprintf(out, "preview smoke stage %s passed %d recorded checks; consult report for required independent visual inspection and not-tested scopes\n", r.Stage, r.passed())
 	return err
 }

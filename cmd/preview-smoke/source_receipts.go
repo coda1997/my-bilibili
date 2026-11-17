@@ -71,5 +71,6 @@ func (s *sourceReceipts) get(event string) (observed, error) {
 		return observed{}, errors.New("required source receipt missing")
 	}
 	value.State.Video.Parts = append(value.State.Video.Parts[:0:0], value.State.Video.Parts...)
+	value.Danmaku.Items = append(value.Danmaku.Items[:0:0], value.Danmaku.Items...)
 	return value, nil
 }

@@ -12,8 +12,10 @@ import (
 	"time"
 
 	"my-bilibili/internal/app"
+	"my-bilibili/internal/danmaku"
 	"my-bilibili/internal/fixture"
 	"my-bilibili/internal/playback"
+	"my-bilibili/internal/previewbundle"
 )
 
 func completeObservation(t *testing.T) observed {
@@ -26,7 +28,7 @@ func completeObservation(t *testing.T) observed {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return observed{State: app.State{DetailPhase: app.DetailReady, Video: video, SelectedPart: "part-1", PlaybackPart: "part-1", Volume: 1, Rate: 1, Playback: playback.Snapshot{Generation: 1, State: playback.Closed, Error: playback.Canceled, Volume: 1, Rate: 1}}}
+	return observed{State: app.State{DetailPhase: app.DetailReady, Video: video, SelectedPart: "part-1", PlaybackPart: "part-1", Volume: 1, Rate: 1, Playback: playback.Snapshot{Generation: 1, State: playback.Closed, Error: playback.Canceled, Volume: 1, Rate: 1}}, Danmaku: previewbundle.DanmakuObservation{Generation: 1, Settings: danmaku.DefaultSettings(), Items: []previewbundle.DanmakuItemObservation{}, Closed: true}}
 }
 func TestObservationNodesAreUniqueAndStrict(t *testing.T) {
 	o := completeObservation(t)

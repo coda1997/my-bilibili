@@ -60,3 +60,17 @@ func TestSourceReceiptStreamFailsClosed(t *testing.T) {
 		})
 	}
 }
+
+func TestSourceReceiptDanmakuItemsAreCopied(t *testing.T) {
+	s := newSourceReceipts()
+	s.values[previewbundle.SourceWindowMinimized] = danmakuSample(t, 2e9)
+	a, err := s.get(previewbundle.SourceWindowMinimized)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.Danmaku.Items[0].X = -999
+	b, err := s.get(previewbundle.SourceWindowMinimized)
+	if err != nil || b.Danmaku.Items[0].X == -999 {
+		t.Fatal("mutable receipt items escaped their owner", err)
+	}
+}
