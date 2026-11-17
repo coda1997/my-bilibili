@@ -113,9 +113,9 @@ const plist = `<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict>
 <key>CFBundleExecutable</key><string>my-bilibili</string>
 <key>CFBundleIdentifier</key><string>local.my-bilibili.preview</string>
-<key>CFBundleName</key><string>My Bilibili Preview</string>
+<key>CFBundleName</key><string>My Bilibili</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.0.2</string>
+<key>CFBundleShortVersionString</key><string>0.0.3</string>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 `

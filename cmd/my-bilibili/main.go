@@ -36,6 +36,14 @@ func main() {
 	}
 }
 func run() error {
+	mode, scenario, err := clientBuildMode()
+	if err != nil {
+		return err
+	}
+	options, err := parseClientOptions(os.Args[1:], mode, scenario)
+	if err != nil {
+		return err
+	}
 	if err := previewbundle.VerifyRuntime(); err != nil {
 		return err
 	}
@@ -47,6 +55,13 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	if !options.fixture {
+		return runClient(resources, options)
+	}
+	return runFixture(resources)
+}
+
+func runFixture(resources string) error {
 	source, err := fixture.New(resources)
 	if err != nil {
 		return err
