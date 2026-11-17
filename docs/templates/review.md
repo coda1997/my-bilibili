@@ -6,7 +6,7 @@ Follow [agent convergence](../agent-convergence.md) R1/R2/R3/R4/R5/R6/R7/R9 for 
 - Independent of implementation author: yes / no
 - Spec SHA-256:
 - Task-graph SHA-256:
-- Base commit and exact candidate commit or manifest/archive identity:
+- Base commit and exact candidate commit SHA:
 - Diff scope and any excluded/unavailable inputs:
 - Review dimensions:
 - Original goal, locked scope and done criteria:
@@ -51,8 +51,8 @@ identity, candidate and one-line ruling; otherwise state none:
 - Found, not done: out-of-scope IDs and recorded destinations:
 - Next action and remaining review/fix budget:
 
-For successor closure, follow the proposed succession procedure in
-docs/workflow.md#reviewer-succession-proposed-clarification. Attribute the new
+For successor closure, follow the succession procedure in
+docs/workflow.md#reviewer-succession. Attribute the new
 verification to the successor, retain the original finding ID and report, and
 reference new candidate-specific evidence. Missing designation/evidence leaves
 closure pending; do not rewrite the original decision or reset repair rounds.

@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 type fullscreenFixture struct {
@@ -55,8 +55,8 @@ func newFullscreenFixture(t *testing.T, mode string) *fullscreenFixture {
 		fullscreenImages.full = fullscreenPNG(t, 1710, 1073)
 	})
 	o := completeObservation(t)
-	o.State.Playback.State = contract.Paused
-	o.State.Playback.Error = contract.NoError
+	o.State.Playback.State = playback.Paused
+	o.State.Playback.Error = playback.NoError
 	o.State.Playback.Duration = 30 * time.Second
 	o.State.Playback.Position = 5 * time.Second
 	return &fullscreenFixture{mode: mode, state: o, ordinary: rectangle{X: 335, Y: 145, Width: 1120, Height: 760}, enlarged: rectangle{X: 0, Y: 34, Width: 1710, Height: 1073}, normalPNG: fullscreenImages.normal, fullPNG: fullscreenImages.full}

@@ -1,9 +1,9 @@
-package mpvprobe
+package mpv
 
 import (
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 // stopVideo runs on the control owner while the render owner remains active.
@@ -20,13 +20,13 @@ func (a *nativeAPI) stopVideo(core uintptr) bool {
 	// Reserve part of the 200ms Close budget for the remaining destructors.
 	// Failure never means ownership is released: the caller still runs every
 	// destructor and joins the workers, even if native shutdown exceeds budget.
-	deadline := time.Now().Add(2 * contract.PollInterval)
+	deadline := time.Now().Add(2 * playback.PollInterval)
 	for events := 0; events < 256; {
 		left := time.Until(deadline)
 		if left <= 0 {
 			return false
 		}
-		p := a.wait(core, min(left, contract.PollInterval).Seconds())
+		p := a.wait(core, min(left, playback.PollInterval).Seconds())
 		if p == nil {
 			return false
 		}

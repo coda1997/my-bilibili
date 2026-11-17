@@ -7,24 +7,24 @@ import (
 	"time"
 
 	gui "github.com/egoist/mygo/ui"
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 type testEngine struct {
-	state    contract.State
-	commands []contract.Command
+	state    playback.State
+	commands []playback.Command
 	closed   bool
 	closes   int
-	sample   *contract.Snapshot
+	sample   *playback.Snapshot
 }
 
-func (e *testEngine) Snapshot() contract.Snapshot {
+func (e *testEngine) Snapshot() playback.Snapshot {
 	if e.sample != nil {
 		return *e.sample
 	}
-	return contract.Snapshot{State: e.state, Duration: 8 * time.Second, Rate: 1, Volume: 1}
+	return playback.Snapshot{State: e.state, Duration: 8 * time.Second, Rate: 1, Volume: 1}
 }
-func (e *testEngine) Command(c contract.Command) error {
+func (e *testEngine) Command(c playback.Command) error {
 	e.commands = append(e.commands, c)
 	return nil
 }
@@ -32,14 +32,14 @@ func (e *testEngine) Close() error { e.closed = true; e.closes++; return nil }
 
 type testOpener struct{ engine *testEngine }
 
-func (o testOpener) Open(context.Context, contract.Input) (contract.Engine, error) {
+func (o testOpener) Open(context.Context, playback.Input) (playback.Engine, error) {
 	return o.engine, nil
 }
 
 func TestHeadlessChineseCommandsAndStates(t *testing.T) {
 	now := time.Unix(1, 0)
-	e := &testEngine{state: contract.Loading}
-	v := &View{Controller: contract.New(testOpener{e}, func() time.Time { return now }), Sources: []Source{{"local", "Local fixture", contract.Input{FilePath: "synthetic.mp4"}}}}
+	e := &testEngine{state: playback.Loading}
+	v := &View{Controller: playback.New(testOpener{e}, func() time.Time { return now }), Sources: []Source{{"local", "Local fixture", playback.Input{FilePath: "synthetic.mp4"}}}}
 	defer v.Close()
 	tt := gui.NewTester(v.Render, 720, 780)
 	if err := tt.Click("Chinese input (injected, not IME)"); err != nil {
@@ -52,10 +52,10 @@ func TestHeadlessChineseCommandsAndStates(t *testing.T) {
 	if err := tt.Click("Local fixture"); err != nil {
 		t.Fatal(err)
 	}
-	if v.Controller.Snapshot().State != contract.Loading {
+	if v.Controller.Snapshot().State != playback.Loading {
 		t.Fatal("loading not observable")
 	}
-	v.open(contract.Input{})
+	v.open(playback.Input{})
 	v.Controller.Tick()
 	if !v.Controller.Active() || e.closed {
 		t.Fatal("invalid view input canceled current session")
@@ -65,27 +65,27 @@ func TestHeadlessChineseCommandsAndStates(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if len(e.commands) != 5 || e.commands[0].Kind != contract.Play || e.commands[2].Position != 3*time.Second {
+	if len(e.commands) != 5 || e.commands[0].Kind != playback.Play || e.commands[2].Position != 3*time.Second {
 		t.Fatal("control command delivery")
 	}
-	e.state = contract.Failed
+	e.state = playback.Failed
 	now = now.Add(time.Second)
 	tt.Frame()
-	if v.Controller.Snapshot().Error != contract.Media || !e.closed {
+	if v.Controller.Snapshot().Error != playback.Media || !e.closed {
 		t.Fatal("error not presented/cleaned")
 	}
 	if err := tt.Click("Play"); err != nil {
 		t.Fatal(err)
 	}
-	if v.lastError != contract.IsClosed {
+	if v.lastError != playback.IsClosed {
 		t.Fatal("closed command not visible")
 	}
 }
 
 func TestHeadlessCancelAndQuit(t *testing.T) {
-	e := &testEngine{state: contract.Loading}
+	e := &testEngine{state: playback.Loading}
 	quit := false
-	v := &View{Controller: contract.New(testOpener{e}, nil), Sources: []Source{{"local", "Local fixture", contract.Input{FilePath: "a"}}}, Quit: func() { quit = true }}
+	v := &View{Controller: playback.New(testOpener{e}, nil), Sources: []Source{{"local", "Local fixture", playback.Input{FilePath: "a"}}}, Quit: func() { quit = true }}
 	tt := gui.NewTester(v.Render, 720, 780)
 	if err := tt.Click("Local fixture"); err != nil {
 		t.Fatal(err)
@@ -93,7 +93,7 @@ func TestHeadlessCancelAndQuit(t *testing.T) {
 	if err := tt.Click("Cancel"); err != nil {
 		t.Fatal(err)
 	}
-	if v.Controller.Snapshot().Error != contract.Canceled || !e.closed {
+	if v.Controller.Snapshot().Error != playback.Canceled || !e.closed {
 		t.Fatal("cancel failed")
 	}
 	if err := tt.Click("Quit lab"); err != nil {
@@ -122,7 +122,7 @@ func click(t *testing.T, tt *gui.Tester, label string) {
 
 func TestExplicitProbeWarningPreservesDefault(t *testing.T) {
 	for _, warning := range []string{"", "EXPERIMENTAL replacement fixture probe"} {
-		v := &View{Controller: contract.New(testOpener{&testEngine{}}, nil), Warning: warning}
+		v := &View{Controller: playback.New(testOpener{&testEngine{}}, nil), Warning: warning}
 		tt := gui.NewTester(v.Render, 760, 1200)
 		label := warning
 		if label == "" {
@@ -135,10 +135,10 @@ func TestExplicitProbeWarningPreservesDefault(t *testing.T) {
 
 func TestSampledTransportInteractionsAndNoFeedback(t *testing.T) {
 	now := time.Unix(1, 0)
-	sample := contract.Snapshot{State: contract.Ready, Duration: 8 * time.Second, Position: time.Second, Volume: .5, Rate: 1}
+	sample := playback.Snapshot{State: playback.Ready, Duration: 8 * time.Second, Position: time.Second, Volume: .5, Rate: 1}
 	e := &testEngine{sample: &sample}
-	v := &View{Controller: contract.New(testOpener{e}, func() time.Time { return now })}
-	v.open(contract.Input{FilePath: "synthetic.mp4"})
+	v := &View{Controller: playback.New(testOpener{e}, func() time.Time { return now })}
+	v.open(playback.Input{FilePath: "synthetic.mp4"})
 	defer v.Close()
 	tt := gui.NewTester(v.Render, 760, 1200)
 	access(t, tt, ProvisionalWarning, false)
@@ -147,11 +147,11 @@ func TestSampledTransportInteractionsAndNoFeedback(t *testing.T) {
 		t.Fatalf("seek is not sampled in seconds: %+v", a)
 	}
 	click(t, tt, "Seek position (seconds)")
-	if len(e.commands) != 1 || e.commands[0] != (contract.Command{Kind: contract.Seek, Position: 4 * time.Second}) {
+	if len(e.commands) != 1 || e.commands[0] != (playback.Command{Kind: playback.Seek, Position: 4 * time.Second}) {
 		t.Fatalf("midpoint click did not seek4s: %+v", e.commands)
 	}
 	tt.Key(0, gui.KeyEnd)
-	if len(e.commands) == 0 || e.commands[len(e.commands)-1] != (contract.Command{Kind: contract.Seek, Position: 8 * time.Second}) {
+	if len(e.commands) == 0 || e.commands[len(e.commands)-1] != (playback.Command{Kind: playback.Seek, Position: 8 * time.Second}) {
 		t.Fatalf("seek did not clamp at duration: %+v", e.commands)
 	}
 	if v.Controller.Snapshot().Position != time.Second {
@@ -161,13 +161,13 @@ func TestSampledTransportInteractionsAndNoFeedback(t *testing.T) {
 	tt.Key(0, gui.KeyHome)
 	tt.Key(0, gui.KeyRight)
 	last := e.commands[len(e.commands)-1]
-	if last.Kind != contract.Volume || last.Value <= 0 || last.Value >= 1 {
+	if last.Kind != playback.Volume || last.Value <= 0 || last.Value >= 1 {
 		t.Fatalf("continuous volume interaction missing: %+v", last)
 	}
 	for i, label := range []string{"0.5x", "1x", "2x"} {
 		click(t, tt, label)
 		last = e.commands[len(e.commands)-1]
-		if last.Kind != contract.Rate || last.Value != []float64{.5, 1, 2}[i] {
+		if last.Kind != playback.Rate || last.Value != []float64{.5, 1, 2}[i] {
 			t.Fatalf("preset %s: %+v", label, last)
 		}
 	}
@@ -182,17 +182,17 @@ func TestSampledTransportInteractionsAndNoFeedback(t *testing.T) {
 }
 
 func TestTransportDisabledStates(t *testing.T) {
-	for _, state := range []contract.State{contract.Idle, contract.Loading, contract.Ready, contract.Paused, contract.Playing, contract.Ended, contract.Failed, contract.Closed} {
+	for _, state := range []playback.State{playback.Idle, playback.Loading, playback.Ready, playback.Paused, playback.Playing, playback.Ended, playback.Failed, playback.Closed} {
 		for _, duration := range []time.Duration{0, -time.Second, 8 * time.Second} {
 			t.Run(string(state)+"/"+duration.String(), func(t *testing.T) {
-				e := &testEngine{sample: &contract.Snapshot{State: state, Duration: duration, Volume: 1, Rate: 1}}
-				v := &View{Controller: contract.New(testOpener{e}, nil)}
-				if state != contract.Idle && state != contract.Closed {
-					v.open(contract.Input{FilePath: "a"})
+				e := &testEngine{sample: &playback.Snapshot{State: state, Duration: duration, Volume: 1, Rate: 1}}
+				v := &View{Controller: playback.New(testOpener{e}, nil)}
+				if state != playback.Idle && state != playback.Closed {
+					v.open(playback.Input{FilePath: "a"})
 				}
 				defer v.Close()
 				tt := gui.NewTester(v.Render, 760, 1200)
-				usable := state == contract.Ready || state == contract.Paused || state == contract.Playing || state == contract.Ended
+				usable := state == playback.Ready || state == playback.Paused || state == playback.Playing || state == playback.Ended
 				seekDisabled := !usable || duration <= 0
 				access(t, tt, "Seek position (seconds)", seekDisabled)
 				access(t, tt, "Playback volume", !usable)
@@ -222,10 +222,10 @@ func TestHeldSlidersDoNotReplayOnNativeSampleChanges(t *testing.T) {
 	for _, label := range []string{"Seek position (seconds)", "Playback volume"} {
 		t.Run(label, func(t *testing.T) {
 			now := time.Unix(1, 0)
-			sample := contract.Snapshot{State: contract.Paused, Duration: 8 * time.Second, Position: time.Second, Volume: .2, Rate: 1}
+			sample := playback.Snapshot{State: playback.Paused, Duration: 8 * time.Second, Position: time.Second, Volume: .2, Rate: 1}
 			e := &testEngine{sample: &sample}
-			v := &View{Controller: contract.New(testOpener{e}, func() time.Time { return now })}
-			v.open(contract.Input{FilePath: "synthetic.mp4"})
+			v := &View{Controller: playback.New(testOpener{e}, func() time.Time { return now })}
+			v.open(playback.Input{FilePath: "synthetic.mp4"})
 			defer v.Close()
 			tt := gui.NewTester(v.Render, 760, 1200)
 			r, ok := tt.Find(label)
@@ -266,10 +266,10 @@ func TestCapturedSlidersOutsideBoundsDoNotReplay(t *testing.T) {
 			}
 			t.Run(name, func(t *testing.T) {
 				now := time.Unix(1, 0)
-				sample := contract.Snapshot{State: contract.Paused, Duration: 8 * time.Second, Position: time.Second, Volume: .2, Rate: 1}
+				sample := playback.Snapshot{State: playback.Paused, Duration: 8 * time.Second, Position: time.Second, Volume: .2, Rate: 1}
 				e := &testEngine{sample: &sample}
-				v := &View{Controller: contract.New(testOpener{e}, func() time.Time { return now })}
-				v.open(contract.Input{FilePath: "synthetic.mp4"})
+				v := &View{Controller: playback.New(testOpener{e}, func() time.Time { return now })}
+				v.open(playback.Input{FilePath: "synthetic.mp4"})
 				defer v.Close()
 				tt := gui.NewTester(v.Render, 760, 1200)
 				r, ok := tt.Find(label)
@@ -320,10 +320,10 @@ func TestCapturedSlidersDisableAndReplacement(t *testing.T) {
 	for _, label := range []string{"Seek position (seconds)", "Playback volume"} {
 		t.Run(label, func(t *testing.T) {
 			now := time.Unix(1, 0)
-			sample := contract.Snapshot{State: contract.Paused, Duration: 8 * time.Second, Position: time.Second, Volume: .2, Rate: 1}
+			sample := playback.Snapshot{State: playback.Paused, Duration: 8 * time.Second, Position: time.Second, Volume: .2, Rate: 1}
 			e := &testEngine{sample: &sample}
-			v := &View{Controller: contract.New(testOpener{e}, func() time.Time { return now })}
-			v.open(contract.Input{FilePath: "synthetic.mp4"})
+			v := &View{Controller: playback.New(testOpener{e}, func() time.Time { return now })}
+			v.open(playback.Input{FilePath: "synthetic.mp4"})
 			defer v.Close()
 			tt := gui.NewTester(v.Render, 760, 1200)
 			r, ok := tt.Find(label)
@@ -344,7 +344,7 @@ func TestCapturedSlidersDisableAndReplacement(t *testing.T) {
 				t.Fatal("disabled captured slider retained interaction or emitted command")
 			}
 			sample.Position, sample.Volume = 3*time.Second, .7
-			v.open(contract.Input{FilePath: "replacement.mp4"})
+			v.open(playback.Input{FilePath: "replacement.mp4"})
 			now = now.Add(time.Second)
 			tt.Frame()
 			want := 3.0
@@ -370,22 +370,22 @@ func TestSliderSampleResetsOnNewGeneration(t *testing.T) {
 	}
 }
 
-type openFunc func(context.Context, contract.Input) (contract.Engine, error)
+type openFunc func(context.Context, playback.Input) (playback.Engine, error)
 
-func (f openFunc) Open(ctx context.Context, in contract.Input) (contract.Engine, error) {
+func (f openFunc) Open(ctx context.Context, in playback.Input) (playback.Engine, error) {
 	return f(ctx, in)
 }
 
 func TestRetryCopiesValidInputPreservesUnsupportedAndIgnoresInvalid(t *testing.T) {
-	for _, in := range []contract.Input{
+	for _, in := range []playback.Input{
 		{URL: "http://127.0.0.1:1234/protected", Headers: map[string]string{"X-Test": "original"}},
 		{URL: "http://127.0.0.1:1234/video", AudioURL: "http://127.0.0.1:1234/audio"},
 	} {
 		t.Run(in.URL, func(t *testing.T) {
-			var inputs []contract.Input
-			v := &View{Controller: contract.New(openFunc(func(_ context.Context, got contract.Input) (contract.Engine, error) {
+			var inputs []playback.Input
+			v := &View{Controller: playback.New(openFunc(func(_ context.Context, got playback.Input) (playback.Engine, error) {
 				inputs = append(inputs, got)
-				return nil, contract.Unsupported
+				return nil, playback.Unsupported
 			}), nil)}
 			defer v.Close()
 			tt := gui.NewTester(v.Render, 760, 1200)
@@ -396,12 +396,12 @@ func TestRetryCopiesValidInputPreservesUnsupportedAndIgnoresInvalid(t *testing.T
 			if in.Headers != nil {
 				in.Headers["X-Test"] = "mutated"
 			}
-			v.open(contract.Input{})
+			v.open(playback.Input{})
 			tt.Frame()
 			generation := v.Controller.Snapshot().Generation
 			access(t, tt, "Retry last input", false)
 			click(t, tt, "Retry last input")
-			if len(inputs) != 2 || !reflect.DeepEqual(inputs[1], first) || v.Controller.Snapshot().Generation <= generation || v.lastError != contract.Unsupported {
+			if len(inputs) != 2 || !reflect.DeepEqual(inputs[1], first) || v.Controller.Snapshot().Generation <= generation || v.lastError != playback.Unsupported {
 				t.Fatalf("retry lost valid unsupported input: %+v", inputs)
 			}
 		})
@@ -412,47 +412,47 @@ func TestRetryLifecycleFailureRecoveryCloseAndEnded(t *testing.T) {
 	now := time.Unix(1, 0)
 	var engines []*testEngine
 	var contexts []context.Context
-	v := &View{Controller: contract.New(openFunc(func(ctx context.Context, _ contract.Input) (contract.Engine, error) {
+	v := &View{Controller: playback.New(openFunc(func(ctx context.Context, _ playback.Input) (playback.Engine, error) {
 		contexts = append(contexts, ctx)
-		e := &testEngine{state: contract.Ready}
+		e := &testEngine{state: playback.Ready}
 		engines = append(engines, e)
 		if len(engines) == 1 {
-			return e, contract.Media
+			return e, playback.Media
 		}
 		return e, nil
 	}), func() time.Time { return now })}
 	defer v.Close()
 	tt := gui.NewTester(v.Render, 760, 1200)
-	v.open(contract.Input{FilePath: "synthetic.mp4"})
+	v.open(playback.Input{FilePath: "synthetic.mp4"})
 	tt.Frame()
 	if !engines[0].closed || contexts[0].Err() == nil {
 		t.Fatal("failed opener left owned engine/context")
 	}
 	generation := v.Controller.Snapshot().Generation
 	click(t, tt, "Retry last input")
-	if v.lastError != contract.NoError || v.Controller.Snapshot().Generation <= generation || !v.Controller.Active() {
+	if v.lastError != playback.NoError || v.Controller.Snapshot().Generation <= generation || !v.Controller.Active() {
 		t.Fatal("explicit retry did not recover fake failure")
 	}
-	v.open(contract.Input{})
+	v.open(playback.Input{})
 	if contexts[1].Err() != nil || engines[1].closed {
 		t.Fatal("invalid input canceled active retry")
 	}
 	v.Controller.Tick()
 	click(t, tt, "Retry last input")
-	if !engines[1].closed || contexts[1].Err() == nil || engines[1].closes != 1 || v.lastError != contract.NoError {
+	if !engines[1].closed || contexts[1].Err() == nil || engines[1].closes != 1 || v.lastError != playback.NoError {
 		t.Fatal("replacement retry did not dispose/reset control error")
 	}
 	v.Close()
 	generation = v.Controller.Snapshot().Generation
 	tt.Frame()
 	click(t, tt, "Retry last input")
-	if v.Controller.Snapshot().Generation <= generation || !v.Controller.Active() || v.lastError != contract.NoError {
+	if v.Controller.Snapshot().Generation <= generation || !v.Controller.Active() || v.lastError != playback.NoError {
 		t.Fatal("close erased retry input")
 	}
-	engines[len(engines)-1].state = contract.Ended
+	engines[len(engines)-1].state = playback.Ended
 	now = now.Add(time.Second)
 	tt.Frame()
-	if v.Controller.Snapshot().State != contract.Ended {
+	if v.Controller.Snapshot().State != playback.Ended {
 		t.Fatal("ended state not observed before retry")
 	}
 	generation = v.Controller.Snapshot().Generation
@@ -463,9 +463,9 @@ func TestRetryLifecycleFailureRecoveryCloseAndEnded(t *testing.T) {
 }
 
 func TestRetryDisabledDuringLoadingAndDesktopScroll(t *testing.T) {
-	e := &testEngine{state: contract.Loading}
-	v := &View{Controller: contract.New(testOpener{e}, nil)}
-	v.open(contract.Input{FilePath: "a"})
+	e := &testEngine{state: playback.Loading}
+	v := &View{Controller: playback.New(testOpener{e}, nil)}
+	v.open(playback.Input{FilePath: "a"})
 	defer v.Close()
 	tt := gui.NewTester(v.Render, 760, 840)
 	access(t, tt, "Retry last input", true)

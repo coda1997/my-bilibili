@@ -4,8 +4,9 @@ Follow [agent convergence](../agent-convergence.md) R5/R6/R7/R9 for triage, ruli
 
 - Date:
 - Run ID:
-- Source revision and dirty status:
-- Exact candidate identity (commit or manifest/archive, not just dirty HEAD):
+- Lane (fast or full):
+- Candidate commit SHA (see docs/workflow.md#evidence-identity-and-tables):
+- CI run URL for that SHA, or "not run":
 - Execution outcome:
 - Independent review status:
 - Findings and separate human policy-approval status:
@@ -28,10 +29,14 @@ List actual changes, not planned capabilities.
 
 ## Verification
 
-List exact commands, platforms, pass/fail results, and evidence locators.
-Distinguish compilation from execution and self-checks from independent review.
-Bind remote CI to its tested revision; list artifact expiry and local-only
-evidence. Do not apply a previous baseline's CI to this changed candidate.
+One claim per row. Distinguish compilation from execution and self-checks
+from independent review. Do not apply a previous baseline's CI to this changed
+candidate. Local hashes stay in the run directory unless an artifact is handed
+to someone else.
+
+| Claim | Evidence (command, CI run URL, report) | Result | Scope and not tested |
+| --- | --- | --- | --- |
+| | | | |
 
 ## Not completed
 
@@ -49,5 +54,5 @@ follow-up destination, and any structural proposal. State none if empty.
 
 Describe the smallest concrete step, its owner or required authority, and
 where another agent should read to continue. Mention evidence expiry if any.
-State the current milestone and next authorized action. Update the current
-handoff pointer without rewriting historical review records or closed runs.
+Update [STATUS](../../STATUS.md), including the owner action queue, without
+rewriting historical review records or closed runs.

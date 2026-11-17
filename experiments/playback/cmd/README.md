@@ -15,7 +15,7 @@ system-media launcher is explicitly `cmd/mygo-native`. See
 Run from the repository root with the pinned Go toolchain. Supply the verified
 mpv v0.42.0 / API 2.6 runtime with the reviewed CoreAudio cleanup patch; its
 provenance and installation prerequisites are in
-[the runtime guide](../mpvprobe/runtime/README.md). The runtime is ignored and
+[the runtime guide](../../../internal/adapters/mpv/runtime/README.md). The runtime is ignored and
 absent from fresh clones. There is no automatic download, discovery or fallback.
 For this checkout's reviewed runtime, the local-fixture command is:
 
@@ -330,7 +330,7 @@ Supply an authorized, provenance-verified local runtime before running. There
 is no automatic download, global install or fallback.
 The approved CoreAudio-without-Cocoa build correction, owner-requested cleanup
 repair, and manual provenance recipe are in
-[mpvprobe/runtime](../mpvprobe/runtime/README.md). Preserve its
+[internal/adapters/mpv/runtime](../../../internal/adapters/mpv/runtime/README.md). Preserve its
 strict linker and loader preflight before invoking the native surface gate.
 
 The runtime manifest uses the following JSON fields, plus separate

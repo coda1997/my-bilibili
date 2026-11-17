@@ -8,7 +8,7 @@ import (
 
 	gui "github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/video"
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 type backend interface {
@@ -33,18 +33,18 @@ type Opener struct {
 	url  func(string) (backend, error)
 }
 
-func (o Opener) Open(ctx context.Context, in contract.Input) (contract.Engine, error) {
+func (o Opener) Open(ctx context.Context, in playback.Input) (playback.Engine, error) {
 	if err := in.Validate(); err != nil {
 		return nil, err
 	}
 	if ctx == nil {
-		return nil, contract.Invalid
+		return nil, playback.Invalid
 	}
 	if ctx.Err() != nil {
-		return nil, contract.Canceled
+		return nil, playback.Canceled
 	}
 	if len(in.Headers) > 0 || in.AudioURL != "" {
-		return nil, contract.Unsupported
+		return nil, playback.Unsupported
 	}
 	f, u := o.file, o.url
 	if f == nil {
@@ -76,7 +76,7 @@ func (o Opener) Open(ctx context.Context, in contract.Input) (contract.Engine, e
 		if p != nil {
 			p.Close()
 		}
-		return nil, contract.Media
+		return nil, playback.Media
 	}
 	// AVFoundation needs mygo's initial play to produce its first picture.
 	// Snapshot pauses/resets that short priming run before publishing Ready.
@@ -92,14 +92,14 @@ type engine struct {
 	initialSeek time.Duration
 }
 
-func (e *engine) Snapshot() contract.Snapshot {
-	s := contract.Snapshot{State: contract.Loading, Rate: 1, Volume: 1}
+func (e *engine) Snapshot() playback.Snapshot {
+	s := playback.Snapshot{State: playback.Loading, Rate: 1, Volume: 1}
 	if e.closed {
-		s.State = contract.Closed
+		s.State = playback.Closed
 		return s
 	}
 	if e.p.Err() != nil {
-		s.State, s.Error = contract.Failed, contract.Media
+		s.State, s.Error = playback.Failed, playback.Media
 		return s
 	}
 	if !e.primed && e.p.Ready() {
@@ -113,48 +113,48 @@ func (e *engine) Snapshot() contract.Snapshot {
 	s.Rate, s.Volume = e.p.Rate(), e.p.Volume()
 	switch {
 	case e.p.Ended():
-		s.State = contract.Ended
+		s.State = playback.Ended
 	case !e.p.Ready():
-		s.State = contract.Loading
+		s.State = playback.Loading
 	case e.p.Playing():
-		s.State = contract.Playing
+		s.State = playback.Playing
 	case e.commanded:
-		s.State = contract.Paused
+		s.State = playback.Paused
 	default:
-		s.State = contract.Ready
+		s.State = playback.Ready
 	}
 	return s
 }
 
-func (e *engine) Command(c contract.Command) error {
+func (e *engine) Command(c playback.Command) error {
 	if err := c.Validate(); err != nil {
 		return err
 	}
 	if e.closed {
-		return contract.IsClosed
+		return playback.IsClosed
 	}
 	switch c.Kind {
-	case contract.Play:
+	case playback.Play:
 		e.wantPlay = true
 		if e.primed {
 			e.p.Play()
 		}
 		e.commanded = true
-	case contract.Pause:
+	case playback.Pause:
 		e.wantPlay = false
 		if e.primed {
 			e.p.Pause()
 		}
 		e.commanded = true
-	case contract.Seek:
+	case playback.Seek:
 		if e.primed {
 			e.p.Seek(c.Position)
 		} else {
 			e.initialSeek = c.Position
 		}
-	case contract.Volume:
+	case playback.Volume:
 		e.p.SetVolume(c.Value)
-	case contract.Rate:
+	case playback.Rate:
 		e.p.SetRate(c.Value)
 	}
 	return nil
@@ -169,7 +169,7 @@ func (e *engine) Close() error {
 	return nil
 }
 
-func Draw(c *gui.Context, plain contract.Engine) {
+func Draw(c *gui.Context, plain playback.Engine) {
 	e, ok := plain.(*engine)
 	if !ok || e.closed {
 		return

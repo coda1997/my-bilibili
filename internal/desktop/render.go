@@ -6,8 +6,8 @@ import (
 	"time"
 
 	gui "github.com/egoist/mygo/ui"
-	"my-bilibili/experiments/playback/contract"
 	"my-bilibili/internal/app"
+	"my-bilibili/internal/playback"
 )
 
 var (
@@ -29,8 +29,8 @@ func (v *View) Render(c *gui.Context) {
 		v.suppressClick = false
 		v.active()
 	}
-	if s.Playback.State != contract.Closed {
-		c.After(contract.PollInterval)
+	if s.Playback.State != playback.Closed {
+		c.After(playback.PollInterval)
 	}
 	w, h := c.Size()
 	fullscreen := v.Fullscreen()
@@ -94,24 +94,24 @@ func (v *View) player(c *gui.Context, s app.State, w, h float32, fullscreen bool
 		} else {
 			v.controlsHeld = false
 		}
-		if s.Playback.State == contract.Loading {
+		if s.Playback.State == playback.Loading {
 			gui.Text(c.Key("loading-state"), "Loading…").Absolute().Left(18).Top(18).TextColor(gui.RGB(245, 245, 248)).FontSize(15)
 		}
-		if s.Playback.State == contract.Failed || s.SelectionError != contract.NoError || v.lastError != contract.NoError {
+		if s.Playback.State == playback.Failed || s.SelectionError != playback.NoError || v.lastError != playback.NoError {
 			gui.Column(c.Key("player-errors")).Absolute().Left(18).Top(18).Gap(7).Padding(10).Background(gui.RGB(44, 30, 38)).Children(func() {
-				if s.SelectionError != contract.NoError {
+				if s.SelectionError != playback.NoError {
 					gui.Text(c, "Could not select "+partTitle(s, s.SelectedPart)).FontSize(13).TextColor(gui.RGB(255, 230, 238))
 					if gui.Button(c.Key("retry-selection"), "Retry selection").Height(32).Clicked() {
 						v.action(c, v.Player.RetrySelection)
 					}
 				}
-				if s.Playback.State == contract.Failed {
+				if s.Playback.State == playback.Failed {
 					gui.Text(c, "Playback failed · "+string(s.Playback.Error)).TextColor(gui.RGB(255, 230, 238))
 					if gui.Button(c.Key("retry-playback"), "Retry playback").Height(32).Clicked() {
 						v.action(c, v.Player.RetryPlayback)
 					}
 				}
-				if v.lastError != contract.NoError {
+				if v.lastError != playback.NoError {
 					gui.Text(c, "Action unavailable · "+string(v.lastError)).TextColor(gui.RGB(255, 230, 238))
 				}
 			})
@@ -126,7 +126,7 @@ func (v *View) player(c *gui.Context, s app.State, w, h float32, fullscreen bool
 		}
 	}
 	v.videoInput(c, video)
-	if !v.controlsHeld && !v.partsOpen && !v.speedOpen && s.Playback.State == contract.Playing {
+	if !v.controlsHeld && !v.partsOpen && !v.speedOpen && s.Playback.State == playback.Playing {
 		if remaining := overlayDelay - v.now().Sub(v.lastActivity); remaining > 0 {
 			c.After(remaining)
 		}
@@ -233,7 +233,7 @@ func (v *View) partButtons(c *gui.Context, s app.State, popup bool) {
 			} else if p.ID == s.SelectedPart {
 				label += " · requested"
 			}
-			b := gui.Button(c.Key(key), label).Height(36).MinWidth(220).Tooltip(label).AccessSelected(p.ID == s.SelectedPart).Disabled(s.Playback.State == contract.Closed)
+			b := gui.Button(c.Key(key), label).Height(36).MinWidth(220).Tooltip(label).AccessSelected(p.ID == s.SelectedPart).Disabled(s.Playback.State == playback.Closed)
 			if b.Clicked() {
 				v.action(c, func() error { return v.Player.SelectPart(p.ID) })
 				v.partsOpen = false

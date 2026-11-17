@@ -7,15 +7,15 @@ import (
 	"testing"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
-	"my-bilibili/experiments/playback/mpvprobe"
+	"my-bilibili/internal/adapters/mpv"
+	"my-bilibili/internal/playback"
 )
 
 // Decode the serialized public result so these regressions can first run against
 // the old driver, and assert the actual evidence contract rather than its storage.
 type decodedFailure struct {
 	Phase        string             `json:"phase"`
-	Code         contract.ErrorCode `json:"code"`
+	Code         playback.ErrorCode `json:"code"`
 	Elapsed      time.Duration      `json:"elapsed_ns"`
 	LastSnapshot *struct {
 		Phase   string        `json:"phase"`
@@ -23,9 +23,9 @@ type decodedFailure struct {
 		Value   observed      `json:"value"`
 	} `json:"last_snapshot"`
 	LastResources *struct {
-		Phase   string             `json:"phase"`
-		Elapsed time.Duration      `json:"elapsed_ns"`
-		Value   mpvprobe.Resources `json:"value"`
+		Phase   string        `json:"phase"`
+		Elapsed time.Duration `json:"elapsed_ns"`
+		Value   mpv.Resources `json:"value"`
 	} `json:"last_resources"`
 }
 
@@ -43,15 +43,15 @@ func failures(t *testing.T, r *report) (*decodedFailure, *decodedFailure) {
 func TestFailureEvidenceTimeoutPhases(t *testing.T) {
 	for _, tc := range []struct {
 		name, phase string
-		state       contract.State
+		state       playback.State
 		hidden      bool
 	}{
-		{"loading", "ready", contract.Loading, false},
-		{"hidden-ready", "ready", contract.Ready, true},
-		{"picture-pending", "picture-tracks", contract.Ready, false},
+		{"loading", "ready", playback.Loading, false},
+		{"hidden-ready", "ready", playback.Ready, true},
+		{"picture-pending", "picture-tracks", playback.Ready, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s := observed{Snapshot: contract.Snapshot{State: contract.Idle, Rate: 1, Volume: 1}}
+			s := observed{Snapshot: playback.Snapshot{State: playback.Idle, Rate: 1, Volume: 1}}
 			var actions []string
 			c, r := pipeClient(t, func(q fakeRequest) any {
 				if q.Method == "act" {
@@ -63,18 +63,18 @@ func TestFailureEvidenceTimeoutPhases(t *testing.T) {
 					s.Duration = time.Minute
 					return map[string]bool{"ok": true}
 				}
-				return fakeNodes(s, false, true, mpvprobe.Resources{Cores: 1, Renderers: 1, Workers: 1})
+				return fakeNodes(s, false, true, mpv.Resources{Cores: 1, Renderers: 1, Workers: 1})
 			})
 			ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 			defer cancel()
-			if err := c.capabilities(ctx, r); safeCode(err) != contract.Timeout {
+			if err := c.capabilities(ctx, r); safeCode(err) != playback.Timeout {
 				t.Fatalf("want timeout: %v", err)
 			}
 			f, cleanup := failures(t, r)
 			if f == nil {
 				t.Fatal("missing normalized primary failure evidence")
 			}
-			if cleanup != nil || f.Phase != tc.phase || f.Code != contract.Timeout || f.LastSnapshot == nil || f.LastResources == nil {
+			if cleanup != nil || f.Phase != tc.phase || f.Code != playback.Timeout || f.LastSnapshot == nil || f.LastResources == nil {
 				t.Fatalf("failure=%+v cleanup=%+v", f, cleanup)
 			}
 			sample := f.LastSnapshot
@@ -91,7 +91,7 @@ func TestFailureEvidenceTimeoutPhases(t *testing.T) {
 	}
 }
 func TestFailureEvidenceAbsentOrMalformedSnapshot(t *testing.T) {
-	valid := mustJSON(observed{Snapshot: contract.Snapshot{State: contract.Idle, Rate: 1, Volume: 1}})
+	valid := mustJSON(observed{Snapshot: playback.Snapshot{State: playback.Idle, Rate: 1, Volume: 1}})
 	for name, label := range map[string]string{
 		"absent":       "unrelated SECRET_RAW_LOCATOR",
 		"malformed":    "snapshot {SECRET_RAW_LOCATOR",
@@ -107,7 +107,7 @@ func TestFailureEvidenceAbsentOrMalformedSnapshot(t *testing.T) {
 				}
 				return map[string]any{"nodes": []map[string]any{{"label": label}}}
 			})
-			if err := c.capabilities(context.Background(), r); safeCode(err) != contract.Media {
+			if err := c.capabilities(context.Background(), r); safeCode(err) != playback.Media {
 				t.Fatalf("want safe failure: %v", err)
 			}
 			f, _ := failures(t, r)
@@ -122,42 +122,42 @@ func TestFailureEvidenceAbsentOrMalformedSnapshot(t *testing.T) {
 }
 func TestFailureEvidenceKeepsEarlierValidSamples(t *testing.T) {
 	n := 0
-	original := observed{Snapshot: contract.Snapshot{State: contract.Idle, Rate: 1, Volume: 1}}
+	original := observed{Snapshot: playback.Snapshot{State: playback.Idle, Rate: 1, Volume: 1}}
 	c, r := pipeClient(t, func(q fakeRequest) any {
 		if q.Method == "act" {
 			return map[string]bool{"ok": true}
 		}
 		n++
 		if n == 1 {
-			return fakeNodes(original, false, true, mpvprobe.Resources{})
+			return fakeNodes(original, false, true, mpv.Resources{})
 		}
 		return map[string]any{"nodes": []map[string]any{{"label": `snapshot {"state":"ready"}`}, {"label": `resources {"Cores":1}`}}}
 	})
-	if err := c.capabilities(context.Background(), r); safeCode(err) != contract.Media {
+	if err := c.capabilities(context.Background(), r); safeCode(err) != playback.Media {
 		t.Fatalf("want failure: %v", err)
 	}
 	f, _ := failures(t, r)
 	if f == nil || f.Phase != "ready" || f.LastSnapshot == nil || f.LastResources == nil {
 		t.Fatalf("lost prior sample: %+v", f)
 	}
-	if f.LastSnapshot.Phase != "initial-snapshot" || f.LastSnapshot.Value != original || f.LastResources.Phase != "initial-snapshot" || f.LastResources.Value != (mpvprobe.Resources{}) || f.LastSnapshot.Elapsed > f.Elapsed {
+	if f.LastSnapshot.Phase != "initial-snapshot" || f.LastSnapshot.Value != original || f.LastResources.Phase != "initial-snapshot" || f.LastResources.Value != (mpv.Resources{}) || f.LastSnapshot.Elapsed > f.Elapsed {
 		t.Fatalf("stale sample redated/overwritten: %+v", f)
 	}
 }
 func TestFailureEvidenceDropsUnknownFieldsAndInvalidResources(t *testing.T) {
 	for _, resource := range []string{`{"Cores":-1,"Renderers":0,"Workers":0}`, `{"Cores":0}`, `{"Cores":null,"Renderers":0,"Workers":0}`, `{"Cores":0,"Cores":1,"Renderers":0,"Workers":0}`} {
 		t.Run(resource, func(t *testing.T) {
-			raw := mustJSON(observed{Snapshot: contract.Snapshot{Generation: 1, State: contract.Failed, Error: contract.Media}})
+			raw := mustJSON(observed{Snapshot: playback.Snapshot{Generation: 1, State: playback.Failed, Error: playback.Media}})
 			raw = strings.TrimSuffix(raw, "}") + `,"url":"SECRET_RAW_LOCATOR","State":"SECRET_RAW_LOCATOR"}`
 			c, r := pipeClient(t, func(fakeRequest) any {
 				return map[string]any{"nodes": []map[string]any{{"label": "snapshot " + raw}, {"label": "resources " + resource}, {"label": "SECRET_RAW_LOCATOR"}}}
 			})
 			// Initial state is valid; the subsequent failure is from the actual until path.
-			if err := c.capabilities(context.Background(), r); safeCode(err) != contract.Media {
+			if err := c.capabilities(context.Background(), r); safeCode(err) != playback.Media {
 				t.Fatalf("want failure: %v", err)
 			}
 			f, _ := failures(t, r)
-			if f == nil || f.LastSnapshot == nil || f.LastSnapshot.Value.State != contract.Failed || f.LastResources != nil {
+			if f == nil || f.LastSnapshot == nil || f.LastSnapshot.Value.State != playback.Failed || f.LastResources != nil {
 				t.Fatalf("unsafe normalization: %+v", f)
 			}
 			if strings.Contains(mustJSON(r), "SECRET") || strings.Contains(mustJSON(r), `"url"`) {
@@ -168,9 +168,9 @@ func TestFailureEvidenceDropsUnknownFieldsAndInvalidResources(t *testing.T) {
 }
 func TestFailureEvidencePrimarySurvivesForcedCleanup(t *testing.T) {
 	c, r := pipeClient(t, func(fakeRequest) any {
-		return fakeNodes(observed{Snapshot: contract.Snapshot{State: contract.Failed, Error: contract.Unsupported}}, false, true, mpvprobe.Resources{})
+		return fakeNodes(observed{Snapshot: playback.Snapshot{State: playback.Failed, Error: playback.Unsupported}}, false, true, mpv.Resources{})
 	})
-	if err := c.capabilities(context.Background(), r); safeCode(err) != contract.Unsupported {
+	if err := c.capabilities(context.Background(), r); safeCode(err) != playback.Unsupported {
 		t.Fatalf("primary: %v", err)
 	}
 	primary, _ := failures(t, r)
@@ -183,7 +183,7 @@ func TestFailureEvidencePrimarySurvivesForcedCleanup(t *testing.T) {
 		t.Fatalf("missing forced cleanup: %v", err)
 	}
 	primary, cleanup := failures(t, r)
-	if mustJSON(primary) != before || cleanup == nil || cleanup.Phase != "cleanup-exit" || cleanup.Code != contract.Timeout {
+	if mustJSON(primary) != before || cleanup == nil || cleanup.Phase != "cleanup-exit" || cleanup.Code != playback.Timeout {
 		t.Fatalf("primary overwritten or cleanup absent: %+v %+v", primary, cleanup)
 	}
 	if cleanup.LastSnapshot == nil || cleanup.LastSnapshot.Elapsed != primary.LastSnapshot.Elapsed || cleanup.LastSnapshot.Phase != primary.LastSnapshot.Phase {
@@ -194,19 +194,19 @@ func TestFailureEvidencePrimarySurvivesForcedCleanup(t *testing.T) {
 // Distinct fixed sample times test preservation without assuming the platform
 // clock advances between adjacent RPC observations and the resulting failure.
 func TestFailureEvidencePreservesSeededProvenance(t *testing.T) {
-	original := observed{Snapshot: contract.Snapshot{State: contract.Idle, Rate: 1, Volume: 1}}
-	resources := mpvprobe.Resources{Cores: 1, Renderers: 1, Workers: 2}
+	original := observed{Snapshot: playback.Snapshot{State: playback.Idle, Rate: 1, Volume: 1}}
+	resources := mpv.Resources{Cores: 1, Renderers: 1, Workers: 2}
 	r := &report{
 		started:       time.Now().Add(-time.Second),
 		lastSnapshot:  &sample[observed]{phaseInitialSnapshot, 17 * time.Millisecond, original},
-		lastResources: &sample[mpvprobe.Resources]{phaseInitialSnapshot, 23 * time.Millisecond, resources},
+		lastResources: &sample[mpv.Resources]{phaseInitialSnapshot, 23 * time.Millisecond, resources},
 	}
 	r.setPhase(phaseReady)
 	r.observe([]node{{Label: `snapshot {"state":"ready"}`}, {Label: `resources {"Cores":0}`}})
-	r.sessionFailed(contract.Media)
+	r.sessionFailed(playback.Media)
 	r.setPhase(phaseCleanupExit)
 	r.observe([]node{{Label: "snapshot null"}, {Label: "resources null"}})
-	r.CleanupFailure = r.failure(contract.Timeout)
+	r.CleanupFailure = r.failure(playback.Timeout)
 	primary, cleanup := failures(t, r)
 	for _, f := range []*decodedFailure{primary, cleanup} {
 		if f == nil || f.LastSnapshot == nil || f.LastResources == nil {
@@ -216,7 +216,7 @@ func TestFailureEvidencePreservesSeededProvenance(t *testing.T) {
 			t.Fatalf("seeded provenance changed: %+v %+v", f.LastSnapshot, f.LastResources)
 		}
 	}
-	if primary.Phase != "ready" || primary.Code != contract.Media || cleanup.Phase != "cleanup-exit" || cleanup.Code != contract.Timeout {
+	if primary.Phase != "ready" || primary.Code != playback.Media || cleanup.Phase != "cleanup-exit" || cleanup.Code != playback.Timeout {
 		t.Fatalf("failure attribution changed: %+v %+v", primary, cleanup)
 	}
 }

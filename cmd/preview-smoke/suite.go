@@ -7,18 +7,18 @@ import (
 	"math"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
-	"my-bilibili/experiments/playback/mpvprobe"
+	"my-bilibili/internal/adapters/mpv"
+	"my-bilibili/internal/playback"
 	"my-bilibili/internal/previewbundle"
 )
 
 type observed = previewbundle.Observation
 
 func ready(s observed) bool {
-	return (s.State.Playback.State == contract.Ready || s.State.Playback.State == contract.Paused) && s.State.Playback.Duration > 0 && s.State.Playback.Error == contract.NoError && s.Tracks.Video && s.Tracks.Audio && s.Resources.Cores > 0 && s.Resources.Renderers > 0 && s.Resources.Workers > 0
+	return (s.State.Playback.State == playback.Ready || s.State.Playback.State == playback.Paused) && s.State.Playback.Duration > 0 && s.State.Playback.Error == playback.NoError && s.Tracks.Video && s.Tracks.Audio && s.Resources.Cores > 0 && s.Resources.Renderers > 0 && s.Resources.Workers > 0
 }
-func disposed(s observed, code contract.ErrorCode) bool {
-	return s.State.Playback.State == contract.Closed && s.State.Playback.Error == code && s.Resources == (mpvprobe.Resources{}) && s.DisposalError == contract.NoError && !s.Tracks.Video && !s.Tracks.Audio && !s.State.DesiredPlaying
+func disposed(s observed, code playback.ErrorCode) bool {
+	return s.State.Playback.State == playback.Closed && s.State.Playback.Error == code && s.Resources == (mpv.Resources{}) && s.DisposalError == playback.NoError && !s.Tracks.Video && !s.Tracks.Audio && !s.State.DesiredPlaying
 }
 func absDuration(d time.Duration) time.Duration {
 	if d < 0 {
@@ -40,10 +40,10 @@ func (c *client) startPlaying(ctx context.Context) (observed, error) {
 	}
 	before := s.State.Playback
 	return c.change(ctx, func() error { return c.act(ctx, "play-toggle") }, func(o observed) bool {
-		return o.State.Playback.Generation == before.Generation && o.State.Playback.State == contract.Playing && o.State.Playback.Position >= before.Position+300*time.Millisecond && o.Tracks.Video && o.Tracks.Audio
+		return o.State.Playback.Generation == before.Generation && o.State.Playback.State == playback.Playing && o.State.Playback.Position >= before.Position+300*time.Millisecond && o.Tracks.Video && o.Tracks.Audio
 	})
 }
-func (c *client) survive(ctx context.Context, p *ownedProcess, code contract.ErrorCode, r *report) error {
+func (c *client) survive(ctx context.Context, p *ownedProcess, code playback.ErrorCode, r *report) error {
 	start := time.Now()
 	for {
 		if p.exited() {
@@ -82,14 +82,14 @@ func (c *client) cancelParent(ctx context.Context, p *ownedProcess, r *report) e
 		return err
 	}
 	s, err := c.until(cancelCtx, 200*time.Millisecond, func(o observed) bool {
-		return o.State.Playback.Generation == before.State.Playback.Generation && disposed(o, contract.Canceled)
+		return o.State.Playback.Generation == before.State.Playback.Generation && disposed(o, playback.Canceled)
 	})
 	elapsed := time.Since(start)
 	if err != nil || elapsed > 200*time.Millisecond {
 		return errors.New("external cancellation did not reach complete disposal within 200ms")
 	}
 	r.pass("external-cancellation", fmt.Sprintf("initiating action through observed disposal: %s (limit 200ms)", elapsed), &s)
-	return c.survive(ctx, p, contract.Canceled, r)
+	return c.survive(ctx, p, playback.Canceled, r)
 }
 func (c *client) layout(ctx context.Context, wide bool) error {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -160,7 +160,7 @@ func (c *client) product(ctx context.Context, p *ownedProcess, dir string, r *re
 		return errors.New("native picture did not change during sampled playback progress")
 	}
 	r.pass("part-1-progress-frames", "native position advanced >=300ms and captured video pixels changed", &s)
-	s, err = c.change(ctx, func() error { return c.act(ctx, "play-toggle") }, func(o observed) bool { return o.State.Playback.State == contract.Paused && !o.State.DesiredPlaying })
+	s, err = c.change(ctx, func() error { return c.act(ctx, "play-toggle") }, func(o observed) bool { return o.State.Playback.State == playback.Paused && !o.State.DesiredPlaying })
 	if err != nil {
 		return err
 	}
@@ -172,12 +172,12 @@ func (c *client) product(ctx context.Context, p *ownedProcess, dir string, r *re
 	if err != nil {
 		return err
 	}
-	if s.State.Playback.State != contract.Paused || absDuration(s.State.Playback.Position-paused.Position) > 150*time.Millisecond {
+	if s.State.Playback.State != playback.Paused || absDuration(s.State.Playback.Position-paused.Position) > 150*time.Millisecond {
 		return errors.New("pause drift exceeded 150ms")
 	}
 	r.pass("pause", "sampled native pause and <=150ms drift over 500ms", &s)
 	s, err = c.change(ctx, func() error { return c.slider(ctx, "seek-slider", "5") }, func(o observed) bool {
-		return o.State.Playback.Generation == paused.Generation && o.State.Playback.State == contract.Paused && absDuration(o.State.Playback.Position-5*time.Second) < 500*time.Millisecond
+		return o.State.Playback.Generation == paused.Generation && o.State.Playback.State == playback.Paused && absDuration(o.State.Playback.Position-5*time.Second) < 500*time.Millisecond
 	})
 	if err != nil {
 		return fmt.Errorf("seek control: %w", err)
@@ -238,7 +238,7 @@ func (c *client) product(ctx context.Context, p *ownedProcess, dir string, r *re
 	c.phase = "parts-replay-disposal"
 	gen := s.State.Playback.Generation
 	s, err = c.change(ctx, func() error { return c.act(ctx, "next-part") }, func(o observed) bool {
-		return o.State.Playback.Generation > gen && o.State.PlaybackPart == "part-2" && o.State.Playback.State == contract.Playing && o.State.Playback.Position >= 300*time.Millisecond && o.Tracks.Video && o.Tracks.Audio
+		return o.State.Playback.Generation > gen && o.State.PlaybackPart == "part-2" && o.State.Playback.State == playback.Playing && o.State.Playback.Position >= 300*time.Millisecond && o.Tracks.Video && o.Tracks.Audio
 	})
 	if err != nil {
 		return err
@@ -252,7 +252,7 @@ func (c *client) product(ctx context.Context, p *ownedProcess, dir string, r *re
 	r.pass("part-2-next-control", "P2 selected through Next; fresh generation, native progress/tracks and picture; settings persisted", &s)
 	gen = s.State.Playback.Generation
 	s, err = c.change(ctx, func() error { return c.selectPopup(ctx, "parts-menu", "part-part-1") }, func(o observed) bool {
-		return o.State.Playback.Generation > gen && o.State.PlaybackPart == "part-1" && o.State.Playback.State == contract.Playing
+		return o.State.Playback.Generation > gen && o.State.PlaybackPart == "part-1" && o.State.Playback.State == playback.Playing
 	})
 	if err != nil {
 		return err
@@ -261,14 +261,14 @@ func (c *client) product(ctx context.Context, p *ownedProcess, dir string, r *re
 	if err = c.slider(ctx, "seek-slider", "29"); err != nil {
 		return err
 	}
-	s, err = c.until(ctx, 4*time.Second, func(o observed) bool { return o.State.Playback.State == contract.Ended && !o.State.DesiredPlaying })
+	s, err = c.until(ctx, 4*time.Second, func(o observed) bool { return o.State.Playback.State == playback.Ended && !o.State.DesiredPlaying })
 	if err != nil {
 		return err
 	}
 	r.pass("ended", "native end reached without auto-next", &s)
 	gen = s.State.Playback.Generation
 	s, err = c.change(ctx, func() error { return c.act(ctx, "play-toggle") }, func(o observed) bool {
-		return o.State.Playback.Generation > gen && o.State.PlaybackPart == "part-1" && o.State.Playback.State == contract.Playing && o.State.Playback.Position > 0 && o.State.Playback.Position < 3*time.Second
+		return o.State.Playback.Generation > gen && o.State.PlaybackPart == "part-1" && o.State.Playback.State == playback.Playing && o.State.Playback.Position > 0 && o.State.Playback.Position < 3*time.Second
 	})
 	if err != nil {
 		return err
@@ -277,12 +277,12 @@ func (c *client) product(ctx context.Context, p *ownedProcess, dir string, r *re
 	if err = c.act(ctx, "e2e-dispose"); err != nil {
 		return err
 	}
-	s, err = c.until(ctx, time.Second, func(o observed) bool { return disposed(o, contract.NoError) })
+	s, err = c.until(ctx, time.Second, func(o observed) bool { return disposed(o, playback.NoError) })
 	if err != nil {
 		return err
 	}
 	r.pass("dispose-without-quit", "Player.Close completed and every native ownership counter is zero", &s)
-	return c.survive(ctx, p, contract.NoError, r)
+	return c.survive(ctx, p, playback.NoError, r)
 }
 
 // These are observations, not native transition-completion acknowledgments.
@@ -531,7 +531,7 @@ func (c *client) fullscreenCycles(ctx context.Context, dir string, r *report, pr
 }
 func preservesPaused(before, after observed) bool {
 	a, b := before.State, after.State
-	return a.Playback.Generation == b.Playback.Generation && b.Playback.State == contract.Paused && !b.DesiredPlaying && a.SelectedPart == b.SelectedPart && a.PlaybackPart == b.PlaybackPart && a.SelectionError == b.SelectionError && a.Playback.Error == b.Playback.Error && a.Volume == b.Volume && a.Rate == b.Rate && b.Playback.Rate == a.Playback.Rate && b.Playback.Volume == a.Playback.Volume && absDuration(a.Playback.Position-b.Playback.Position) < 150*time.Millisecond
+	return a.Playback.Generation == b.Playback.Generation && b.Playback.State == playback.Paused && !b.DesiredPlaying && a.SelectedPart == b.SelectedPart && a.PlaybackPart == b.PlaybackPart && a.SelectionError == b.SelectionError && a.Playback.Error == b.Playback.Error && a.Volume == b.Volume && a.Rate == b.Rate && b.Playback.Rate == a.Playback.Rate && b.Playback.Volume == a.Playback.Volume && absDuration(a.Playback.Position-b.Playback.Position) < 150*time.Millisecond
 }
 func run(ctx context.Context, app, dir string, r *report) error {
 	if err := invocation(ctx, app, "product", "", dir, r, func(ctx context.Context, c *client, p *ownedProcess) error { return c.product(ctx, p, dir, r) }); err != nil {
@@ -550,7 +550,7 @@ func run(ctx context.Context, app, dir string, r *report) error {
 	}
 	if err := invocation(ctx, app, "loading-cancel", "delayed", dir, r, func(ctx context.Context, c *client, p *ownedProcess) error {
 		if _, err := c.until(ctx, 3*time.Second, func(s observed) bool {
-			return s.State.Playback.State == contract.Loading && s.Resources.Cores > 0 && s.Delay.Requests > 0 && s.Delay.Active > 0
+			return s.State.Playback.State == playback.Loading && s.Resources.Cores > 0 && s.Delay.Requests > 0 && s.Delay.Active > 0
 		}); err != nil {
 			return err
 		}
@@ -569,7 +569,7 @@ func run(ctx context.Context, app, dir string, r *report) error {
 	}
 	return invocation(ctx, app, "loading-window-close", "delayed", dir, r, func(ctx context.Context, c *client, p *ownedProcess) error {
 		s, err := c.until(ctx, 3*time.Second, func(s observed) bool {
-			return s.State.Playback.State == contract.Loading && s.Resources.Cores > 0 && s.Delay.Requests > 0 && s.Delay.Active > 0
+			return s.State.Playback.State == playback.Loading && s.Resources.Cores > 0 && s.Delay.Requests > 0 && s.Delay.Active > 0
 		})
 		if err == nil {
 			r.pass("fresh-loading-before-window-close", "separate delayed invocation; actual delayed request active during native loading", &s)

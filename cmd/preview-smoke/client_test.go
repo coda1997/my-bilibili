@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
 	"my-bilibili/internal/app"
 	"my-bilibili/internal/fixture"
+	"my-bilibili/internal/playback"
 )
 
 func completeObservation(t *testing.T) observed {
@@ -22,18 +22,18 @@ func completeObservation(t *testing.T) observed {
 	if err != nil {
 		t.Fatal(err)
 	}
-	video, err := source.Detail()
+	video, err := source.Detail(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	return observed{State: app.State{Video: video, SelectedPart: "part-1", PlaybackPart: "part-1", Volume: 1, Rate: 1, Playback: contract.Snapshot{Generation: 1, State: contract.Closed, Error: contract.Canceled, Volume: 1, Rate: 1}}}
+	return observed{State: app.State{Video: video, SelectedPart: "part-1", PlaybackPart: "part-1", Volume: 1, Rate: 1, Playback: playback.Snapshot{Generation: 1, State: playback.Closed, Error: playback.Canceled, Volume: 1, Rate: 1}}}
 }
 func TestObservationNodesAreUniqueAndStrict(t *testing.T) {
 	o := completeObservation(t)
 	b, _ := json.Marshal(o)
 	good := node{Key: "e2e-observation", Label: string(b)}
 	got, err := observation([]node{good})
-	if err != nil || !disposed(got, contract.Canceled) {
+	if err != nil || !disposed(got, playback.Canceled) {
 		t.Fatal(got, err)
 	}
 	for _, nodes := range [][]node{nil, {good, good}, {{Key: "other", Label: string(b)}}, {{Key: "e2e-observation", Label: `{}`}}, {{Key: "e2e-observation", Label: `null`}}} {
@@ -42,12 +42,12 @@ func TestObservationNodesAreUniqueAndStrict(t *testing.T) {
 		}
 	}
 	o.Resources.Cores = 1
-	if disposed(o, contract.Canceled) {
+	if disposed(o, playback.Canceled) {
 		t.Fatal("positive ownership passed disposal")
 	}
 	o.Resources.Cores = 0
-	o.State.Playback.Error = contract.NoError
-	if disposed(o, contract.Canceled) {
+	o.State.Playback.Error = playback.NoError
+	if disposed(o, playback.Canceled) {
 		t.Fatal("ordinary close passed parent cancellation")
 	}
 }

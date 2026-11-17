@@ -1,4 +1,4 @@
-package mpvprobe
+package mpv
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"time"
 
 	gui "github.com/egoist/mygo/ui"
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 const width, height = 640, 360
@@ -29,14 +29,14 @@ func Owned() Resources { return Resources{cores.Load(), renderers.Load(), worker
 
 type Opener struct {
 	Library string
-	Policy  contract.InputPolicy
+	Policy  playback.InputPolicy
 	loader  func(string) (*nativeAPI, error)
 }
 
-func (o Opener) Open(ctx context.Context, in contract.Input) (contract.Engine, error) {
+func (o Opener) Open(ctx context.Context, in playback.Input) (playback.Engine, error) {
 	in.Headers = maps.Clone(in.Headers)
 	if ctx == nil {
-		return nil, contract.Invalid
+		return nil, playback.Invalid
 	}
 	validate := in.Validate
 	if o.Policy != nil {
@@ -54,16 +54,16 @@ func (o Opener) Open(ctx context.Context, in contract.Input) (contract.Engine, e
 		loader = load
 	}
 	e := &engine{commands: make([][]string, 0, 32), stop: make(chan struct{}), done: make(chan struct{}),
-		s: contract.Snapshot{State: contract.Loading, Rate: 1, Volume: 1}}
+		s: playback.Snapshot{State: playback.Loading, Rate: 1, Volume: 1}}
 	go e.run(ctx, in, o.Library, loader)
 	return e, nil
 }
 
 type engine struct {
 	mu       sync.RWMutex
-	s        contract.Snapshot
+	s        playback.Snapshot
 	closed   bool
-	failure  contract.ErrorCode
+	failure  playback.ErrorCode
 	tracks   Tracks
 	once     sync.Once
 	commands [][]string // Pending native arguments; protected by mu.
@@ -80,41 +80,41 @@ type engine struct {
 	bitmap   *gui.Bitmap // UI thread only
 }
 
-func (e *engine) Snapshot() contract.Snapshot {
+func (e *engine) Snapshot() playback.Snapshot {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.s
 }
 
-func (e *engine) Command(c contract.Command) error {
+func (e *engine) Command(c playback.Command) error {
 	if err := c.Validate(); err != nil {
 		return err
 	}
 	args := []string{"set", "pause", "yes"}
 	switch c.Kind {
-	case contract.Play:
+	case playback.Play:
 		args[2] = "no"
-	case contract.Seek:
+	case playback.Seek:
 		args = []string{"seek", strconv.FormatFloat(c.Position.Seconds(), 'f', 9, 64), "absolute+exact"}
-	case contract.Volume:
+	case playback.Volume:
 		args = []string{"set", "volume", strconv.FormatFloat(c.Value*100, 'f', -1, 64)}
-	case contract.Rate:
+	case playback.Rate:
 		args = []string{"set", "speed", strconv.FormatFloat(c.Value, 'f', -1, 64)}
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.closed {
-		return contract.IsClosed
+		return playback.IsClosed
 	}
 	// Adjacent unsent absolute targets supersede one another. Other controls
 	// are ordering barriers; already-sent commands retain their reply ownership.
 	n := len(e.commands)
-	if c.Kind == contract.Seek && n > 0 && e.commands[n-1][0] == "seek" {
+	if c.Kind == playback.Seek && n > 0 && e.commands[n-1][0] == "seek" {
 		e.commands[n-1] = args
 		return nil
 	}
 	if n == 32 {
-		return contract.Media
+		return playback.Media
 	}
 	e.commands = append(e.commands, args)
 	return nil
@@ -129,27 +129,27 @@ func (e *engine) Close() error {
 	})
 	<-e.done // Never publish disposal while native objects/workers remain owned.
 	e.mu.Lock()
-	e.s.State, e.s.Error = contract.Closed, contract.NoError
+	e.s.State, e.s.Error = playback.Closed, playback.NoError
 	e.mu.Unlock()
 	// Close and Draw are UI-thread operations. Worker buffer ownership ended.
 	e.frames, e.bitmap = [2]*image.RGBA{}, nil
 	return nil
 }
 
-func (e *engine) fail(code contract.ErrorCode) {
+func (e *engine) fail(code playback.ErrorCode) {
 	e.mu.Lock()
 	e.failure = code
 	e.mu.Unlock()
 }
 
-func (e *engine) run(ctx context.Context, in contract.Input, path string, loader func(string) (*nativeAPI, error)) {
+func (e *engine) run(ctx context.Context, in playback.Input, path string, loader func(string) (*nativeAPI, error)) {
 	workers.Add(1)
 	defer func() {
 		workers.Add(-1)
 		e.mu.Lock()
 		e.closed = true
-		if e.failure != contract.NoError {
-			e.s.State, e.s.Error = contract.Failed, e.failure
+		if e.failure != playback.NoError {
+			e.s.State, e.s.Error = playback.Failed, e.failure
 		}
 		e.mu.Unlock()
 		close(e.done)
@@ -162,7 +162,7 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 	}
 	a, err := loader(path)
 	if err != nil {
-		e.fail(contract.Unsupported)
+		e.fail(playback.Unsupported)
 		return
 	}
 	defer a.unload()
@@ -172,7 +172,7 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 	}
 	core := a.create()
 	if core == 0 {
-		e.fail(contract.Media)
+		e.fail(playback.Media)
 		return
 	}
 	cores.Add(1)
@@ -192,7 +192,7 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 		// equivalent to disabled; every other configuration error is fatal.
 		absentScript := result == -5 && (option[0] == "load-scripts" || option[0] == "ytdl")
 		if result < 0 && !absentScript {
-			e.fail(contract.Media)
+			e.fail(playback.Media)
 			return
 		}
 	}
@@ -201,11 +201,11 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 		return
 	}
 	if usesHTTPS(in) && a.option(core, "tls-verify", "yes") < 0 {
-		e.fail(contract.Unsupported)
+		e.fail(playback.Unsupported)
 		return
 	}
 	if !a.transport(core, in) || a.initialize(core) < 0 {
-		e.fail(contract.Media)
+		e.fail(playback.Media)
 		return
 	}
 	properties := []struct {
@@ -214,7 +214,7 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 	}{{"time-pos", 5}, {"duration", 5}, {"pause", 3}, {"volume", 5}, {"speed", 5}, {"eof-reached", 3}, {"track-list", 6}}
 	for i, p := range properties {
 		if a.observe(core, uint64(i+1), p.name, p.kind) < 0 {
-			e.fail(contract.Media)
+			e.fail(playback.Media)
 			return
 		}
 	}
@@ -229,16 +229,16 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 		// Keep the render owner servicing frames while vid=no destroys the VO.
 		// Sending quit alone does not acknowledge that native video has stopped.
 		if renderCreated && !a.stopVideo(core) {
-			e.fail(contract.Media)
+			e.fail(playback.Media)
 		}
 		if a.send(core, 0, []string{"quit"}) < 0 {
-			e.fail(contract.Media)
+			e.fail(playback.Media)
 		}
 		close(renderStop)
 		<-renderDone
 	}()
 	if !renderCreated {
-		e.fail(contract.Media)
+		e.fail(playback.Media)
 		return
 	}
 	if ctx.Err() != nil {
@@ -251,11 +251,11 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 	}
 	id := uint64(1)
 	if a.send(core, id, []string{"loadfile", source, "replace"}) < 0 {
-		e.fail(contract.Media)
+		e.fail(playback.Media)
 		return
 	}
 	pending, loaded, paused, commanded := id, false, true, false
-	ticker := time.NewTicker(contract.PollInterval)
+	ticker := time.NewTicker(playback.PollInterval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -273,7 +273,7 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 		for n := 0; ; n++ {
 			p := a.wait(core, 0)
 			if p == nil {
-				e.fail(contract.Media)
+				e.fail(playback.Media)
 				return
 			}
 			ev := *(*event)(p)
@@ -281,21 +281,21 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 				break
 			}
 			if n == 256 || ev.ID == 24 || ev.ID == 1 {
-				e.fail(contract.Media)
+				e.fail(playback.Media)
 				return
 			}
 			switch ev.ID {
 			case 5: // command reply; dependent commands wait for their own ID.
 				if ev.Reply == pending {
 					if ev.Error < 0 {
-						e.fail(contract.Media)
+						e.fail(playback.Media)
 						return
 					}
 					pending = 0
 				}
 			case 7: // end-file: reason/error are the first two C ints.
 				if ev.Data != nil && (*[2]int32)(ev.Data)[0] == 4 {
-					e.fail(contract.Media)
+					e.fail(playback.Media)
 					return
 				}
 			case 8:
@@ -303,7 +303,7 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 				// mpv can keep playing video after a failed optional audio-files
 				// load. This presentation explicitly requires its external audio.
 				if !ok || !tracks.Video || in.AudioURL != "" && (!tracks.Audio || !tracks.ExternalAudio) {
-					e.fail(contract.Media)
+					e.fail(playback.Media)
 					return
 				}
 				e.mu.Lock()
@@ -316,12 +316,12 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 					if p.Data != nil {
 						if ev.Reply == 7 && loaded {
 							if p.Format != 6 {
-								e.fail(contract.Media)
+								e.fail(playback.Media)
 								return
 							}
 							tracks, ok := selectedTracks((*nodeValue)(p.Data))
 							if !ok || !tracks.Video || in.AudioURL != "" && (!tracks.Audio || !tracks.ExternalAudio) {
-								e.fail(contract.Media)
+								e.fail(playback.Media)
 								return
 							}
 							e.mu.Lock()
@@ -335,16 +335,16 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 			}
 		}
 		e.mu.Lock()
-		if e.failure != contract.NoError {
+		if e.failure != playback.NoError {
 			e.mu.Unlock()
 			return
 		}
-		if loaded && e.s.Duration > 0 && e.s.State != contract.Ended {
-			e.s.State = contract.Playing
+		if loaded && e.s.Duration > 0 && e.s.State != playback.Ended {
+			e.s.State = playback.Playing
 			if paused {
-				e.s.State = contract.Ready
+				e.s.State = playback.Ready
 				if commanded {
-					e.s.State = contract.Paused
+					e.s.State = playback.Paused
 				}
 			}
 		}
@@ -365,7 +365,7 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 				}
 				id++
 				if a.send(core, id, args) < 0 {
-					e.fail(contract.Media)
+					e.fail(playback.Media)
 					return
 				}
 				pending = id
@@ -380,7 +380,7 @@ func (e *engine) update(id uint64, p property, paused *bool) {
 	if id == 3 && p.Format == 3 {
 		*paused = *(*int32)(p.Data) != 0
 	} else if id == 6 && p.Format == 3 && *(*int32)(p.Data) != 0 {
-		e.s.State = contract.Ended
+		e.s.State = playback.Ended
 	} else if p.Format == 5 {
 		value := *(*float64)(p.Data)
 		if math.IsNaN(value) || math.IsInf(value, 0) || value < 0 {
@@ -406,7 +406,7 @@ func (e *engine) update(id uint64, p property, paused *bool) {
 
 // Match the policy parser's case-insensitive scheme handling. Parsing here is
 // only for classification; both private locator strings remain byte-for-byte intact.
-func usesHTTPS(in contract.Input) bool {
+func usesHTTPS(in playback.Input) bool {
 	for _, raw := range []string{in.URL, in.AudioURL} {
 		if u, err := url.Parse(raw); err == nil && u.Scheme == "https" {
 			return true
@@ -415,26 +415,26 @@ func usesHTTPS(in contract.Input) bool {
 	return false
 }
 
-func safePolicyError(err error) contract.ErrorCode {
-	var code contract.ErrorCode
+func safePolicyError(err error) playback.ErrorCode {
+	var code playback.ErrorCode
 	if errors.As(err, &code) {
 		switch code {
-		case contract.Invalid, contract.Unsupported, contract.Canceled, contract.Timeout, contract.Media, contract.IsClosed:
+		case playback.Invalid, playback.Unsupported, playback.Canceled, playback.Timeout, playback.Media, playback.IsClosed:
 			return code
 		}
 	}
-	return contract.Invalid
+	return playback.Invalid
 }
-func contextError(ctx context.Context) contract.ErrorCode {
+func contextError(ctx context.Context) playback.ErrorCode {
 	if ctx.Err() == context.DeadlineExceeded {
-		return contract.Timeout
+		return playback.Timeout
 	}
-	return contract.Canceled
+	return playback.Canceled
 }
 
 // DrawTarget shares the existing buffer/lifetime protocol but labels the actual
 // target correctly. It is UI-thread-only and never records a frame.
-func DrawTarget(c *gui.Context, plain contract.Engine) {
+func DrawTarget(c *gui.Context, plain playback.Engine) {
 	e, ok := plain.(*engine)
 	if !ok {
 		return

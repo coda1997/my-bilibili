@@ -8,9 +8,9 @@ import (
 	"reflect"
 	"strings"
 
-	"my-bilibili/experiments/playback/contract"
-	"my-bilibili/experiments/playback/mpvprobe"
+	"my-bilibili/internal/adapters/mpv"
 	"my-bilibili/internal/app"
+	"my-bilibili/internal/playback"
 )
 
 // Observation contains only safe application/native state, never media inputs.
@@ -18,9 +18,9 @@ import (
 type Observation struct {
 	State         app.State
 	Fullscreen    bool
-	Resources     mpvprobe.Resources
-	Tracks        mpvprobe.Tracks
-	DisposalError contract.ErrorCode
+	Resources     mpv.Resources
+	Tracks        mpv.Tracks
+	DisposalError playback.ErrorCode
 	Delay         DelayObservation
 }
 type DelayObservation struct{ Requests, Active int64 }
@@ -43,13 +43,13 @@ func ParseObservation(data []byte) (Observation, error) {
 	}
 	s := o.State.Playback
 	switch s.State {
-	case contract.Idle, contract.Loading, contract.Ready, contract.Paused, contract.Playing, contract.Ended, contract.Failed, contract.Closed:
+	case playback.Idle, playback.Loading, playback.Ready, playback.Paused, playback.Playing, playback.Ended, playback.Failed, playback.Closed:
 	default:
 		return Observation{}, invalid
 	}
-	for _, code := range []contract.ErrorCode{s.Error, o.State.SelectionError, o.DisposalError} {
+	for _, code := range []playback.ErrorCode{s.Error, o.State.SelectionError, o.DisposalError} {
 		switch code {
-		case contract.NoError, contract.Invalid, contract.Unsupported, contract.Canceled, contract.Timeout, contract.Media, contract.IsClosed:
+		case playback.NoError, playback.Invalid, playback.Unsupported, playback.Canceled, playback.Timeout, playback.Media, playback.IsClosed:
 		default:
 			return Observation{}, invalid
 		}

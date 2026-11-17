@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -12,10 +13,10 @@ import (
 
 	_ "github.com/egoist/mygo/plugins/automation"
 	gui "github.com/egoist/mygo/ui"
-	"my-bilibili/experiments/playback/contract"
-	"my-bilibili/experiments/playback/mpvprobe"
+	"my-bilibili/internal/adapters/mpv"
 	"my-bilibili/internal/app"
 	"my-bilibili/internal/catalog"
+	"my-bilibili/internal/playback"
 	"my-bilibili/internal/previewbundle"
 )
 
@@ -27,11 +28,11 @@ type delayedSource struct {
 	requests, active atomic.Int64
 }
 
-func (s *delayedSource) Resolve(id catalog.PartID) (contract.Input, error) {
-	if _, err := s.Source.Resolve(id); err != nil {
-		return contract.Input{}, err
+func (s *delayedSource) Resolve(ctx context.Context, id catalog.PartID) (app.Resolution, error) {
+	if _, err := s.Source.Resolve(ctx, id); err != nil {
+		return app.Resolution{}, err
 	}
-	return contract.Input{URL: s.origin + "/delayed"}, nil
+	return app.Resolution{Input: playback.Input{URL: s.origin + "/delayed"}}, nil
 }
 func automationSource(source app.Source) (app.Source, func(), error) {
 	mode := os.Getenv("MY_BILIBILI_E2E_SCENARIO")
@@ -39,11 +40,11 @@ func automationSource(source app.Source) (app.Source, func(), error) {
 		return source, func() {}, nil
 	}
 	if mode != "delayed" {
-		return nil, nil, contract.Invalid
+		return nil, nil, playback.Invalid
 	}
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
-		return nil, nil, contract.Media
+		return nil, nil, playback.Media
 	}
 	delayed := &delayedSource{Source: source, origin: "http://" + listener.Addr().String()}
 	server := &http.Server{ReadHeaderTimeout: time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -88,13 +89,13 @@ func (a *application) automationRender(c *gui.Context) {
 			a.window.SetContentSize(1120, 760)
 		}
 	})
-	observation := previewbundle.Observation{State: a.session.State(), Fullscreen: a.window.IsFullScreen(), Resources: mpvprobe.Owned(), Tracks: mpvprobe.Inspect(a.session.Engine()), DisposalError: ""}
+	observation := previewbundle.Observation{State: a.session.State(), Fullscreen: a.window.IsFullScreen(), Resources: mpv.Owned(), Tracks: mpv.Inspect(a.session.Engine()), DisposalError: ""}
 	if delayed, ok := a.source.(*delayedSource); ok {
 		active := delayed.active.Load()
 		observation.Delay = previewbundle.DelayObservation{Requests: delayed.requests.Load(), Active: active}
 	}
 	if a.closeError != nil {
-		observation.DisposalError = contract.Media
+		observation.DisposalError = playback.Media
 	}
 	b, _ := json.Marshal(observation)
 	gui.Text(c.Key("e2e-observation"), string(b)).Absolute().Left(-20000).Top(-20000).Size(1, 1)

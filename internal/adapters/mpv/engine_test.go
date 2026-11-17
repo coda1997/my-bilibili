@@ -1,4 +1,4 @@
-package mpvprobe
+package mpv
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"unsafe"
 
 	gui "github.com/egoist/mygo/ui"
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 type fakeNative struct {
@@ -89,7 +89,7 @@ func (f *fakeNative) add(s string) { f.mu.Lock(); f.order = append(f.order, s); 
 
 func openFake(t *testing.T, f *fakeNative) *engine {
 	t.Helper()
-	plain, err := (Opener{loader: func(string) (*nativeAPI, error) { return f.a, nil }}).Open(context.Background(), contract.Input{FilePath: "synthetic.mp4"})
+	plain, err := (Opener{loader: func(string) (*nativeAPI, error) { return f.a, nil }}).Open(context.Background(), playback.Input{FilePath: "synthetic.mp4"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,12 +118,12 @@ func TestABIAndLoaderSafeRejection(t *testing.T) {
 	if unsafe.Sizeof(event{}) != 24 || unsafe.Offsetof(event{}.Data) != 16 || unsafe.Sizeof(property{}) != 24 || unsafe.Offsetof(property{}.Data) != 16 || unsafe.Sizeof(renderParam{}) != 16 {
 		t.Fatal("unexpected C ABI layout")
 	}
-	if _, err := load("/absent-synthetic-libmpv.dylib"); err != contract.Unsupported {
+	if _, err := load("/absent-synthetic-libmpv.dylib"); err != playback.Unsupported {
 		t.Fatal(err)
 	}
 	called := false
 	o := Opener{loader: func(string) (*nativeAPI, error) { called = true; return nil, errors.New("must not load") }}
-	for _, in := range []contract.Input{{}, {FilePath: "synthetic", Headers: map[string]string{"X-Test": "value"}}, {URL: "https://example.invalid/video"}} {
+	for _, in := range []playback.Input{{}, {FilePath: "synthetic", Headers: map[string]string{"X-Test": "value"}}, {URL: "https://example.invalid/video"}} {
 		if _, err := o.Open(context.Background(), in); err == nil {
 			t.Fatal("invalid/unsupported input accepted")
 		}
@@ -136,7 +136,7 @@ func TestABIAndLoaderSafeRejection(t *testing.T) {
 func TestTransportInputAcceptedWithoutDroppingFields(t *testing.T) {
 	f := fake()
 	entered, release := make(chan struct{}), make(chan struct{})
-	in := contract.Input{URL: "http://127.0.0.1/video", AudioURL: "http://127.0.0.1/audio", Headers: map[string]string{"X-Test": "one,two"}}
+	in := playback.Input{URL: "http://127.0.0.1/video", AudioURL: "http://127.0.0.1/audio", Headers: map[string]string{"X-Test": "one,two"}}
 	e, err := (Opener{loader: func(string) (*nativeAPI, error) { close(entered); <-release; return f.a, nil }}).Open(context.Background(), in)
 	if err != nil {
 		t.Fatalf("valid transport input rejected: %v", err)
@@ -151,13 +151,13 @@ func TestTransportInputAcceptedWithoutDroppingFields(t *testing.T) {
 func TestOpenIsAsyncAndCloseWaitsForRealDisposal(t *testing.T) {
 	f := fake()
 	blocked, entered := make(chan struct{}), make(chan struct{})
-	plain, err := (Opener{loader: func(string) (*nativeAPI, error) { close(entered); <-blocked; return f.a, nil }}).Open(context.Background(), contract.Input{FilePath: "synthetic"})
+	plain, err := (Opener{loader: func(string) (*nativeAPI, error) { close(entered); <-blocked; return f.a, nil }}).Open(context.Background(), playback.Input{FilePath: "synthetic"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	e := plain.(*engine)
 	<-entered
-	if e.Snapshot().State != contract.Loading {
+	if e.Snapshot().State != playback.Loading {
 		t.Fatal("Open waited for initialization")
 	}
 	finished := make(chan struct{})
@@ -181,7 +181,7 @@ func TestOpenIsAsyncAndCloseWaitsForRealDisposal(t *testing.T) {
 	if len(f.order) != 3 || f.order[0] != "render-free" || f.order[1] != "destroy" || f.order[2] != "unload" {
 		t.Fatal(f.order)
 	}
-	if e.Command(contract.Command{Kind: contract.Play}) != contract.IsClosed {
+	if e.Command(playback.Command{Kind: playback.Play}) != playback.IsClosed {
 		t.Fatal("closed command accepted")
 	}
 	_ = e.Close()
@@ -193,11 +193,11 @@ func TestSaturatedQueueCannotSuppressShutdownAndRenderIsFreedFirst(t *testing.T)
 	f.release = release
 	e := openFake(t, f)
 	for i := 0; i < 32; i++ {
-		if e.Command(contract.Command{Kind: contract.Play}) != nil {
+		if e.Command(playback.Command{Kind: playback.Play}) != nil {
 			t.Fatal(i)
 		}
 	}
-	if e.Command(contract.Command{Kind: contract.Play}) != contract.Media {
+	if e.Command(playback.Command{Kind: playback.Play}) != playback.Media {
 		t.Fatal("queue overflow not rejected")
 	}
 	finished := make(chan struct{})
@@ -224,7 +224,7 @@ func TestSaturatedQueueCannotSuppressShutdownAndRenderIsFreedFirst(t *testing.T)
 func TestAsyncOrderingAndNativeFailureDisposal(t *testing.T) {
 	f := fake()
 	e := openFake(t, f)
-	_ = e.Command(contract.Command{Kind: contract.Play})
+	_ = e.Command(playback.Command{Kind: playback.Play})
 	select {
 	case id := <-f.sent:
 		t.Fatalf("command %d overtook load reply", id)
@@ -240,13 +240,13 @@ func TestAsyncOrderingAndNativeFailureDisposal(t *testing.T) {
 		t.Fatal("reply did not release next command")
 	}
 	f.events <- &event{ID: 5, Reply: 2, Error: -1}
-	await(t, func() bool { return e.Snapshot().State == contract.Failed })
+	await(t, func() bool { return e.Snapshot().State == playback.Failed })
 	select {
 	case <-e.done:
 	case <-time.After(time.Second):
 		t.Fatal("failure did not dispose native resources")
 	}
-	if e.Snapshot().Error != contract.Media || Owned() != (Resources{}) {
+	if e.Snapshot().Error != playback.Media || Owned() != (Resources{}) {
 		t.Fatal(e.Snapshot(), Owned())
 	}
 }
@@ -265,7 +265,7 @@ func TestPartialInitializationAndRenderFailuresDisposeOwnership(t *testing.T) {
 			case "required-option":
 				f.a.option = func(uintptr, string, string) int32 { return -5 }
 			}
-			plain, err := (Opener{loader: func(string) (*nativeAPI, error) { return f.a, nil }}).Open(context.Background(), contract.Input{FilePath: "synthetic"})
+			plain, err := (Opener{loader: func(string) (*nativeAPI, error) { return f.a, nil }}).Open(context.Background(), playback.Input{FilePath: "synthetic"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -276,7 +276,7 @@ func TestPartialInitializationAndRenderFailuresDisposeOwnership(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Fatal("failure did not release all workers")
 			}
-			if e.Snapshot().Error != contract.Media || Owned() != (Resources{}) {
+			if e.Snapshot().Error != playback.Media || Owned() != (Resources{}) {
 				t.Fatal(e.Snapshot(), Owned())
 			}
 		})
@@ -292,7 +292,7 @@ func TestCompiledOutScriptOptionsAreDisabled(t *testing.T) {
 		return 0
 	}
 	e := openFake(t, f)
-	if e.Snapshot().Error != contract.NoError {
+	if e.Snapshot().Error != playback.NoError {
 		t.Fatal(e.Snapshot())
 	}
 }
@@ -314,12 +314,12 @@ func TestFailureIsNotPublishedUntilNativeDisposalCompletes(t *testing.T) {
 		close(release)
 		t.Fatal("destructor not reached")
 	}
-	if e.Snapshot().State == contract.Failed || Owned().Renderers != 1 {
+	if e.Snapshot().State == playback.Failed || Owned().Renderers != 1 {
 		close(release)
 		t.Fatal("terminal failure published before disposal")
 	}
 	close(release)
-	await(t, func() bool { return e.Snapshot().State == contract.Failed })
+	await(t, func() bool { return e.Snapshot().State == playback.Failed })
 	if Owned() != (Resources{}) {
 		t.Fatal(Owned())
 	}
@@ -328,7 +328,7 @@ func TestFailureIsNotPublishedUntilNativeDisposalCompletes(t *testing.T) {
 func TestDisplayedPixelsAreNotRecycledAndDrawDoesNotWait(t *testing.T) {
 	// NewTester eagerly invokes the callback. Keep Draw disabled until the
 	// test can place every draw of the held render inside its timed boundary.
-	var drawEngine contract.Engine
+	var drawEngine playback.Engine
 	tt := gui.NewTester(func(c *gui.Context) {
 		if drawEngine != nil {
 			Draw(c, drawEngine)

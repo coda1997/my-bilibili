@@ -1,6 +1,6 @@
 //go:build darwin && arm64 && nativecleanup
 
-package mpvprobe
+package mpv
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 // This explicit native suite must run uncached with a provenance-verified
@@ -47,7 +47,7 @@ func TestNativeCoreAudioCleanup(t *testing.T) {
 
 func nativeCleanupScenario(t *testing.T, library, scenario string) {
 	t.Helper()
-	fixture, err := filepath.Abs("../testdata/combined.mp4")
+	fixture, err := filepath.Abs("../../../experiments/playback/testdata/combined.mp4")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,19 +58,19 @@ func nativeCleanupScenario(t *testing.T, library, scenario string) {
 	for cycle := 0; cycle < cycles; cycle++ {
 		ctx, cancel := context.WithCancel(context.Background())
 		t.Cleanup(cancel)
-		e, err := (Opener{Library: library}).Open(ctx, contract.Input{FilePath: fixture})
+		e, err := (Opener{Library: library}).Open(ctx, playback.Input{FilePath: fixture})
 		if err != nil {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = e.Close() })
-		nativeCleanupAwait(t, e, 10*time.Second, func(s contract.Snapshot) bool { return s.State == contract.Ready })
+		nativeCleanupAwait(t, e, 10*time.Second, func(s playback.Snapshot) bool { return s.State == playback.Ready })
 		play := func() {
 			before := e.Snapshot().Position
-			if err := e.Command(contract.Command{Kind: contract.Play}); err != nil {
+			if err := e.Command(playback.Command{Kind: playback.Play}); err != nil {
 				t.Fatal(err)
 			}
-			nativeCleanupAwait(t, e, 2*time.Second, func(s contract.Snapshot) bool {
-				return s.State == contract.Playing && s.Position >= before+300*time.Millisecond
+			nativeCleanupAwait(t, e, 2*time.Second, func(s playback.Snapshot) bool {
+				return s.State == playback.Playing && s.Position >= before+300*time.Millisecond
 			})
 		}
 		switch scenario {
@@ -80,10 +80,10 @@ func nativeCleanupScenario(t *testing.T, library, scenario string) {
 		case "pause-resume":
 			for n := 0; n < 4; n++ {
 				play()
-				if err := e.Command(contract.Command{Kind: contract.Pause}); err != nil {
+				if err := e.Command(playback.Command{Kind: playback.Pause}); err != nil {
 					t.Fatal(err)
 				}
-				nativeCleanupAwait(t, e, 2*time.Second, func(s contract.Snapshot) bool { return s.State == contract.Paused })
+				nativeCleanupAwait(t, e, 2*time.Second, func(s playback.Snapshot) bool { return s.State == playback.Paused })
 			}
 		case "idle-expiry":
 			// Let the real idle deadline expire, then verify native progression
@@ -102,14 +102,14 @@ func nativeCleanupScenario(t *testing.T, library, scenario string) {
 			t.Fatal(err)
 		}
 		elapsed := time.Since(started)
-		if e.(*engine).failure != contract.NoError {
+		if e.(*engine).failure != playback.NoError {
 			t.Error("shutdown used its failure path:", e.(*engine).failure)
 		}
 		t.Logf("cycle=%d close=%s owned=%+v", cycle, elapsed, Owned())
 		if elapsed > 200*time.Millisecond {
 			t.Errorf("Close exceeded the 200ms cancellation budget: %s", elapsed)
 		}
-		if e.Snapshot().State != contract.Closed || Owned() != (Resources{}) {
+		if e.Snapshot().State != playback.Closed || Owned() != (Resources{}) {
 			t.Fatal("session or adapter ownership remains after Close")
 		}
 		if err := e.Close(); err != nil {
@@ -120,12 +120,12 @@ func nativeCleanupScenario(t *testing.T, library, scenario string) {
 	t.Log("survived delayed native cleanup")
 }
 
-func nativeCleanupAwait(t *testing.T, e contract.Engine, limit time.Duration, ready func(contract.Snapshot) bool) {
+func nativeCleanupAwait(t *testing.T, e playback.Engine, limit time.Duration, ready func(playback.Snapshot) bool) {
 	t.Helper()
 	deadline := time.Now().Add(limit)
 	for {
 		s := e.Snapshot()
-		if s.State == contract.Failed {
+		if s.State == playback.Failed {
 			t.Fatalf("native session failed: %s", s.Error)
 		}
 		if ready(s) {

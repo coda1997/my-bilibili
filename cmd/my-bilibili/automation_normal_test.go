@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	"my-bilibili/internal/fixture"
 	"testing"
 )
@@ -21,7 +22,8 @@ func TestNormalSourceIgnoresAutomationEnvironment(t *testing.T) {
 	if got != source {
 		t.Fatal("normal source was replaced by automation")
 	}
-	in, err := got.Resolve("part-1")
+	r, err := got.Resolve(context.Background(), "part-1")
+	in := r.Input
 	if err != nil || in.URL != "" || in.FilePath == "" {
 		t.Fatal(in, err)
 	}

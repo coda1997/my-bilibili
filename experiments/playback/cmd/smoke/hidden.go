@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"my-bilibili/experiments/playback/cmd/fixturehttp"
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 // An occluded runtime is not a decoder failure or a passing playback smoke.
@@ -18,7 +18,7 @@ func (c *client) hiddenMedia(ctx context.Context, r *report, srv *fixturehttp.Se
 		r.Checks = append(r.Checks, check{Name: name, Result: "not-tested", Detail: "no visible native picture; requires exposed runtime window (audio/IME additionally need human observation)"})
 	}
 	loading := func(key string) (observed, error) {
-		return c.openUntil(ctx, key, 2*time.Second, func(s observed) bool { return s.State == contract.Loading && s.Owned && s.Duration > 0 })
+		return c.openUntil(ctx, key, 2*time.Second, func(s observed) bool { return s.State == playback.Loading && s.Owned && s.Duration > 0 })
 	}
 	s, err := loading("local")
 	if err != nil {
@@ -47,7 +47,7 @@ func (c *client) hiddenMedia(ctx context.Context, r *report, srv *fixturehttp.Se
 		return err
 	}
 	record(r, "volume-rate-configuration", "pass", "public configuration readback only, during loading", s)
-	a, err := c.openUntil(ctx, "delayed", 500*time.Millisecond, func(s observed) bool { return s.State == contract.Loading && s.Owned })
+	a, err := c.openUntil(ctx, "delayed", 500*time.Millisecond, func(s observed) bool { return s.State == playback.Loading && s.Owned })
 	if err != nil {
 		return fmt.Errorf("delayed loading before switch: %w", err)
 	}
@@ -69,11 +69,11 @@ func (c *client) hiddenMedia(ctx context.Context, r *report, srv *fixturehttp.Se
 	if err != nil {
 		return err
 	}
-	if s.Generation != generation || !s.Owned || s.State != contract.Loading {
+	if s.Generation != generation || !s.Owned || s.State != playback.Loading {
 		return errors.New("obsolete delayed session restored state")
 	}
 	record(r, "loading-switch-generation", "pass", "replacement stays current after delayed-response window; still no picture", s)
-	active, err := c.openUntil(ctx, "delayed", 500*time.Millisecond, func(s observed) bool { return s.State == contract.Loading && s.Owned })
+	active, err := c.openUntil(ctx, "delayed", 500*time.Millisecond, func(s observed) bool { return s.State == playback.Loading && s.Owned })
 	if err != nil {
 		return fmt.Errorf("delayed loading before cancellation: %w", err)
 	}
@@ -82,7 +82,7 @@ func (c *client) hiddenMedia(ctx context.Context, r *report, srv *fixturehttp.Se
 		return err
 	}
 	s, err = c.until(ctx, 100*time.Millisecond, func(s observed) bool {
-		return s.Generation == active.Generation && s.State == contract.Closed && s.Error == contract.Canceled && !s.Owned
+		return s.Generation == active.Generation && s.State == playback.Closed && s.Error == playback.Canceled && !s.Owned
 	})
 	if err != nil {
 		return fmt.Errorf("loading cancellation observation: %w", err)
@@ -94,7 +94,7 @@ func (c *client) hiddenMedia(ctx context.Context, r *report, srv *fixturehttp.Se
 	record(r, "loading-cancel", "pass", fmt.Sprintf("owned engine removed; externally observed in %s", elapsed), s)
 	for _, key := range []string{"headers", "separate"} {
 		s, err = c.openUntil(ctx, key, time.Second, func(s observed) bool {
-			return s.State == contract.Failed && s.Error == contract.Unsupported && !s.Owned
+			return s.State == playback.Failed && s.Error == playback.Unsupported && !s.Owned
 		})
 		if err != nil {
 			return err
@@ -103,7 +103,7 @@ func (c *client) hiddenMedia(ctx context.Context, r *report, srv *fixturehttp.Se
 		record(r, key+"-playback", "fail", "pinned public player API cannot supply this capability", s)
 	}
 	for _, key := range []string{"protected", "failure"} {
-		s, err = c.openUntil(ctx, key, 10*time.Second, func(s observed) bool { return s.State == contract.Failed && s.Error == contract.Media && !s.Owned })
+		s, err = c.openUntil(ctx, key, 10*time.Second, func(s observed) bool { return s.State == playback.Failed && s.Error == playback.Media && !s.Owned })
 		if err != nil {
 			return fmt.Errorf("%s native error: %w (generation=%d state=%s error=%s owned=%t)", key, err, s.Generation, s.State, s.Error, s.Owned)
 		}
@@ -118,7 +118,7 @@ func (c *client) hiddenMedia(ctx context.Context, r *report, srv *fixturehttp.Se
 	if err = c.act(ctx, "close"); err != nil {
 		return err
 	}
-	s, err = c.until(ctx, time.Second, func(s observed) bool { return s.State == contract.Closed && !s.Owned })
+	s, err = c.until(ctx, time.Second, func(s observed) bool { return s.State == playback.Closed && !s.Owned })
 	if err != nil {
 		return err
 	}
@@ -127,7 +127,7 @@ func (c *client) hiddenMedia(ctx context.Context, r *report, srv *fixturehttp.Se
 		return err
 	}
 	s, err = c.until(ctx, time.Second, func(s observed) bool {
-		return s.ControlError == contract.IsClosed && !s.Owned && s.Generation == generation
+		return s.ControlError == playback.IsClosed && !s.Owned && s.Generation == generation
 	})
 	if err != nil {
 		return err

@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"my-bilibili/experiments/playback/cmd/fixturehttp"
-	"my-bilibili/experiments/playback/contract"
-	"my-bilibili/experiments/playback/mpvprobe"
+	"my-bilibili/internal/adapters/mpv"
+	"my-bilibili/internal/playback"
 )
 
 func abs(d time.Duration) time.Duration {
@@ -31,7 +31,7 @@ func (c *client) progress(ctx context.Context) (observed, error) {
 		return before, err
 	}
 	s, err := c.until(ctx, 2*time.Second, func(s observed) bool {
-		return s.Generation == before.Generation && s.Owned && s.State == contract.Playing && s.Position-before.Position >= 300*time.Millisecond
+		return s.Generation == before.Generation && s.Owned && s.State == playback.Playing && s.Position-before.Position >= 300*time.Millisecond
 	})
 	if err == nil && time.Since(started) > 2*time.Second {
 		err = errors.New("playhead advance exceeded 2s external deadline")
@@ -61,7 +61,7 @@ func (c *client) playback(ctx context.Context, dir, key string, r *report) (obse
 	if err = c.act(ctx, "pause"); err != nil {
 		return s, err
 	}
-	if _, err = c.until(ctx, time.Second, func(s observed) bool { return s.Generation == generation && s.State == contract.Paused }); err != nil {
+	if _, err = c.until(ctx, time.Second, func(s observed) bool { return s.Generation == generation && s.State == playback.Paused }); err != nil {
 		return s, err
 	}
 	if err = wait(ctx, 200*time.Millisecond); err != nil {
@@ -75,7 +75,7 @@ func (c *client) playback(ctx context.Context, dir, key string, r *report) (obse
 		return s, err
 	}
 	s, err = c.snapshot(ctx)
-	if err != nil || a.Generation != generation || s.Generation != generation || a.State != contract.Paused || s.State != contract.Paused || abs(s.Position-a.Position) > 150*time.Millisecond {
+	if err != nil || a.Generation != generation || s.Generation != generation || a.State != playback.Paused || s.State != playback.Paused || abs(s.Position-a.Position) > 150*time.Millisecond {
 		return s, errors.New("pause state/generation changed or drift exceeded 150ms")
 	}
 	record(r, key+"-pause", "pass", fmt.Sprintf("drift %s across 500ms after 200ms settling", s.Position-a.Position), s)
@@ -84,7 +84,7 @@ func (c *client) playback(ctx context.Context, dir, key string, r *report) (obse
 		return s, err
 	}
 	s, err = c.until(ctx, 2*time.Second, func(s observed) bool {
-		return s.Generation == generation && s.Owned && s.State == contract.Paused && abs(s.Position-3*time.Second) <= 500*time.Millisecond
+		return s.Generation == generation && s.Owned && s.State == playback.Paused && abs(s.Position-3*time.Second) <= 500*time.Millisecond
 	})
 	if err != nil || time.Since(start) > 2*time.Second {
 		return s, errors.New("paused seek to 3s did not meet 2s/500ms bound")
@@ -102,7 +102,7 @@ func (c *client) playback(ctx context.Context, dir, key string, r *report) (obse
 
 func (c *client) zeroResources(ctx context.Context) error {
 	owned, err := c.resources(ctx)
-	if err != nil || owned != (mpvprobe.Resources{}) {
+	if err != nil || owned != (mpv.Resources{}) {
 		return errors.New("native resources/workers remain after terminal state")
 	}
 	return nil
@@ -111,7 +111,7 @@ func (c *client) zeroResources(ctx context.Context) error {
 func (c *client) mediaFailure(ctx context.Context, key string, r *report) error {
 	started := time.Now()
 	s, err := c.openUntil(ctx, key, 10*time.Second, func(s observed) bool {
-		return s.State == contract.Failed && s.Error == contract.Media && !s.Owned
+		return s.State == playback.Failed && s.Error == playback.Media && !s.Owned
 	})
 	if err != nil || time.Since(started) > 10*time.Second {
 		return fmt.Errorf("%s did not produce disposed Media failure within 10s (state=%s error=%s)", key, s.State, s.Error)
@@ -123,20 +123,20 @@ func (c *client) mediaFailure(ctx context.Context, key string, r *report) error 
 	return nil
 }
 
-func (c *client) tracks(ctx context.Context) (mpvprobe.Tracks, error) {
+func (c *client) tracks(ctx context.Context) (mpv.Tracks, error) {
 	nodes, err := c.tree(ctx)
 	if err != nil {
-		return mpvprobe.Tracks{}, err
+		return mpv.Tracks{}, err
 	}
 	for _, n := range nodes {
 		if strings.HasPrefix(n.Label, "tracks ") {
-			var tracks mpvprobe.Tracks
+			var tracks mpv.Tracks
 			if json.Unmarshal([]byte(strings.TrimPrefix(n.Label, "tracks ")), &tracks) == nil {
 				return tracks, nil
 			}
 		}
 	}
-	return mpvprobe.Tracks{}, errors.New("selected-track evidence absent")
+	return mpv.Tracks{}, errors.New("selected-track evidence absent")
 }
 
 func (c *client) capabilities(ctx context.Context, dir string, r *report, srv *fixturehttp.Server) error {
@@ -202,7 +202,7 @@ func (c *client) capabilities(ctx context.Context, dir string, r *report, srv *f
 		return err
 	}
 	closed, err := c.until(ctx, cancelObservationLimit, func(now observed) bool {
-		return now.Generation == s.Generation && now.State == contract.Closed && now.Error == contract.Canceled && !now.Owned
+		return now.Generation == s.Generation && now.State == playback.Closed && now.Error == playback.Canceled && !now.Owned
 	})
 	elapsed := time.Since(start)
 	if err != nil || elapsed > cancelObservationLimit {
@@ -251,14 +251,14 @@ func (c *client) slidersAndRetry(ctx context.Context, r *report) error {
 	generation := before.Generation
 	keys, positions := seekSliderPlan()
 	s, err := c.sliderKeys(ctx, "seek-slider", keys, 2*time.Second, func(i int, s observed) bool {
-		return s.Generation == generation && s.State == contract.Paused && s.Owned && abs(s.Position-positions[i]) <= 100*time.Millisecond && s.ControlError == contract.NoError
+		return s.Generation == generation && s.State == playback.Paused && s.Owned && abs(s.Position-positions[i]) <= 100*time.Millisecond && s.ControlError == playback.NoError
 	})
 	if err != nil {
 		return fmt.Errorf("native seek slider: %w", err)
 	}
 	record(r, "seek-slider", "pass", "keyboard interaction through actual slider reaches native paused 4s within 2s/500ms", s)
 	s, err = c.sliderKeys(ctx, "volume-slider", []string{"Home", "PageUp", "PageUp", "PageUp", "PageUp", "PageUp"}, time.Second, func(i int, s observed) bool {
-		return s.Generation == generation && s.Owned && math.Abs(s.Volume-float64(i)/10) < .005 && s.ControlError == contract.NoError
+		return s.Generation == generation && s.Owned && math.Abs(s.Volume-float64(i)/10) < .005 && s.ControlError == playback.NoError
 	})
 	if err != nil {
 		return fmt.Errorf("native volume slider: %w", err)
@@ -282,7 +282,7 @@ func (c *client) slidersAndRetry(ctx context.Context, r *report) error {
 		return err
 	}
 	if _, err = c.until(ctx, time.Second, func(s observed) bool {
-		return s.Generation == generation && s.State == contract.Closed && !s.Owned && s.Error == contract.NoError
+		return s.Generation == generation && s.State == playback.Closed && !s.Owned && s.Error == playback.NoError
 	}); err != nil {
 		return err
 	}
@@ -293,12 +293,12 @@ func (c *client) slidersAndRetry(ctx context.Context, r *report) error {
 		return err
 	}
 	if _, err = c.until(ctx, time.Second, func(s observed) bool {
-		return s.Generation == generation && !s.Owned && s.ControlError == contract.IsClosed
+		return s.Generation == generation && !s.Owned && s.ControlError == playback.IsClosed
 	}); err != nil {
 		return err
 	}
 	s, err = c.ready(ctx, "retry")
-	if err != nil || s.Generation <= generation || s.ControlError != contract.NoError {
+	if err != nil || s.Generation <= generation || s.ControlError != playback.NoError {
 		return errors.New("explicit copied-input retry did not replace closed generation")
 	}
 	record(r, "explicit-close-retry", "pass", "new generation, cleared control error and closed-command rejection; failure retry separately preserves missing metadata", s)

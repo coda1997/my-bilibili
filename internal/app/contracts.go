@@ -5,24 +5,43 @@ import (
 	"context"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
 	"my-bilibili/internal/catalog"
+	"my-bilibili/internal/playback"
 )
 
-// Source is the synchronous catalog/media boundary consumed by the application.
-// Implementations own resource validation and conversion to playback inputs.
+// Source is the catalog/media boundary consumed by the application.
+// Implementations own resource validation, transport details and conversion to
+// playback inputs, including any required request headers in Input.Headers.
+//
+// Calls receive the session context and must return promptly once it is
+// canceled. Session currently invokes Source synchronously on the UI thread, so
+// an implementation that performs network I/O must not be wired in until
+// resolution moves off the UI thread with stale-result handling.
 type Source interface {
-	Detail() (catalog.Video, error)
-	Resolve(catalog.PartID) (contract.Input, error)
+	Detail(context.Context) (catalog.Video, error)
+	Resolve(context.Context, catalog.PartID) (Resolution, error)
 }
+
+// Resolution is a playable input for one part and the time it stops being
+// usable. A zero ExpiresAt means the input does not expire (for example a
+// local file). Session never reuses an input at or past ExpiresAt minus
+// ResolutionMargin; it resolves the part again instead.
+type Resolution struct {
+	Input     playback.Input
+	ExpiresAt time.Time
+}
+
+// ResolutionMargin keeps an input that is about to expire from being opened,
+// so a connection is not started with a URL that expires during loading.
+const ResolutionMargin = 30 * time.Second
 
 // State separates the requested part from the accepted playback attempt.
 // Volume and Rate are chosen settings; Playback contains native observations.
 type State struct {
 	Video                      catalog.Video
 	SelectedPart, PlaybackPart catalog.PartID
-	SelectionError             contract.ErrorCode
-	Playback                   contract.Snapshot
+	SelectionError             playback.ErrorCode
+	Playback                   playback.Snapshot
 	DesiredPlaying             bool
 	Volume, Rate               float64
 }

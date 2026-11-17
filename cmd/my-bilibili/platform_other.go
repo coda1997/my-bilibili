@@ -3,8 +3,8 @@
 package main
 
 import (
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 	"time"
 )
 
-func doubleClickInterval() (time.Duration, error) { return 0, contract.Unsupported }
+func doubleClickInterval() (time.Duration, error) { return 0, playback.Unsupported }

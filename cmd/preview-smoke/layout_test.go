@@ -7,9 +7,9 @@ import (
 	"time"
 
 	gui "github.com/egoist/mygo/ui"
-	"my-bilibili/experiments/playback/contract"
 	"my-bilibili/internal/app"
 	"my-bilibili/internal/desktop"
+	"my-bilibili/internal/playback"
 )
 
 type layoutPlayer struct {
@@ -28,7 +28,7 @@ func TestLayoutUsesActualAccessibleDesktopGeometry(t *testing.T) {
 				height = 600
 			}
 			s := completeObservation(t).State
-			s.Playback.State = contract.Paused
+			s.Playback.State = playback.Paused
 			view := &desktop.View{Player: layoutPlayer{state: s}, Fullscreen: func() bool { return false }, DoubleClickInterval: 500 * time.Millisecond}
 			ui := gui.NewTester(view.Render, width, height)
 			var nodes []node

@@ -8,14 +8,17 @@ Follow [agent convergence](agent-convergence.md) R1–R9 for finding disposition
 ## Start from a fresh context
 
 For a read-only explanation, audit, or investigation, use the
-[proposed lightweight route](workflow.md#read-only-requests-proposed-clarification)
+[lightweight route](workflow.md#read-only-requests)
 instead of requiring an implementation assignment or creating a run. It does
 not bypass formal review inputs or authorize edits. The steps below apply to
 scoped changes; a request to edit leaves the read-only route.
 
-1. Read [README](../README.md) for the current handoff. Check the milestone in
-   [stage zero](stage-zero.md); do not start a full client slice before the M1
-   UI/playback decision. A proposed spec is not authorization to implement it.
+Choose the [risk lane](workflow.md#risk-lanes) first. A fast-lane change goes
+straight to a regression test, the fix, checks and a PR; skip the contract,
+assignment and run steps below. The rest of this guide is the full lane.
+
+1. Read [STATUS](../STATUS.md) for current state, next actions and the owner
+   action queue. A proposed spec is not authorization to implement it.
 2. Follow [testing prerequisites](testing.md#prerequisites). Record the checkout,
    branch, base commit, and dirty state. Preserve unrelated work and ask about
    unexpected changes rather than resetting it.
@@ -69,7 +72,7 @@ the entire author's chat transcript.
 A reviewer must be a separate authorized agent/context, not the implementation
 author wearing a different role. For BLOCKING closure, provide the original
 finding/reproduction and the changed candidate. If the original reviewer cannot
-continue, follow the [proposed succession procedure](workflow.md#reviewer-succession-proposed-clarification),
+continue, follow the [succession procedure](workflow.md#reviewer-succession),
 including explicit human designation; do not silently substitute a reviewer.
 Select review dimensions from actual risk (correctness, architecture, security,
 native platform/UI), not an automatic fixed number of agents. Prepare the packet
@@ -90,11 +93,10 @@ the controller's run or change review/policy records.
    identity. See [recorded checks](testing.md#recorded-checks).
 2. Implement only the assigned slice. Add a regression for a reproduced bug,
    execute targeted checks, then the full check. Record failures honestly.
-3. Integrate and identify a candidate. Prefer an authorized clean commit; if
-   committing is not authorized, preserve a manifest and archive of all relevant
-   tracked/untracked candidate files, their hashes/modes, and the base SHA. Do
-   not identify modified code solely by the unchanged HEAD commit. Keep a diff
-   and enumerate any excluded local files. The recorder does not do this for you.
+3. Integrate and commit the candidate on its feature branch; the commit SHA
+   is its identity. See [evidence identity](workflow.md#evidence-identity-and-tables)
+   for the uncommitted fallback. Do not identify modified code by an unchanged
+   HEAD commit.
 4. Dispatch authorized independent review of that exact candidate. Record its
    round and finding dispositions. Changes invalidate affected checks and
    reviews; identify the new candidate and re-verify affected evidence within

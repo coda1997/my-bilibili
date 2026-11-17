@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 func TestTargetRejectsLegacyOriginDescriptor(t *testing.T) {
 	now := time.Now()
 	d := validDescriptor(now)
 	d.Version = 1
-	if _, err := Parse(encoded(d), func() time.Time { return now }); err != contract.Invalid {
+	if _, err := Parse(encoded(d), func() time.Time { return now }); err != playback.Invalid {
 		t.Fatal("legacy descriptor version accepted", err)
 	}
 	d.Version = 2
@@ -22,7 +22,7 @@ func TestTargetRejectsLegacyOriginDescriptor(t *testing.T) {
 		t.Fatal(err)
 	}
 	fields["origins"] = map[string]string{"video": "https://video.example.test:443", "audio": "https://audio.example.test:443"}
-	if _, err := Parse(encoded(fields), func() time.Time { return now }); err != contract.Invalid {
+	if _, err := Parse(encoded(fields), func() time.Time { return now }); err != playback.Invalid {
 		t.Fatal("removed origin declaration accepted", err)
 	}
 }
@@ -55,12 +55,12 @@ func TestTargetAcceptsAllHTTPSHosts(t *testing.T) {
 			// Removing destination restrictions must not permit replacing a
 			// previously accepted input after its descriptor has been parsed.
 			in.URL = "https://another.example.test/video"
-			if p.Validate(in) != contract.Invalid {
+			if p.Validate(in) != playback.Invalid {
 				t.Fatal("post-validation locator replacement accepted")
 			}
 			in = p.Input()
 			in.URL, in.AudioURL = in.AudioURL, in.URL
-			if p.Validate(in) != contract.Invalid {
+			if p.Validate(in) != playback.Invalid {
 				t.Fatal("post-validation track replacement accepted")
 			}
 		})

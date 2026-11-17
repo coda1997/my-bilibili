@@ -17,8 +17,8 @@ import (
 	"time"
 
 	"my-bilibili/experiments/playback/cmd/fixturehttp"
-	"my-bilibili/experiments/playback/contract"
-	"my-bilibili/experiments/playback/mpvprobe"
+	"my-bilibili/internal/adapters/mpv"
+	"my-bilibili/internal/playback"
 )
 
 // Owner-authorized replacement-probe observation bound (2026-11-11).
@@ -309,7 +309,7 @@ func (c *client) surface(ctx context.Context, dir string, r *report, srv *fixtur
 		return err
 	}
 	s, err = c.snapshot(ctx)
-	if err != nil || s.Generation != current || !s.Owned || s.State != contract.Ready {
+	if err != nil || s.Generation != current || !s.Owned || s.State != playback.Ready {
 		return errors.New("obsolete delayed session restored state")
 	}
 	record(r, "loading-switch-generation", "pass", fmt.Sprintf("replacement ready in %s and remains current beyond original delayed response", switchElapsed), s)
@@ -322,7 +322,7 @@ func (c *client) surface(ctx context.Context, dir string, r *report, srv *fixtur
 		return err
 	}
 	s, err = c.until(ctx, cancelObservationLimit, func(s observed) bool {
-		return s.Generation == active.Generation && s.State == contract.Closed && s.Error == contract.Canceled && !s.Owned
+		return s.Generation == active.Generation && s.State == playback.Closed && s.Error == playback.Canceled && !s.Owned
 	})
 	elapsed := time.Since(start)
 	if err != nil || elapsed > cancelObservationLimit {
@@ -330,7 +330,7 @@ func (c *client) surface(ctx context.Context, dir string, r *report, srv *fixtur
 		return errors.New("loading cancel observation exceeds 200ms")
 	}
 	resources, err := c.resources(ctx)
-	if err != nil || resources != (mpvprobe.Resources{}) {
+	if err != nil || resources != (mpv.Resources{}) {
 		return errors.New("cancel left native resources or workers owned")
 	}
 	record(r, "loading-cancel", "pass", fmt.Sprintf("closed and no owned engine externally observed in %s; native/worker counters zero", elapsed), s)
@@ -340,7 +340,7 @@ func (c *client) surface(ctx context.Context, dir string, r *report, srv *fixtur
 
 func (c *client) loading(ctx context.Context, srv *fixturehttp.Server) (observed, error) {
 	before := srv.Stats().Delayed
-	s, err := c.openUntil(ctx, "delayed", 500*time.Millisecond, func(s observed) bool { return s.State == contract.Loading && s.Owned })
+	s, err := c.openUntil(ctx, "delayed", 500*time.Millisecond, func(s observed) bool { return s.State == playback.Loading && s.Owned })
 	if err != nil {
 		return s, fmt.Errorf("delayed loading not observable: %w", err)
 	}

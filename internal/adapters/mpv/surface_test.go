@@ -1,4 +1,4 @@
-package mpvprobe
+package mpv
 
 import (
 	"image"

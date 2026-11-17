@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 // Preview is explicitly selected; it never substitutes for the full M1 suite.
@@ -54,7 +54,7 @@ func (c *client) preview(ctx context.Context, dir string, r *report) error {
 	if err = c.act(ctx, "pause"); err != nil {
 		return err
 	}
-	if _, err = c.until(ctx, time.Second, func(s observed) bool { return s.Generation == generation && s.State == contract.Paused }); err != nil {
+	if _, err = c.until(ctx, time.Second, func(s observed) bool { return s.Generation == generation && s.State == playback.Paused }); err != nil {
 		return err
 	}
 	if err = wait(ctx, 200*time.Millisecond); err != nil {
@@ -71,7 +71,7 @@ func (c *client) preview(ctx context.Context, dir string, r *report) error {
 	if err != nil {
 		return err
 	}
-	if a.Generation != generation || s.Generation != generation || a.State != contract.Paused || s.State != contract.Paused || abs(s.Position-a.Position) > 150*time.Millisecond {
+	if a.Generation != generation || s.Generation != generation || a.State != playback.Paused || s.State != playback.Paused || abs(s.Position-a.Position) > 150*time.Millisecond {
 		return errors.New("preview pause drift exceeds150ms or session/state changed")
 	}
 	record(r, "preview-pause-stability", "pass", fmt.Sprintf("500ms drift=%s after200ms settling", s.Position-a.Position), s)
@@ -80,14 +80,14 @@ func (c *client) preview(ctx context.Context, dir string, r *report) error {
 		seekKeys = append(seekKeys, "Right")
 	}
 	s, err = c.sliderKeys(ctx, "seek-slider", seekKeys, 2*time.Second, func(i int, s observed) bool {
-		return s.Generation == generation && s.State == contract.Paused && s.Owned && abs(s.Position-time.Duration(i)*250*time.Millisecond) <= 100*time.Millisecond && s.ControlError == contract.NoError
+		return s.Generation == generation && s.State == playback.Paused && s.Owned && abs(s.Position-time.Duration(i)*250*time.Millisecond) <= 100*time.Millisecond && s.ControlError == playback.NoError
 	})
 	if err != nil {
 		return fmt.Errorf("preview slider seek: %w (generation=%d state=%s position=%s control_error=%s)", err, s.Generation, s.State, s.Position, s.ControlError)
 	}
 	record(r, "preview-slider-seek", "pass", "native paused position4s +/-500ms within2s; interaction through seek slider", s)
 	if _, err = c.sliderKeys(ctx, "volume-slider", []string{"Home", "PageUp", "PageUp", "PageUp", "PageUp", "PageUp"}, time.Second, func(i int, s observed) bool {
-		return s.Generation == generation && s.Owned && math.Abs(s.Volume-float64(i)/10) < .005 && s.ControlError == contract.NoError
+		return s.Generation == generation && s.Owned && math.Abs(s.Volume-float64(i)/10) < .005 && s.ControlError == playback.NoError
 	}); err != nil {
 		return err
 	}
@@ -99,7 +99,7 @@ func (c *client) preview(ctx context.Context, dir string, r *report) error {
 			return err
 		}
 		s, err = c.until(ctx, time.Second, func(s observed) bool {
-			return s.Generation == generation && s.Owned && math.Abs(s.Volume-.5) < .005 && s.Rate == preset.rate && s.ControlError == contract.NoError
+			return s.Generation == generation && s.Owned && math.Abs(s.Volume-.5) < .005 && s.Rate == preset.rate && s.ControlError == playback.NoError
 		})
 		if err != nil {
 			return fmt.Errorf("preview volume/preset configuration: %w", err)
@@ -110,7 +110,7 @@ func (c *client) preview(ctx context.Context, dir string, r *report) error {
 		return err
 	}
 	if _, err = c.until(ctx, time.Second, func(s observed) bool {
-		return s.Generation == generation && s.State == contract.Closed && !s.Owned && s.Error == contract.NoError
+		return s.Generation == generation && s.State == playback.Closed && !s.Owned && s.Error == playback.NoError
 	}); err != nil {
 		return err
 	}
@@ -118,7 +118,7 @@ func (c *client) preview(ctx context.Context, dir string, r *report) error {
 		return err
 	}
 	if _, err = c.until(ctx, time.Second, func(s observed) bool {
-		return s.Generation == generation && s.ControlError == contract.IsClosed && !s.Owned
+		return s.Generation == generation && s.ControlError == playback.IsClosed && !s.Owned
 	}); err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func (c *client) preview(ctx context.Context, dir string, r *report) error {
 	if err != nil {
 		return fmt.Errorf("preview explicit retry: %w", err)
 	}
-	if s.Generation <= generation || s.ControlError != contract.NoError {
+	if s.Generation <= generation || s.ControlError != playback.NoError {
 		return errors.New("preview retry did not replace generation and clear error")
 	}
 	record(r, "preview-close-retry", "pass", "closed input explicitly reopened with newer generation and cleared error; not network recovery evidence", s)

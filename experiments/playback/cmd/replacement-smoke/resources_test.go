@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"my-bilibili/experiments/playback/mpvprobe"
+	"my-bilibili/internal/adapters/mpv"
 )
 
 func resourceClient(t *testing.T, labels []string) *client {
@@ -73,12 +73,12 @@ func TestResourceObservationsPreserveValidCounters(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		text string
-		want mpvprobe.Resources
+		want mpv.Resources
 	}{
-		{"zero", `{"Cores":0,"Renderers":0,"Workers":0}`, mpvprobe.Resources{}},
-		{"positive", `{"Cores":1,"Renderers":2,"Workers":3}`, mpvprobe.Resources{Cores: 1, Renderers: 2, Workers: 3}},
-		{"maximum", `{"Cores":9223372036854775807,"Renderers":0,"Workers":0}`, mpvprobe.Resources{Cores: 9223372036854775807}},
-		{"unknown-fields", `{"Cores":0,"Renderers":0,"Workers":0,"extra":{"nested":true},"cores":4}`, mpvprobe.Resources{}},
+		{"zero", `{"Cores":0,"Renderers":0,"Workers":0}`, mpv.Resources{}},
+		{"positive", `{"Cores":1,"Renderers":2,"Workers":3}`, mpv.Resources{Cores: 1, Renderers: 2, Workers: 3}},
+		{"maximum", `{"Cores":9223372036854775807,"Renderers":0,"Workers":0}`, mpv.Resources{Cores: 9223372036854775807}},
+		{"unknown-fields", `{"Cores":0,"Renderers":0,"Workers":0,"extra":{"nested":true},"cores":4}`, mpv.Resources{}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			labels := []string{"unrelated", "resources " + tc.text}
@@ -87,7 +87,7 @@ func TestResourceObservationsPreserveValidCounters(t *testing.T) {
 				t.Fatalf("valid counters changed: got=%+v want=%+v err=%v", got, tc.want, err)
 			}
 			err = resourceClient(t, labels).zeroResources(context.Background())
-			if (err == nil) != (tc.want == (mpvprobe.Resources{})) {
+			if (err == nil) != (tc.want == (mpv.Resources{})) {
 				t.Fatalf("cleanup result disagrees with observed ownership: counters=%+v err=%v", tc.want, err)
 			}
 		})

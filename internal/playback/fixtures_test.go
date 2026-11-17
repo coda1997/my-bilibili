@@ -1,4 +1,4 @@
-package contract
+package playback
 
 import (
 	"crypto/sha256"
@@ -25,7 +25,7 @@ func TestFixtureManifest(t *testing.T) {
 			}
 		}
 	}
-	b, err := os.ReadFile("../testdata/manifest.json")
+	b, err := os.ReadFile("../../experiments/playback/testdata/manifest.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestFixtureManifest(t *testing.T) {
 			t.Fatal("unexpected fixture")
 		}
 		delete(want, f.Name)
-		b, err := os.ReadFile(filepath.Join("../testdata", f.Name))
+		b, err := os.ReadFile(filepath.Join("../../experiments/playback/testdata", f.Name))
 		if err != nil {
 			t.Fatal(err)
 		}

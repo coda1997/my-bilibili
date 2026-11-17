@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "spec_id": "0024-playback-promotion",
+  "tasks": [
+    {
+      "id": "PRO-001",
+      "title": "Promote playback packages and guard product imports",
+      "depends_on": [],
+      "write_paths": ["internal/playback", "internal/adapters/mpv", "internal/architecture", "experiments/playback", "cmd", "internal/app", "internal/desktop", "internal/fixture", "internal/previewbundle"],
+      "acceptance": ["PRO-AC-01", "PRO-AC-02"],
+      "checks": ["go run ./cmd/dev check --race", "go vet -tags e2e ./...", "Temporary experiment import must fail TestProductDoesNotImportExperiments"]
+    },
+    {
+      "id": "PRO-002",
+      "title": "Context- and expiry-aware Source with Session reuse rules",
+      "depends_on": ["PRO-001"],
+      "write_paths": ["internal/app", "internal/fixture", "internal/previewbundle", "cmd"],
+      "acceptance": ["PRO-AC-03"],
+      "checks": ["go test -race -count=1 ./internal/app ./internal/fixture ./cmd/my-bilibili"]
+    },
+    {
+      "id": "PRO-003",
+      "title": "Status page, risk lanes, evidence identity and owner queue",
+      "depends_on": [],
+      "write_paths": ["STATUS.md", "README.md", "AGENTS.md", "docs", ".agents/skills", ".github/copilot-instructions.md", "specs/0024-playback-promotion"],
+      "acceptance": ["PRO-AC-04"],
+      "checks": ["Owner review of policy text"]
+    }
+  ]
+}

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"my-bilibili/experiments/playback/cmd/fixturehttp"
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 func record(r *report, name, result, detail string, s observed) {
@@ -65,7 +65,7 @@ func (c *client) picture(ctx context.Context, dir, name string) error {
 
 func (c *client) ready(ctx context.Context, key string) (observed, error) {
 	s, err := c.openUntil(ctx, key, 10*time.Second, func(s observed) bool {
-		return s.State == contract.Ready && s.Duration > 0 && s.Owned && s.Error == contract.NoError
+		return s.State == playback.Ready && s.Duration > 0 && s.Owned && s.Error == playback.NoError
 	})
 	if err != nil {
 		return s, fmt.Errorf("%w (state=%s error=%s duration=%s owned=%t)", err, s.State, s.Error, s.Duration, s.Owned)
@@ -82,7 +82,7 @@ func (c *client) progress(ctx context.Context) (observed, error) {
 		return start, err
 	}
 	return c.until(ctx, 2*time.Second, func(s observed) bool {
-		return s.Generation == start.Generation && s.State == contract.Playing && s.Position-start.Position >= 300*time.Millisecond
+		return s.Generation == start.Generation && s.State == playback.Playing && s.Position-start.Position >= 300*time.Millisecond
 	})
 }
 
@@ -111,7 +111,7 @@ func (c *client) media(ctx context.Context, dir string, r *report, srv *fixtureh
 	if err = c.act(ctx, "pause"); err != nil {
 		return err
 	}
-	if _, err = c.until(ctx, time.Second, func(s observed) bool { return s.State == contract.Paused }); err != nil {
+	if _, err = c.until(ctx, time.Second, func(s observed) bool { return s.State == playback.Paused }); err != nil {
 		return err
 	}
 	if err = wait(ctx, 200*time.Millisecond); err != nil {
@@ -128,7 +128,7 @@ func (c *client) media(ctx context.Context, dir string, r *report, srv *fixtureh
 	if err != nil {
 		return err
 	}
-	if s.Generation != a.Generation || s.State != contract.Paused || abs(s.Position-a.Position) > 150*time.Millisecond {
+	if s.Generation != a.Generation || s.State != playback.Paused || abs(s.Position-a.Position) > 150*time.Millisecond {
 		return errors.New("native pause drift exceeds 150ms")
 	}
 	record(r, "pause-stability", "pass", fmt.Sprintf("500ms sample drift=%s after 200ms settle", s.Position-a.Position), s)
@@ -136,7 +136,7 @@ func (c *client) media(ctx context.Context, dir string, r *report, srv *fixtureh
 		return err
 	}
 	s, err = c.until(ctx, 2*time.Second, func(s observed) bool {
-		return s.State == contract.Paused && abs(s.Position-3*time.Second) <= 500*time.Millisecond
+		return s.State == playback.Paused && abs(s.Position-3*time.Second) <= 500*time.Millisecond
 	})
 	if err != nil {
 		return fmt.Errorf("native seek: %w", err)
@@ -180,7 +180,7 @@ func (c *client) media(ctx context.Context, dir string, r *report, srv *fixtureh
 		return err
 	}
 	s, err = c.until(ctx, 2*time.Second, func(s observed) bool {
-		return s.State == contract.Paused && abs(s.Position-3*time.Second) <= 500*time.Millisecond
+		return s.State == playback.Paused && abs(s.Position-3*time.Second) <= 500*time.Millisecond
 	})
 	if err != nil {
 		return fmt.Errorf("HTTP seek: %w", err)
@@ -191,7 +191,7 @@ func (c *client) media(ctx context.Context, dir string, r *report, srv *fixtureh
 	} else {
 		record(r, "native-HTTP-Range", "not-tested", "no native Range request observed; Go server Range unit tests are separate", s)
 	}
-	loading, err := c.openUntil(ctx, "delayed", 500*time.Millisecond, func(s observed) bool { return s.State == contract.Loading && s.Owned })
+	loading, err := c.openUntil(ctx, "delayed", 500*time.Millisecond, func(s observed) bool { return s.State == playback.Loading && s.Owned })
 	if err != nil {
 		return fmt.Errorf("delayed loading before switch: %w", err)
 	}
@@ -214,14 +214,14 @@ func (c *client) media(ctx context.Context, dir string, r *report, srv *fixtureh
 	if err != nil {
 		return err
 	}
-	if s.Generation != current || !s.Owned || s.State != contract.Ready {
+	if s.Generation != current || !s.Owned || s.State != playback.Ready {
 		return errors.New("obsolete delayed session restored state")
 	}
 	record(r, "loading-switch-generation", "pass", "replacement stays current after old delayed-response window", s)
 	for _, mode := range []string{"loading", "playing"} {
 		var active observed
 		if mode == "loading" {
-			active, err = c.openUntil(ctx, "delayed", 500*time.Millisecond, func(s observed) bool { return s.State == contract.Loading && s.Owned })
+			active, err = c.openUntil(ctx, "delayed", 500*time.Millisecond, func(s observed) bool { return s.State == playback.Loading && s.Owned })
 			if err != nil {
 				return fmt.Errorf("delayed loading before cancellation: %w", err)
 			}
@@ -238,7 +238,7 @@ func (c *client) media(ctx context.Context, dir string, r *report, srv *fixtureh
 			return err
 		}
 		s, err = c.until(ctx, 100*time.Millisecond, func(s observed) bool {
-			return s.Generation == active.Generation && s.State == contract.Closed && s.Error == contract.Canceled && !s.Owned
+			return s.Generation == active.Generation && s.State == playback.Closed && s.Error == playback.Canceled && !s.Owned
 		})
 		if err != nil {
 			return fmt.Errorf("%s cancel: %w", mode, err)
@@ -251,7 +251,7 @@ func (c *client) media(ctx context.Context, dir string, r *report, srv *fixtureh
 	}
 	for _, key := range []string{"headers", "separate"} {
 		s, err = c.openUntil(ctx, key, time.Second, func(s observed) bool {
-			return s.State == contract.Failed && s.Error == contract.Unsupported && !s.Owned
+			return s.State == playback.Failed && s.Error == playback.Unsupported && !s.Owned
 		})
 		if err != nil {
 			return err
@@ -260,7 +260,7 @@ func (c *client) media(ctx context.Context, dir string, r *report, srv *fixtureh
 		record(r, key+"-playback", "fail", "pinned public player API cannot supply this capability", s)
 	}
 	for _, key := range []string{"protected", "failure"} {
-		s, err = c.openUntil(ctx, key, 10*time.Second, func(s observed) bool { return s.State == contract.Failed && s.Error == contract.Media && !s.Owned })
+		s, err = c.openUntil(ctx, key, 10*time.Second, func(s observed) bool { return s.State == playback.Failed && s.Error == playback.Media && !s.Owned })
 		if err != nil {
 			return fmt.Errorf("%s native failure: %w (generation=%d state=%s error=%s owned=%t)", key, err, s.Generation, s.State, s.Error, s.Owned)
 		}
@@ -275,7 +275,7 @@ func (c *client) media(ctx context.Context, dir string, r *report, srv *fixtureh
 	if err = c.act(ctx, "close"); err != nil {
 		return err
 	}
-	s, err = c.until(ctx, time.Second, func(s observed) bool { return s.State == contract.Closed && !s.Owned && s.Error == contract.NoError })
+	s, err = c.until(ctx, time.Second, func(s observed) bool { return s.State == playback.Closed && !s.Owned && s.Error == playback.NoError })
 	if err != nil {
 		return err
 	}
@@ -284,7 +284,7 @@ func (c *client) media(ctx context.Context, dir string, r *report, srv *fixtureh
 		return err
 	}
 	s, err = c.until(ctx, time.Second, func(s observed) bool {
-		return s.ControlError == contract.IsClosed && !s.Owned && s.Generation == generation
+		return s.ControlError == playback.IsClosed && !s.Owned && s.Generation == generation
 	})
 	if err != nil {
 		return err

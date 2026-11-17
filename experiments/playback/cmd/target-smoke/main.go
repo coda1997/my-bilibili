@@ -16,9 +16,9 @@ import (
 	"syscall"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
-	"my-bilibili/experiments/playback/mpvprobe"
 	"my-bilibili/experiments/playback/targetprobe"
+	"my-bilibili/internal/adapters/mpv"
+	"my-bilibili/internal/playback"
 )
 
 type check struct {
@@ -44,24 +44,24 @@ type report struct {
 	started        time.Time
 	phase          driverPhase
 	lastSnapshot   *sample[observed]
-	lastResources  *sample[mpvprobe.Resources]
+	lastResources  *sample[mpv.Resources]
 }
 
-func safeCode(err error) contract.ErrorCode {
+func safeCode(err error) playback.ErrorCode {
 	if err == nil {
-		return contract.NoError
+		return playback.NoError
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return contract.Timeout
+		return playback.Timeout
 	}
 	if errors.Is(err, context.Canceled) {
-		return contract.Canceled
+		return playback.Canceled
 	}
-	var code contract.ErrorCode
-	if errors.As(err, &code) && validCode(code) && code != contract.NoError {
+	var code playback.ErrorCode
+	if errors.As(err, &code) && validCode(code) && code != playback.NoError {
 		return code
 	}
-	return contract.Media
+	return playback.Media
 }
 
 func main() {

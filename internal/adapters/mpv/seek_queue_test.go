@@ -1,4 +1,4 @@
-package mpvprobe
+package mpv
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"time"
 	"unsafe"
 
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 type queuedNativeCommand struct {
@@ -18,7 +18,7 @@ type queuedNativeCommand struct {
 
 // The real adapter owns the queue and native loop. Only native replies and
 // property observations are controlled, so a held reply models a slow consumer.
-func seekController(t *testing.T) (*contract.Controller, *engine, *fakeNative, <-chan queuedNativeCommand) {
+func seekController(t *testing.T) (*playback.Controller, *engine, *fakeNative, <-chan queuedNativeCommand) {
 	t.Helper()
 	f := fake()
 	tracks := trackNode(true, false, false)
@@ -36,8 +36,8 @@ func seekController(t *testing.T) (*contract.Controller, *engine, *fakeNative, <
 		}
 		return result
 	}
-	c := contract.New(Opener{loader: func(string) (*nativeAPI, error) { return f.a, nil }}, nil)
-	if err := c.Open(context.Background(), contract.Input{FilePath: "synthetic.mp4"}); err != nil {
+	c := playback.New(Opener{loader: func(string) (*nativeAPI, error) { return f.a, nil }}, nil)
+	if err := c.Open(context.Background(), playback.Input{FilePath: "synthetic.mp4"}); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
@@ -55,7 +55,7 @@ func seekController(t *testing.T) (*contract.Controller, *engine, *fakeNative, <
 	f.events <- &event{ID: 5, Reply: 1}
 	f.events <- &event{ID: 8}
 	f.events <- &event{ID: 22, Reply: 2, Data: unsafe.Pointer(&p)}
-	await(t, func() bool { c.Tick(); return c.Snapshot().State == contract.Ready })
+	await(t, func() bool { c.Tick(); return c.Snapshot().State == playback.Ready })
 	return c, e, f, sent
 }
 
@@ -76,7 +76,7 @@ func receiveQueuedCommand(t *testing.T, sent <-chan queuedNativeCommand, want []
 func TestSeekBurstKeepsControllerAndLatestPosition(t *testing.T) {
 	c, e, f, sent := seekController(t)
 	generation := c.Snapshot().Generation
-	if err := c.Command(contract.Command{Kind: contract.Seek, Position: time.Second}); err != nil {
+	if err := c.Command(playback.Command{Kind: playback.Seek, Position: time.Second}); err != nil {
 		t.Fatal(err)
 	}
 	pending := receiveQueuedCommand(t, sent, []string{"seek", "1.000000000", "absolute+exact"})
@@ -87,7 +87,7 @@ func TestSeekBurstKeepsControllerAndLatestPosition(t *testing.T) {
 		want       string
 	}{{2, 101, "101.000000000"}, {102, 202, "202.000000000"}} {
 		for i := burst.start; i <= burst.end; i++ {
-			if err := c.Command(contract.Command{Kind: contract.Seek, Position: time.Duration(i) * time.Second}); err != nil {
+			if err := c.Command(playback.Command{Kind: playback.Seek, Position: time.Duration(i) * time.Second}); err != nil {
 				t.Fatalf("seek %d: %v; controller=%+v active=%v owned=%+v", i, err, c.Snapshot(), c.Active(), Owned())
 			}
 		}
@@ -107,26 +107,26 @@ func TestSeekBurstKeepsControllerAndLatestPosition(t *testing.T) {
 	f.events <- &event{ID: 5, Reply: pending.id}
 	f.events <- &event{ID: 22, Reply: 1, Data: unsafe.Pointer(&p)}
 	await(t, func() bool { c.Tick(); return c.Snapshot().Position == 202*time.Second })
-	if c.Engine() != e || c.Snapshot().Generation != generation || c.Snapshot().Error != contract.NoError {
+	if c.Engine() != e || c.Snapshot().Generation != generation || c.Snapshot().Error != playback.NoError {
 		t.Fatal("final target did not preserve the live engine", c.Snapshot())
 	}
 	if err := c.Close(); err != nil || Owned() != (Resources{}) {
 		t.Fatal("close retained ownership", err, Owned())
 	}
-	if e.Command(contract.Command{Kind: contract.Seek, Position: time.Second}) != contract.IsClosed {
+	if e.Command(playback.Command{Kind: playback.Seek, Position: time.Second}) != playback.IsClosed {
 		t.Fatal("closed engine accepted Seek")
 	}
 }
 
 func TestSeekQueuePreservesControlBarriers(t *testing.T) {
 	c, _, f, sent := seekController(t)
-	if err := c.Command(contract.Command{Kind: contract.Seek, Position: time.Second}); err != nil {
+	if err := c.Command(playback.Command{Kind: playback.Seek, Position: time.Second}); err != nil {
 		t.Fatal(err)
 	}
 	pending := receiveQueuedCommand(t, sent, []string{"seek", "1.000000000", "absolute+exact"})
-	controls := []contract.Command{
-		{Kind: contract.Pause}, {Kind: contract.Volume, Value: .4},
-		{Kind: contract.Rate, Value: 1.5}, {Kind: contract.Play},
+	controls := []playback.Command{
+		{Kind: playback.Pause}, {Kind: playback.Volume, Value: .4},
+		{Kind: playback.Rate, Value: 1.5}, {Kind: playback.Play},
 	}
 	wantControls := [][]string{
 		{"set", "pause", "yes"}, {"set", "volume", "40"},
@@ -135,7 +135,7 @@ func TestSeekQueuePreservesControlBarriers(t *testing.T) {
 	var want [][]string
 	for _, control := range controls {
 		for i := 2; i <= 50; i++ {
-			if err := c.Command(contract.Command{Kind: contract.Seek, Position: time.Duration(i) * time.Second}); err != nil {
+			if err := c.Command(playback.Command{Kind: playback.Seek, Position: time.Duration(i) * time.Second}); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -146,7 +146,7 @@ func TestSeekQueuePreservesControlBarriers(t *testing.T) {
 	for i := 0; i < len(controls); i++ {
 		want = append(want, []string{"seek", "50.000000000", "absolute+exact"}, wantControls[i])
 	}
-	if err := c.Command(contract.Command{Kind: contract.Seek, Position: 55 * time.Second}); err != nil {
+	if err := c.Command(playback.Command{Kind: playback.Seek, Position: 55 * time.Second}); err != nil {
 		t.Fatal(err)
 	}
 	want = append(want, []string{"seek", "55.000000000", "absolute+exact"})
@@ -158,7 +158,7 @@ func TestSeekQueuePreservesControlBarriers(t *testing.T) {
 	// being swallowed as successful input handling.
 	f.events <- &event{ID: 5, Reply: pending.id, Error: -1}
 	await(t, func() bool { c.Tick(); return !c.Active() })
-	if c.Snapshot().State != contract.Failed || c.Snapshot().Error != contract.Media || Owned() != (Resources{}) {
+	if c.Snapshot().State != playback.Failed || c.Snapshot().Error != playback.Media || Owned() != (Resources{}) {
 		t.Fatal("native failure was hidden or retained resources", c.Snapshot(), Owned())
 	}
 }
@@ -169,28 +169,28 @@ func TestSeekQueueFullTailReplacementAndBound(t *testing.T) {
 			f := fake()
 			e := openFake(t, f) // Hold load reply so all 32 entries remain unsent.
 			for i := 0; i < 31; i++ {
-				if err := e.Command(contract.Command{Kind: contract.Play}); err != nil {
+				if err := e.Command(playback.Command{Kind: playback.Play}); err != nil {
 					t.Fatal(err)
 				}
 			}
-			tail := contract.Command{Kind: contract.Pause}
+			tail := playback.Command{Kind: playback.Pause}
 			if seekTail {
-				tail = contract.Command{Kind: contract.Seek, Position: time.Second}
+				tail = playback.Command{Kind: playback.Seek, Position: time.Second}
 			}
 			if err := e.Command(tail); err != nil {
 				t.Fatal(err)
 			}
-			want := error(contract.Media)
+			want := error(playback.Media)
 			if seekTail {
 				want = nil
 			}
-			if err := e.Command(contract.Command{Kind: contract.Seek, Position: 2 * time.Second}); err != want {
+			if err := e.Command(playback.Command{Kind: playback.Seek, Position: 2 * time.Second}); err != want {
 				t.Fatalf("full queue Seek = %v, want %v", err, want)
 			}
-			if err := e.Command(contract.Command{Kind: contract.Seek, Position: -time.Second}); err != contract.Invalid {
+			if err := e.Command(playback.Command{Kind: playback.Seek, Position: -time.Second}); err != playback.Invalid {
 				t.Fatal("invalid target accepted", err)
 			}
-			if err := e.Command(contract.Command{Kind: contract.Volume, Value: .5}); err != contract.Media {
+			if err := e.Command(playback.Command{Kind: playback.Volume, Value: .5}); err != playback.Media {
 				t.Fatal("queue bound changed or a control was silently dropped", err)
 			}
 			if err := e.Close(); err != nil || Owned() != (Resources{}) {

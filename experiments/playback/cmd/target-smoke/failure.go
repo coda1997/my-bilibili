@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"my-bilibili/experiments/playback/contract"
-	"my-bilibili/experiments/playback/mpvprobe"
+	"my-bilibili/internal/adapters/mpv"
+	"my-bilibili/internal/playback"
 )
 
 // Phases come only from driver control flow, never from RPC or caller strings.
@@ -43,11 +43,11 @@ type sample[T any] struct {
 }
 
 type failureEvidence struct {
-	Phase         driverPhase                 `json:"phase"`
-	Code          contract.ErrorCode          `json:"code"`
-	Elapsed       time.Duration               `json:"elapsed_ns"`
-	LastSnapshot  *sample[observed]           `json:"last_snapshot,omitempty"`
-	LastResources *sample[mpvprobe.Resources] `json:"last_resources,omitempty"`
+	Phase         driverPhase            `json:"phase"`
+	Code          playback.ErrorCode     `json:"code"`
+	Elapsed       time.Duration          `json:"elapsed_ns"`
+	LastSnapshot  *sample[observed]      `json:"last_snapshot,omitempty"`
+	LastResources *sample[mpv.Resources] `json:"last_resources,omitempty"`
 }
 
 func (r *report) setPhase(phase driverPhase) {
@@ -78,7 +78,7 @@ func (r *report) observe(nodes []node) {
 		r.lastSnapshot = &sample[observed]{r.phase, elapsed, s}
 	}
 	if resources, err := resourceNodes(nodes); err == nil {
-		r.lastResources = &sample[mpvprobe.Resources]{r.phase, elapsed, resources}
+		r.lastResources = &sample[mpv.Resources]{r.phase, elapsed, resources}
 	}
 }
 

@@ -1,4 +1,4 @@
-package mpvprobe
+package mpv
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"time"
 	"unsafe"
 
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
 // Model the native dependency from CA-CLEANUP-002: video-output destruction
@@ -65,7 +65,7 @@ func TestCloseServicesPendingFrameBeforeRenderFree(t *testing.T) {
 	if elapsed := time.Since(started); elapsed > 200*time.Millisecond {
 		t.Errorf("complete Close exceeded 200ms: %s", elapsed)
 	}
-	if Owned() != (Resources{}) || e.Snapshot().State != contract.Closed {
+	if Owned() != (Resources{}) || e.Snapshot().State != playback.Closed {
 		t.Fatal("Close returned with ownership", Owned(), e.Snapshot())
 	}
 }
@@ -128,7 +128,7 @@ func TestShutdownFailureStillDisposesInOrder(t *testing.T) {
 			e := openFake(t, f)
 			_ = e.Close()
 			_ = e.Close()
-			if e.failure != contract.Media || Owned() != (Resources{}) {
+			if e.failure != playback.Media || Owned() != (Resources{}) {
 				t.Fatal("shutdown failure lost or resources remain", e.failure, Owned())
 			}
 			if !reflect.DeepEqual(f.order, []string{"render-free", "destroy", "unload"}) {
@@ -176,7 +176,7 @@ func TestRenderFailureServicesShutdownWithoutTargetPixels(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("render failure did not finish disposal")
 	}
-	if e.Snapshot().State != contract.Failed || e.Snapshot().Error != contract.Media || Owned() != (Resources{}) {
+	if e.Snapshot().State != playback.Failed || e.Snapshot().Error != playback.Media || Owned() != (Resources{}) {
 		t.Fatal(e.Snapshot(), Owned())
 	}
 }
@@ -185,7 +185,7 @@ func TestContextCancellationJoinsVideoShutdown(t *testing.T) {
 	f := fake()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	plain, err := (Opener{loader: func(string) (*nativeAPI, error) { return f.a, nil }}).Open(ctx, contract.Input{FilePath: "synthetic.mp4"})
+	plain, err := (Opener{loader: func(string) (*nativeAPI, error) { return f.a, nil }}).Open(ctx, playback.Input{FilePath: "synthetic.mp4"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestContextCancellationJoinsVideoShutdown(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("cancellation did not join shutdown")
 	}
-	if e.failure != contract.NoError || Owned() != (Resources{}) || !reflect.DeepEqual(f.order, []string{"render-free", "destroy", "unload"}) {
+	if e.failure != playback.NoError || Owned() != (Resources{}) || !reflect.DeepEqual(f.order, []string{"render-free", "destroy", "unload"}) {
 		t.Fatal(e.failure, Owned(), f.order)
 	}
 }

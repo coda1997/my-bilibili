@@ -1,4 +1,4 @@
-package mpvprobe
+package mpv
 
 import (
 	"context"
@@ -8,26 +8,26 @@ import (
 	"time"
 	"unsafe"
 
-	"my-bilibili/experiments/playback/contract"
+	"my-bilibili/internal/playback"
 )
 
-type targetPolicyFunc func(contract.Input) error
+type targetPolicyFunc func(playback.Input) error
 
-func (f targetPolicyFunc) Validate(in contract.Input) error { return f(in) }
-func remoteInput() contract.Input {
-	return contract.Input{URL: "https://public.example.test/video?synthetic=one%2Btwo", AudioURL: "https://public.example.test/audio", Headers: map[string]string{"Referer": "https://public.example.test/", "User-Agent": "synthetic-public"}}
+func (f targetPolicyFunc) Validate(in playback.Input) error { return f(in) }
+func remoteInput() playback.Input {
+	return playback.Input{URL: "https://public.example.test/video?synthetic=one%2Btwo", AudioURL: "https://public.example.test/audio", Headers: map[string]string{"Referer": "https://public.example.test/", "User-Agent": "synthetic-public"}}
 }
 
 func TestTargetDualBoundaryRejectsBeforeNativeLoad(t *testing.T) {
 	calls := 0
 	loader := func(string) (*nativeAPI, error) { calls++; return nil, errors.New("PRIVATE_SYNTHETIC") }
-	allow := targetPolicyFunc(func(contract.Input) error { return nil })
-	deny := targetPolicyFunc(func(contract.Input) error { return contract.Timeout })
+	allow := targetPolicyFunc(func(playback.Input) error { return nil })
+	deny := targetPolicyFunc(func(playback.Input) error { return playback.Timeout })
 	for _, pair := range []struct {
-		controller, opener contract.InputPolicy
-		want               contract.ErrorCode
-	}{{allow, nil, contract.Invalid}, {nil, allow, contract.Invalid}, {allow, deny, contract.Timeout}, {deny, allow, contract.Timeout}} {
-		c := contract.NewWithPolicy(Opener{Policy: pair.opener, loader: loader}, nil, pair.controller)
+		controller, opener playback.InputPolicy
+		want               playback.ErrorCode
+	}{{allow, nil, playback.Invalid}, {nil, allow, playback.Invalid}, {allow, deny, playback.Timeout}, {deny, allow, playback.Timeout}} {
+		c := playback.NewWithPolicy(Opener{Policy: pair.opener, loader: loader}, nil, pair.controller)
 		if err := c.Open(context.Background(), remoteInput()); err != pair.want {
 			t.Fatal(err, pair.want)
 		}
@@ -36,8 +36,8 @@ func TestTargetDualBoundaryRejectsBeforeNativeLoad(t *testing.T) {
 	if calls != 0 {
 		t.Fatal("rejection loaded native code")
 	}
-	for _, code := range []error{contract.Invalid, contract.Timeout, errors.New("PRIVATE_SYNTHETIC")} {
-		_, err := (Opener{Policy: targetPolicyFunc(func(contract.Input) error { return code }), loader: loader}).Open(context.Background(), remoteInput())
+	for _, code := range []error{playback.Invalid, playback.Timeout, errors.New("PRIVATE_SYNTHETIC")} {
+		_, err := (Opener{Policy: targetPolicyFunc(func(playback.Input) error { return code }), loader: loader}).Open(context.Background(), remoteInput())
 		if err == nil || strings.Contains(err.Error(), "PRIVATE") {
 			t.Fatal("unsafe rejection")
 		}
@@ -64,10 +64,10 @@ func TestTargetTLSBeforeInitializeAndFailureClosed(t *testing.T) {
 				initialized = true
 				return 0
 			}
-			var validated contract.Input
+			var validated playback.Input
 			in := remoteInput()
 			entered, release := make(chan struct{}), make(chan struct{})
-			e, err := (Opener{Policy: targetPolicyFunc(func(got contract.Input) error { validated = got; return nil }), loader: func(string) (*nativeAPI, error) { close(entered); <-release; return f.a, nil }}).Open(context.Background(), in)
+			e, err := (Opener{Policy: targetPolicyFunc(func(got playback.Input) error { validated = got; return nil }), loader: func(string) (*nativeAPI, error) { close(entered); <-release; return f.a, nil }}).Open(context.Background(), in)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -85,7 +85,7 @@ func TestTargetTLSBeforeInitializeAndFailureClosed(t *testing.T) {
 			native := e.(*engine)
 			if reject {
 				<-native.done
-				if native.Snapshot().Error != contract.Unsupported || initialized {
+				if native.Snapshot().Error != playback.Unsupported || initialized {
 					t.Fatal("TLS failure initialized or wrong code")
 				}
 			} else {
@@ -106,8 +106,8 @@ func TestTargetExpiredContextDoesNotLoad(t *testing.T) {
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 	defer cancel()
 	calls := 0
-	_, err := (Opener{Policy: targetPolicyFunc(func(contract.Input) error { return nil }), loader: func(string) (*nativeAPI, error) { calls++; return nil, nil }}).Open(ctx, remoteInput())
-	if err != contract.Timeout || calls != 0 {
+	_, err := (Opener{Policy: targetPolicyFunc(func(playback.Input) error { return nil }), loader: func(string) (*nativeAPI, error) { calls++; return nil, nil }}).Open(ctx, remoteInput())
+	if err != playback.Timeout || calls != 0 {
 		t.Fatal(err, calls)
 	}
 }
@@ -164,7 +164,7 @@ func TestTargetHTTPSCaseTLSBoundaries(t *testing.T) {
 					}
 					return 0
 				}
-				plain, err := (Opener{Policy: targetPolicyFunc(func(contract.Input) error { return nil }), loader: func(string) (*nativeAPI, error) { return f.a, nil }}).Open(context.Background(), in)
+				plain, err := (Opener{Policy: targetPolicyFunc(func(playback.Input) error { return nil }), loader: func(string) (*nativeAPI, error) { return f.a, nil }}).Open(context.Background(), in)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -173,7 +173,7 @@ func TestTargetHTTPSCaseTLSBoundaries(t *testing.T) {
 				if reject {
 					select {
 					case <-native.done:
-						if native.Snapshot().Error != contract.Unsupported || initialized {
+						if native.Snapshot().Error != playback.Unsupported || initialized {
 							t.Error("TLS rejection initialized or lost unsupported code")
 						}
 					case <-f.sent:
@@ -205,7 +205,7 @@ func TestTargetHTTPSCaseCancellationClassification(t *testing.T) {
 			in.URL = strings.Replace(in.URL, "https:", scheme+":", 1)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			plain, err := (Opener{Policy: targetPolicyFunc(func(contract.Input) error { return nil }), loader: func(string) (*nativeAPI, error) { return f.a, nil }}).Open(ctx, in)
+			plain, err := (Opener{Policy: targetPolicyFunc(func(playback.Input) error { return nil }), loader: func(string) (*nativeAPI, error) { return f.a, nil }}).Open(ctx, in)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -222,7 +222,7 @@ func TestTargetHTTPSCaseCancellationClassification(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Fatal("cancel did not finish")
 			}
-			if s := native.Snapshot(); s.State != contract.Failed || s.Error != contract.Canceled {
+			if s := native.Snapshot(); s.State != playback.Failed || s.Error != playback.Canceled {
 				t.Error("accepted HTTPS lost cancellation classification", s.State, s.Error)
 			}
 			_ = native.Close()
