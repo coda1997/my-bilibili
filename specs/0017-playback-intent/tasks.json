@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec_id": "0017-playback-intent",
+  "tasks": [
+    {
+      "id": "INTENT-001",
+      "title": "Preserve changed playback intent and verify delayed command consumption",
+      "depends_on": [],
+      "write_paths": ["internal/app/session.go", "internal/app/session_test.go"],
+      "acceptance": ["INTENT-AC-01", "INTENT-AC-02"],
+      "checks": ["go test -count=1 -race ./internal/app", "Original Session overlay must fail delayed-intent regressions"]
+    },
+    {
+      "id": "INTENT-002",
+      "title": "Verify the candidate, obtain independent review and prepare the PR handoff",
+      "depends_on": ["INTENT-001"],
+      "write_paths": ["reports/0029-playback-intent.md", "reports/0029-playback-intent-pr.md", "README.md", "docs/stage-zero.md"],
+      "acceptance": ["INTENT-AC-03"],
+      "checks": ["go run ./cmd/dev check --race", "Independent exact-candidate review", "Sanitized handoff and PR draft"]
+    }
+  ]
+}

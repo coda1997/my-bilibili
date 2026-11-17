@@ -28,11 +28,13 @@ func (f *fakeSource) Resolve(id catalog.PartID) (contract.Input, error) {
 }
 
 type fakeEngine struct {
-	snapshot contract.Snapshot
-	commands []contract.Command
-	closed   int
-	failKind contract.CommandKind
-	failErr  error
+	deferCommands bool
+	pending       []contract.Command
+	snapshot      contract.Snapshot
+	commands      []contract.Command
+	closed        int
+	failKind      contract.CommandKind
+	failErr       error
 }
 
 func (e *fakeEngine) Snapshot() contract.Snapshot { return e.snapshot }
@@ -41,6 +43,15 @@ func (e *fakeEngine) Command(c contract.Command) error {
 	if c.Kind == e.failKind {
 		return e.failErr
 	}
+	if e.deferCommands {
+		e.pending = append(e.pending, c)
+		return nil
+	}
+	e.apply(c)
+	return nil
+}
+
+func (e *fakeEngine) apply(c contract.Command) {
 	switch c.Kind {
 	case contract.Play:
 		e.snapshot.State = contract.Playing
@@ -53,7 +64,6 @@ func (e *fakeEngine) Command(c contract.Command) error {
 	case contract.Rate:
 		e.snapshot.Rate = c.Value
 	}
-	return nil
 }
 func (e *fakeEngine) Close() error { e.closed++; return nil }
 
@@ -545,5 +555,108 @@ func TestCompletionClearsRetryIntentButExplicitReplayPlays(t *testing.T) {
 	}
 	if countKind(h.engine(), contract.Play) != 1 {
 		t.Fatal("explicit play did not request playback")
+	}
+}
+
+// Keep command acceptance separate from engine consumption, as in the native
+// adapter. Advancing the controller clock still sees the old engine snapshot.
+func deferredPlaybackHarness(t *testing.T, playing bool) *harness {
+	t.Helper()
+	h := newHarness(t)
+	h.start(t)
+	t.Cleanup(func() { _ = h.s.Close() })
+	h.tick(contract.Paused)
+	if playing {
+		if err := h.s.Play(); err != nil {
+			t.Fatal(err)
+		}
+		h.tick(contract.Playing)
+	}
+	h.engine().commands = nil
+	h.engine().deferCommands = true
+	return h
+}
+
+func TestPlaybackIntentWithDeferredCommands(t *testing.T) {
+	for _, playing := range []bool{false, true} {
+		for _, toggle := range []bool{false, true} {
+			t.Run(fmt.Sprintf("playing=%v/toggle=%v", playing, toggle), func(t *testing.T) {
+				h := deferredPlaybackHarness(t, playing)
+				e := h.engine()
+				initial := e.snapshot.State
+				for i, intent := range []bool{!playing, !playing, playing, playing} {
+					h.now = h.now.Add(contract.PollInterval)
+					action := h.s.Pause
+					if intent {
+						action = h.s.Play
+					}
+					if toggle && i%2 == 0 {
+						action = h.s.Toggle
+					}
+					if err := action(); err != nil {
+						t.Fatal(err)
+					}
+					if h.s.State().DesiredPlaying != intent {
+						t.Fatal("lost requested intent")
+					}
+				}
+				want := []contract.Command{{Kind: contract.Play}, {Kind: contract.Pause}}
+				if playing {
+					want[0], want[1] = want[1], want[0]
+				}
+				if !reflect.DeepEqual(e.commands, want) {
+					t.Errorf("accepted commands=%v, want %v", e.commands, want)
+				}
+				if e.snapshot.State != initial {
+					t.Fatal("engine consumed commands before explicit drain")
+				}
+				for _, cmd := range e.pending {
+					e.apply(cmd)
+				}
+				e.pending = nil
+				h.tick(e.snapshot.State)
+				state := h.s.State()
+				if state.DesiredPlaying != playing || state.Playback.State != initial {
+					t.Errorf("after consumption: desired=%v state=%v, want desired=%v state=%v", state.DesiredPlaying, state.Playback.State, playing, initial)
+				}
+				if e.closed != 0 || h.s.Engine() != e || len(h.opener.inputs) != 1 || state.Playback.Generation != 1 {
+					t.Fatal("intent change disposed or reopened playback")
+				}
+			})
+		}
+	}
+}
+
+func TestOppositePlaybackIntentFailure(t *testing.T) {
+	for _, playing := range []bool{false, true} {
+		t.Run(fmt.Sprintf("playing=%v", playing), func(t *testing.T) {
+			h := deferredPlaybackHarness(t, playing)
+			e := h.engine()
+			first, second := h.s.Play, h.s.Pause
+			failKind := contract.Pause
+			if playing {
+				first, second, failKind = h.s.Pause, h.s.Play, contract.Play
+			}
+			if err := first(); err != nil {
+				t.Fatal(err)
+			}
+			e.failKind, e.failErr = failKind, errors.New("private native failure")
+			h.now = h.now.Add(contract.PollInterval)
+			requireError(t, second(), contract.Media)
+			state := h.s.State()
+			if state.Playback.State != contract.Failed || state.Playback.Error != contract.Media || state.DesiredPlaying || h.s.Engine() != nil || e.closed != 1 {
+				t.Fatal("opposite command failure did not clear intent and dispose", state)
+			}
+			if len(e.commands) != 2 || e.commands[1].Kind != failKind {
+				t.Fatal(e.commands)
+			}
+			h.s.Tick()
+			if err := h.s.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if e.closed != 1 || len(e.commands) != 2 {
+				t.Fatal("failure cleanup repeated commands or disposal")
+			}
+		})
 	}
 }

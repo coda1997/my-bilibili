@@ -58,6 +58,17 @@ retained. This does not measure physical sync/rate.
 
 ## Start here
 
+The owner-selected issue #10 repair now has local independent technical approval:
+rapid opposite play/pause actions preserve the last intent despite stale samples.
+New regressions and full local race checks pass; restoring the old source fails
+all six new cases. See [the issue #10 handoff](reports/0029-playback-intent.md)
+and [publication notes](reports/0029-playback-intent-pr.md). The owner authorized
+publication as Draft [PR #12](https://github.com/coda1997/my-bilibili/pull/12);
+see that PR for current exact-candidate CI. Merge, issue closure and M3 acceptance
+remain separate owner decisions.
+PR #9 is confirmed merged with passing three-platform CI; the older M2 narrative
+below records its premerge continuation, not current remote status.
+
 M2's fullscreen repair now has scoped independent approval. On 2026-11-16,
 the original reviewer closed REV-002 after verifying four complete native suites
 with 30 passing checks each, 51 complete fixed fullscreen cycles, and independent
