@@ -17,6 +17,10 @@ type View struct {
 	stateGeneration uint64
 	controller      domain.Controller
 	requestClose    func(bool)
+	dismiss         func()
+	discardUnsaved  func() error
+	embedded        bool
+	visible         bool
 	bitmap          *gui.Bitmap
 	qr              domain.QR
 	generation      uint64
@@ -28,7 +32,7 @@ type View struct {
 }
 
 func New(controller domain.Controller, requestClose func(bool)) *View {
-	return &View{controller: controller, requestClose: requestClose}
+	return &View{controller: controller, requestClose: requestClose, visible: true}
 }
 func (v *View) clearQR() { v.bitmap = nil; v.qr = domain.QR{}; v.qrLimit = 0; v.qrError = domain.None }
 
@@ -68,16 +72,21 @@ func (v *View) syncQR(s domain.State, now time.Time, limit int) bool {
 	return false
 }
 func (v *View) action(c *gui.Context, fn func() error) {
-	v.actionError = domain.None
-	if err := fn(); err != nil {
-		var code domain.Code
-		if errors.As(err, &code) {
-			v.actionError = code
-		} else {
-			v.actionError = domain.Invalid
+	v.actionError = actionCode(fn())
+	c.Invalidate()
+}
+func actionCode(err error) domain.Code {
+	if err == nil {
+		return domain.None
+	}
+	var code domain.Code
+	if errors.As(err, &code) {
+		switch code {
+		case domain.Invalid, domain.Network, domain.ServiceRejected, domain.ExpiredSession, domain.Storage, domain.Missing, domain.Busy, domain.Canceled, domain.Timeout, domain.Closed:
+			return code
 		}
 	}
-	c.Invalidate()
+	return domain.Invalid
 }
 func status(s domain.State) (string, string) {
 	switch s.Phase {
@@ -94,7 +103,7 @@ func status(s domain.State) (string, string) {
 	case domain.Saving:
 		return "正在保存登录", "登录已确认，正在保存到钥匙串。如有系统提示，请完成确认。"
 	case domain.SaveFailed:
-		return "登录尚未保存", "手机已确认登录。请重试保存，无需再次扫码；放弃关闭会丢失本次尚未保存的登录。"
+		return "登录保存未确认", "手机已确认登录，但暂时无法确认钥匙串保存结果。可重试保存，无需再次扫码；放弃会丢弃当前尝试，已写入钥匙串的数据会保留。"
 	case domain.Verifying:
 		return "正在检查登录", "正在确认已保存的登录是否可用。"
 	case domain.VerifyFailed:
@@ -152,6 +161,9 @@ func safeError(code domain.Code) string {
 	}
 }
 func (v *View) Render(c *gui.Context) {
+	if !v.visible {
+		return
+	}
 	s := v.controller.Snapshot()
 	if v.phase != s.Phase || v.stateGeneration != s.Generation {
 		v.confirmLogout = false
@@ -163,6 +175,14 @@ func (v *View) Render(c *gui.Context) {
 	width := max(float32(1), w-48)
 	expired := v.syncQR(s, c.Now(), int(min(float32(320), width)))
 	heading, body := status(s)
+	if v.embedded {
+		switch s.Phase {
+		case domain.SignedIn:
+			body = "登录已保存在这台 Mac 的钥匙串中。关闭面板后仍可继续使用。"
+		case domain.DeleteFailed:
+			body = "登录可能仍保存在钥匙串中。可以重试退出，也可以稍后处理。"
+		}
+	}
 	if expired {
 		heading = "二维码已过期"
 		body = "请取消本次登录，再重新生成二维码。"
@@ -231,24 +251,43 @@ func (v *View) actions(c *gui.Context, s domain.State) {
 		}
 	case domain.SaveFailed:
 		act("retry-save", "重试保存", v.controller.RetrySave)
-		v.button(c, "discard-close", "放弃并关闭", s.Busy, func() { v.clearQR(); v.requestClose(true) })
-		return
+		if !v.embedded {
+			v.button(c, "discard-close", "放弃并关闭", s.Busy, func() { v.clearQR(); v.requestClose(true) })
+			return
+		}
+		v.button(c, "discard-attempt", "放弃本次登录", s.Busy || !s.Unsaved, func() { v.clearQR(); v.action(c, v.discardUnsaved) })
 	case domain.VerifyFailed:
 		act("retry-verify", "重新检查登录", v.controller.RetryVerify)
 	case domain.DeleteFailed:
 		act("retry-logout", "重试退出", v.controller.Logout)
-		v.button(c, "retained-close", "保留登录并关闭", s.Busy, func() { v.clearQR(); v.requestClose(true) })
-		return
+		if !v.embedded {
+			v.button(c, "retained-close", "保留登录并关闭", s.Busy, func() { v.clearQR(); v.requestClose(true) })
+			return
+		}
 	}
 	if s.Stored && !s.Busy && (s.Phase == domain.SignedIn || s.Phase == domain.VerifyFailed || s.Phase == domain.Expired) {
 		v.button(c, "logout", "退出登录…", false, func() { v.confirmLogout = true; c.Invalidate() })
 	}
 	if s.Phase != domain.Done {
 		label := "关闭窗口"
+		if v.embedded {
+			label = "关闭面板"
+		}
 		if s.Phase == domain.SignedIn {
 			label = "完成"
 		}
-		v.button(c, "close-login", label, false, func() { v.clearQR(); v.requestClose(false) })
+		v.button(c, "close-login", label, false, func() {
+			if v.embedded {
+				_ = v.Hide() // The safe cancellation result remains in actionError.
+				if v.dismiss != nil {
+					v.dismiss()
+				}
+				c.Invalidate()
+				return
+			}
+			v.clearQR()
+			v.requestClose(false)
+		})
 	}
 }
 func cWidth(c *gui.Context) float32 { w, _ := c.Size(); return w }
