@@ -9,6 +9,7 @@ import (
 	gui "github.com/egoist/mygo/ui"
 	"my-bilibili/internal/app"
 	"my-bilibili/internal/catalog"
+	danmakuview "my-bilibili/internal/desktop/danmaku"
 	"my-bilibili/internal/playback"
 )
 
@@ -20,6 +21,7 @@ const overlayDelay = 3 * time.Second
 // playback events on the UI thread before rebuilding the view.
 type View struct {
 	Player              app.Player
+	Danmaku             *danmakuview.View
 	Surface             func(*gui.Context, float32, float32)
 	Cover               func(*gui.Context, string)
 	Fullscreen          func() bool
