@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "spec_id": "0023-p0-persistent-login",
+  "tasks": [
+    {"id":"LOG-001","title":"Freeze plain account ports and the pinned QR utility","depends_on":[],"write_paths":["internal/account/contracts.go","internal/account/contracts_test.go","go.mod","go.sum","docs/licenses/go-qrcode.txt"],"acceptance":["LOG-AC-01"],"checks":["Compile and test plain redacted account contracts","Verify exact QR module pin and MIT notice"]},
+    {"id":"LOG-002","title":"Implement account lifecycle and bounded web sign-in adapter","depends_on":["LOG-001"],"write_paths":["internal/account","internal/adapters/bilibili/account","internal/architecture/account_imports_test.go"],"acceptance":["LOG-AC-01","LOG-AC-02","LOG-AC-03"],"checks":["Synthetic HTTP/lifecycle/race tests","Guard and import-boundary discrimination; no live service calls"]},
+    {"id":"LOG-003","title":"Implement protected storage and native QR presentation","depends_on":["LOG-001"],"write_paths":["internal/adapters/credentials","internal/desktop/account","cmd/account-storage-smoke"],"acceptance":["LOG-AC-04","LOG-AC-05"],"checks":["Fake Keychain/CLI/QR rendering tests","Synthetic-only protected storage and native UI evidence after integration; no real account deletion"]},
+    {"id":"LOG-004","title":"Integrate reviewed login, verify it and retain the user's session","depends_on":["LOG-002","LOG-003"],"write_paths":["cmd/p0-login","reports/0035-p0-persistent-login.md"],"acceptance":["LOG-AC-04","LOG-AC-05","LOG-AC-06"],"checks":["go run ./cmd/dev check --race","Synthetic native storage and tagged UI checks","Independent exact-candidate review before user scan","One successful user-assisted login, secure save and same-binary restart verification; preserve credentials"]}
+  ]
+}

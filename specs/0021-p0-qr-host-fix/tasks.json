@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec_id": "0021-p0-qr-host-fix",
+  "tasks": [
+    {
+      "id": "QRH-001",
+      "title": "Accept the observed QR host while preserving historical diagnostics",
+      "depends_on": [],
+      "write_paths": ["experiments/p0/serviceprobe/probe.go", "experiments/p0/serviceprobe/qr_diagnostic.go", "experiments/p0/serviceprobe/qr_diagnostic_test.go", "experiments/p0/serviceprobe/qr_hosts_test.go"],
+      "acceptance": ["QRH-AC-01", "QRH-AC-02", "QRH-AC-03"],
+      "checks": ["go test -count=1 -race ./experiments/p0/...", "go run ./cmd/dev check --race", "Before/after and scoped negative controls; independent exact-candidate code review"]
+    },
+    {
+      "id": "QRH-002",
+      "title": "Verify the repaired existing probe once and record the scoped outcome",
+      "depends_on": ["QRH-001"],
+      "write_paths": ["reports/0033-p0-qr-host-fix.md"],
+      "acceptance": ["QRH-AC-04"],
+      "checks": ["One existing service-probe --live invocation after code approval", "Record exact identities, actual step outcomes and retained cumulative counts without claiming real login"]
+    }
+  ]
+}
