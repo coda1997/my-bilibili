@@ -1,4 +1,5 @@
-// Package desktop presents the fixture preview without owning playback or windows.
+// Package desktop presents the client and fixture preview without owning playback
+// or windows.
 package desktop
 
 import (
@@ -20,14 +21,18 @@ const overlayDelay = 3 * time.Second
 // may be nil to use time.Now; tests inject their clock. Render pumps source and
 // playback events on the UI thread before rebuilding the view.
 type View struct {
-	Player              app.Player
-	Danmaku             *danmakuview.View
-	Surface             func(*gui.Context, float32, float32)
-	Cover               func(*gui.Context, string)
-	Fullscreen          func() bool
-	SetFullscreen       func(bool)
-	Now                 func() time.Time
-	DoubleClickInterval time.Duration
+	Player               app.Player
+	Danmaku              *danmakuview.View
+	Surface              func(*gui.Context, float32, float32)
+	Cover                func(*gui.Context, string)
+	Fullscreen           func() bool
+	SetFullscreen        func(bool)
+	Now                  func() time.Time
+	DoubleClickInterval  time.Duration
+	RealContent          bool
+	DanmakuError         catalog.Code
+	DanmakuPrefetchError catalog.Code
+	RetryDanmaku         func() error
 
 	lastActivity         time.Time
 	pendingClick         time.Time
@@ -38,8 +43,14 @@ type View struct {
 	seek, volume         sliderState
 	partsOpen, speedOpen bool
 	danmakuOpen          bool
+	qualityOpen          bool
+	qualityPart          catalog.PartID
+	resuming             bool
+	seekEpoch            uint64
 	controlsHeld         bool
 	lastError            playback.ErrorCode
+	lastContentError     catalog.Code
+	lastDanmakuError     catalog.Code
 }
 
 type sliderState struct {
@@ -67,13 +78,24 @@ func (v *View) now() time.Time {
 
 func (v *View) active() { v.lastActivity = v.now() }
 
+func (v *View) retireInput() {
+	v.partsOpen, v.speedOpen, v.danmakuOpen, v.qualityOpen = false, false, false, false
+	v.seek.pressed, v.volume.pressed, v.controlsHeld = false, false, false
+	v.pendingClick = time.Time{}
+	v.suppressClick = false
+}
+
 func (v *View) action(c *gui.Context, fn func() error) {
 	v.pendingClick = time.Time{}
 	v.lastError = playback.NoError
+	v.lastContentError = catalog.None
 	if err := fn(); err != nil {
 		var code playback.ErrorCode
+		var content catalog.Code
 		if errors.As(err, &code) {
 			v.lastError = code
+		} else if v.RealContent && errors.As(err, &content) && content != catalog.None {
+			v.lastContentError = content
 		} else {
 			v.lastError = playback.Media
 		}
@@ -90,7 +112,11 @@ func (v *View) fullscreen(c *gui.Context, enabled bool) {
 }
 
 func (v *View) overlayVisible(s app.State) bool {
-	return s.Closing || s.ResolvingPart != "" || s.Playback.State != playback.Playing || v.controlsHeld || v.seek.pressed || v.volume.pressed || v.partsOpen || v.speedOpen || v.danmakuOpen || v.now().Sub(v.lastActivity) < overlayDelay
+	return s.Closing || s.ResolvingPart != "" || s.Resuming || s.ResumeError != catalog.None ||
+		s.SelectionError != catalog.None || s.PlaybackRetryError != catalog.None ||
+		v.lastError != playback.NoError || v.lastContentError != catalog.None ||
+		s.Playback.State != playback.Playing || v.controlsHeld || v.seek.pressed || v.volume.pressed ||
+		v.partsOpen || v.speedOpen || v.danmakuOpen || v.qualityOpen || v.now().Sub(v.lastActivity) < overlayDelay
 }
 
 func (v *View) videoInput(c *gui.Context, s app.State, video gui.Element) {
@@ -136,8 +162,8 @@ func (v *View) shortcuts(c *gui.Context, s app.State) {
 	// Built after the controls, so their focused native input handlers and popup
 	// scopes get first refusal (slider arrows, button Space, text input, Escape).
 	if c.Shortcut(0, gui.KeyEscape) {
-		if v.partsOpen || v.speedOpen || v.danmakuOpen {
-			v.partsOpen, v.speedOpen, v.danmakuOpen = false, false, false
+		if v.partsOpen || v.speedOpen || v.danmakuOpen || v.qualityOpen {
+			v.partsOpen, v.speedOpen, v.danmakuOpen, v.qualityOpen = false, false, false, false
 			v.active()
 			c.Invalidate()
 		} else if v.Fullscreen() {
@@ -191,7 +217,32 @@ func usable(s app.State) bool {
 	return partsReady(s) && (s.ResolvingPart != "" || s.Playback.State != playback.Idle)
 }
 func seekable(s app.State) bool {
-	return partsReady(s) && s.Playback.Duration > 0 && (s.Playback.State == playback.Ready || s.Playback.State == playback.Paused || s.Playback.State == playback.Playing)
+	return partsReady(s) && !s.Resuming && s.Playback.Duration > 0 && (s.Playback.State == playback.Ready || s.Playback.State == playback.Paused || s.Playback.State == playback.Playing)
+}
+
+func qualityReady(s app.State) bool {
+	return partsReady(s) && s.PlaybackPart != "" && len(s.Qualities) > 0 &&
+		s.SelectedPart == s.PlaybackPart && (s.ResolvingPart == "" || s.ResolvingPart == s.PlaybackPart) &&
+		s.Playback.State != playback.Ended
+}
+
+func (v *View) words(fixture, real string) string {
+	if v.RealContent {
+		return real
+	}
+	return fixture
+}
+
+func (v *View) partTitle(s app.State, id catalog.PartID) string {
+	if v.RealContent {
+		for i, p := range s.Video.Parts {
+			if p.ID == id {
+				return fmt.Sprintf("P%d · %s", i+1, p.Title)
+			}
+		}
+		return "尚未加载分集"
+	}
+	return partTitle(s, id)
 }
 func partTitle(s app.State, id catalog.PartID) string {
 	for i, p := range s.Video.Parts {

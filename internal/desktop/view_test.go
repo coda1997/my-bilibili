@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -14,9 +15,10 @@ import (
 )
 
 type call struct {
-	name  string
-	value float64
-	part  catalog.PartID
+	name    string
+	value   float64
+	part    catalog.PartID
+	quality app.QualityID
 }
 type fakePlayer struct {
 	state app.State
@@ -25,14 +27,22 @@ type fakePlayer struct {
 	err   error
 }
 
-func (p *fakePlayer) State() app.State { return p.state }
+func (p *fakePlayer) State() app.State {
+	s := p.state
+	s.Video.Parts = slices.Clone(s.Video.Parts)
+	s.Qualities = slices.Clone(s.Qualities)
+	return s
+}
 func (p *fakePlayer) record(name string) error {
 	p.calls = append(p.calls, call{name: name})
 	return p.err
 }
-func (p *fakePlayer) Start(context.Context) error       { return p.record("start") }
-func (p *fakePlayer) RetryDetail() error                { return p.record("retry-detail") }
-func (p *fakePlayer) SelectQuality(app.QualityID) error { return nil }
+func (p *fakePlayer) Start(context.Context) error { return p.record("start") }
+func (p *fakePlayer) RetryDetail() error          { return p.record("retry-detail") }
+func (p *fakePlayer) SelectQuality(id app.QualityID) error {
+	p.calls = append(p.calls, call{name: "quality", quality: id})
+	return p.err
+}
 func (p *fakePlayer) SelectPart(id catalog.PartID) error {
 	p.calls = append(p.calls, call{name: "part", part: id})
 	return p.err
