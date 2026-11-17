@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec_id": "0018-seek-queue",
+  "tasks": [
+    {
+      "id": "SEEK-001",
+      "title": "Bound consecutive seek requests and verify adapter lifetime",
+      "depends_on": [],
+      "write_paths": ["experiments/playback/mpvprobe/engine.go", "experiments/playback/mpvprobe/seek_queue_test.go"],
+      "acceptance": ["SEEK-AC-01", "SEEK-AC-02"],
+      "checks": ["go test -count=1 -race ./experiments/playback/mpvprobe ./experiments/playback/contract ./internal/app", "Original engine must fail seek overload regression"]
+    },
+    {
+      "id": "SEEK-002",
+      "title": "Review, publish, verify CI and merge the scoped repair",
+      "depends_on": ["SEEK-001"],
+      "write_paths": ["reports/0030-seek-queue.md", "reports/0030-seek-queue-pr.md", "README.md", "docs/stage-zero.md"],
+      "acceptance": ["SEEK-AC-03"],
+      "checks": ["go run ./cmd/dev check --race", "Independent exact-candidate review", "Three-platform CI on final PR candidate and protected squash merge receipt"]
+    }
+  ]
+}

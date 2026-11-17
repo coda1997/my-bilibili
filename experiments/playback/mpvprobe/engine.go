@@ -53,7 +53,7 @@ func (o Opener) Open(ctx context.Context, in contract.Input) (contract.Engine, e
 	if loader == nil {
 		loader = load
 	}
-	e := &engine{commands: make(chan []string, 32), stop: make(chan struct{}), done: make(chan struct{}),
+	e := &engine{commands: make([][]string, 0, 32), stop: make(chan struct{}), done: make(chan struct{}),
 		s: contract.Snapshot{State: contract.Loading, Rate: 1, Volume: 1}}
 	go e.run(ctx, in, o.Library, loader)
 	return e, nil
@@ -66,7 +66,7 @@ type engine struct {
 	failure  contract.ErrorCode
 	tracks   Tracks
 	once     sync.Once
-	commands chan []string
+	commands [][]string // Pending native arguments; protected by mu.
 	stop     chan struct{}
 	done     chan struct{}
 
@@ -106,12 +106,18 @@ func (e *engine) Command(c contract.Command) error {
 	if e.closed {
 		return contract.IsClosed
 	}
-	select {
-	case e.commands <- args:
+	// Adjacent unsent absolute targets supersede one another. Other controls
+	// are ordering barriers; already-sent commands retain their reply ownership.
+	n := len(e.commands)
+	if c.Kind == contract.Seek && n > 0 && e.commands[n-1][0] == "seek" {
+		e.commands[n-1] = args
 		return nil
-	default:
+	}
+	if n == 32 {
 		return contract.Media
 	}
+	e.commands = append(e.commands, args)
+	return nil
 }
 
 func (e *engine) Close() error {
@@ -344,8 +350,16 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 		}
 		e.mu.Unlock()
 		if pending == 0 {
-			select {
-			case args := <-e.commands:
+			e.mu.Lock()
+			var args []string
+			if len(e.commands) > 0 {
+				args = e.commands[0]
+				copy(e.commands, e.commands[1:])
+				e.commands[len(e.commands)-1] = nil
+				e.commands = e.commands[:len(e.commands)-1]
+			}
+			e.mu.Unlock()
+			if args != nil {
 				if len(args) == 3 && args[0] == "set" && args[1] == "pause" {
 					commanded = true
 				}
@@ -355,7 +369,6 @@ func (e *engine) run(ctx context.Context, in contract.Input, path string, loader
 					return
 				}
 				pending = id
-			default:
 			}
 		}
 	}
