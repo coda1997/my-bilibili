@@ -60,7 +60,11 @@ func TestDanmakuObservationCopiesThePreparedFrameAndExcludesText(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	o := previewbundle.Observation{State: app.State{DetailPhase: app.DetailReady, Video: video, SelectedPart: "part-1", PlaybackPart: "part-1", Playback: snapshot, Rate: 1, Volume: 1}, Danmaku: observeDanmaku(view.State())}
+	resolution, err := source.Resolve(context.Background(), app.ResolveRequest{Part: "part-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := previewbundle.Observation{State: app.State{DetailPhase: app.DetailReady, Video: video, SelectedPart: "part-1", PlaybackPart: "part-1", SelectedQuality: resolution.Quality.ID, PlaybackQuality: resolution.Quality.ID, Qualities: resolution.Qualities, Playback: snapshot, Rate: 1, Volume: 1}, Danmaku: observeDanmaku(view.State())}
 	raw, err := json.Marshal(o)
 	if err != nil {
 		t.Fatal(err)

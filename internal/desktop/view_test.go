@@ -203,7 +203,7 @@ func TestControlsMenusAndErrors(t *testing.T) {
 		t.Fatal("controls bubbled to video")
 	}
 	h.player.state.SelectedPart = "part-2"
-	h.player.state.SelectionError = playback.Media
+	h.player.state.SelectionError = catalog.Unavailable
 	h.player.state.Playback.State = playback.Failed
 	h.player.state.Playback.Error = playback.Unsupported
 	h.ui.Frame()

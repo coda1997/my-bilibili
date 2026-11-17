@@ -7,6 +7,7 @@ import (
 
 	gui "github.com/egoist/mygo/ui"
 	"my-bilibili/internal/app"
+	"my-bilibili/internal/catalog"
 	"my-bilibili/internal/playback"
 )
 
@@ -146,7 +147,7 @@ func (v *View) status(c *gui.Context, s app.State, w float32) {
 				gui.Text(c.Key("loading-state"), "Loading…").TextColor(white).FontSize(15)
 			}
 		}
-		if s.DetailPhase == app.DetailFailed || s.Playback.State == playback.Failed || s.SelectionError != playback.NoError || s.PlaybackRetryError != playback.NoError || v.lastError != playback.NoError {
+		if s.DetailPhase == app.DetailFailed || s.Playback.State == playback.Failed || s.SelectionError != catalog.None || s.PlaybackRetryError != catalog.None || v.lastError != playback.NoError {
 			gui.Column(c.Key("player-errors")).Gap(7).Padding(10).Background(gui.RGB(44, 30, 38)).Children(func() {
 				if s.DetailPhase == app.DetailFailed {
 					gui.Text(c, "Could not load video details · "+string(s.DetailError)).TextColor(gui.RGB(255, 230, 238))
@@ -154,15 +155,15 @@ func (v *View) status(c *gui.Context, s app.State, w float32) {
 						v.action(c, v.Player.RetryDetail)
 					}
 				}
-				if s.SelectionError != playback.NoError {
+				if s.SelectionError != catalog.None {
 					gui.Text(c, "Could not select "+partTitle(s, s.SelectedPart)).FontSize(13).TextColor(gui.RGB(255, 230, 238))
 					if gui.Button(c.Key("retry-selection"), "Retry selection").Height(32).Disabled(!partsReady(s) || s.ResolvingPart != "").Clicked() {
 						v.action(c, v.Player.RetrySelection)
 					}
 				}
-				if s.Playback.State == playback.Failed || s.PlaybackRetryError != playback.NoError {
+				if s.Playback.State == playback.Failed || s.PlaybackRetryError != catalog.None {
 					message := "Playback failed · " + string(s.Playback.Error)
-					if s.PlaybackRetryError != playback.NoError {
+					if s.PlaybackRetryError != catalog.None {
 						message = "Could not reload playback · " + string(s.PlaybackRetryError)
 					}
 					gui.Text(c, message).TextColor(gui.RGB(255, 230, 238))

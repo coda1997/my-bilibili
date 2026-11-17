@@ -10,6 +10,7 @@ import (
 
 	"my-bilibili/internal/adapters/mpv"
 	"my-bilibili/internal/app"
+	"my-bilibili/internal/catalog"
 	"my-bilibili/internal/playback"
 )
 
@@ -51,9 +52,19 @@ func ParseObservation(data []byte) (Observation, error) {
 	default:
 		return Observation{}, invalid
 	}
-	for _, code := range []playback.ErrorCode{s.Error, o.State.DetailError, o.State.SelectionError, o.State.PlaybackRetryError, o.DisposalError} {
+	for _, code := range []playback.ErrorCode{s.Error, o.DisposalError} {
 		switch code {
 		case playback.NoError, playback.Invalid, playback.Unsupported, playback.Canceled, playback.Timeout, playback.Media, playback.IsClosed:
+		default:
+			return Observation{}, invalid
+		}
+	}
+	for _, code := range []catalog.Code{o.State.DetailError, o.State.SelectionError, o.State.PlaybackRetryError, o.State.ResumeError} {
+		switch code {
+		case catalog.None, catalog.Invalid, catalog.Unsupported, catalog.Canceled, catalog.Timeout, catalog.Network,
+			catalog.InvalidResponse, catalog.Unavailable, catalog.Restricted, catalog.LoginRequired,
+			catalog.SessionExpired, catalog.VerificationRequired, catalog.RateLimited,
+			catalog.ServiceUnavailable, catalog.QualityUnavailable, catalog.Closed:
 		default:
 			return Observation{}, invalid
 		}
@@ -87,17 +98,25 @@ func validSourceState(state app.State) bool {
 		if native.Generation != 0 || native.State != playback.Idle && native.State != playback.Closed {
 			return false
 		}
+		if state.SelectedQuality != "" || state.PlaybackQuality != "" || len(state.Qualities) != 0 {
+			return false
+		}
 	} else if !part(string(state.PlaybackPart)) || native.Generation == 0 {
+		return false
+	} else if len(state.Qualities) != 1 || state.Qualities[0] != (app.Quality{ID: "fixture", Label: "Fixture", Width: 640, Height: 360}) || state.PlaybackQuality != "fixture" {
+		return false
+	}
+	if state.SelectedQuality != "" && state.SelectedQuality != "fixture" {
 		return false
 	}
 	switch state.DetailPhase {
 	case app.DetailInitial, app.DetailLoading, app.DetailFailed:
-		if v.ID != "" || v.Title != "" || v.Creator != "" || v.Description != "" || v.CoverID != "" || len(v.Parts) != 0 || state.SelectedPart != "" || state.PlaybackPart != "" || state.ResolvingPart != "" || state.DesiredPlaying || state.SelectionError != playback.NoError || state.PlaybackRetryError != playback.NoError {
+		if v.ID != "" || v.Title != "" || v.Creator != "" || v.Description != "" || v.CoverID != "" || len(v.Parts) != 0 || state.SelectedPart != "" || state.PlaybackPart != "" || state.ResolvingPart != "" || state.DesiredPlaying || state.SelectionError != catalog.None || state.PlaybackRetryError != catalog.None {
 			return false
 		}
-		return (state.DetailPhase == app.DetailFailed) == (state.DetailError != playback.NoError)
+		return (state.DetailPhase == app.DetailFailed) == (state.DetailError != catalog.None)
 	case app.DetailReady:
-		if state.DetailError != playback.NoError || v.ID != "preview-video" || v.CoverID != "preview-cover" || v.Title == "" || v.Creator == "" || v.Description == "" || len(v.Parts) != 2 || v.Parts[0].ID != "part-1" || v.Parts[1].ID != "part-2" || !part(string(state.SelectedPart)) {
+		if state.DetailError != catalog.None || v.ID != "preview-video" || v.CoverID != "preview-cover" || v.Title == "" || v.Creator == "" || v.Description == "" || len(v.Parts) != 2 || v.Parts[0].ID != "part-1" || v.Parts[1].ID != "part-2" || !part(string(state.SelectedPart)) {
 			return false
 		}
 		for _, p := range v.Parts {
@@ -105,7 +124,7 @@ func validSourceState(state app.State) bool {
 				return false
 			}
 		}
-		return (state.ResolvingPart == "" || part(string(state.ResolvingPart))) && (state.PlaybackRetryError == playback.NoError || state.PlaybackPart != "")
+		return (state.ResolvingPart == "" || part(string(state.ResolvingPart))) && (state.PlaybackRetryError == catalog.None || state.PlaybackPart != "")
 	default:
 		return false
 	}

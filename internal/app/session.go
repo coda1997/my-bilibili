@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"maps"
-	"strings"
 	"time"
 
 	"my-bilibili/internal/catalog"
@@ -19,7 +18,7 @@ type Session struct {
 	controller  *playback.Controller
 	video       catalog.Video
 	detailPhase DetailPhase
-	detailError playback.ErrorCode
+	detailError catalog.Code
 	ctx         context.Context
 	cancel      context.CancelFunc
 	started     bool
@@ -33,10 +32,13 @@ type Session struct {
 	requestContext   func(context.Context, time.Duration) (context.Context, context.CancelFunc)
 
 	selected, playback  catalog.PartID
-	selectionError      playback.ErrorCode
+	selectionError      catalog.Code
 	selectionRetry      catalog.PartID
 	selectionIntent     bool
-	playbackRetryError  playback.ErrorCode
+	playbackRetryError  catalog.Code
+	selectedQuality     QualityID
+	playbackQuality     QualityID
+	qualities           []Quality
 	input               playback.Input
 	expiresAt           time.Time
 	hasInput            bool
@@ -64,22 +66,6 @@ func New(source Source, controller *playback.Controller) (*Session, error) {
 	}, nil
 }
 
-func validateVideo(video catalog.Video) error {
-	if strings.TrimSpace(string(video.ID)) == "" || strings.TrimSpace(video.Title) == "" ||
-		strings.TrimSpace(video.Creator) == "" || strings.TrimSpace(video.Description) == "" ||
-		strings.TrimSpace(video.CoverID) == "" || len(video.Parts) == 0 {
-		return playback.Invalid
-	}
-	seen := make(map[catalog.PartID]bool, len(video.Parts))
-	for _, part := range video.Parts {
-		if strings.TrimSpace(string(part.ID)) == "" || seen[part.ID] || strings.TrimSpace(part.Title) == "" || part.Duration <= 0 {
-			return playback.Invalid
-		}
-		seen[part.ID] = true
-	}
-	return nil
-}
-
 func safeError(err error) playback.ErrorCode {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return playback.Timeout
@@ -97,10 +83,48 @@ func safeError(err error) playback.ErrorCode {
 	return playback.Media
 }
 
+func safeContentError(err error) catalog.Code {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return catalog.Timeout
+	}
+	if errors.Is(err, context.Canceled) {
+		return catalog.Canceled
+	}
+	var content catalog.Code
+	if errors.As(err, &content) {
+		switch content {
+		case catalog.Invalid, catalog.Unsupported, catalog.Canceled, catalog.Timeout, catalog.Network,
+			catalog.InvalidResponse, catalog.Unavailable, catalog.Restricted, catalog.LoginRequired,
+			catalog.SessionExpired, catalog.VerificationRequired, catalog.RateLimited,
+			catalog.ServiceUnavailable, catalog.QualityUnavailable, catalog.Closed:
+			return content
+		}
+	}
+	var native playback.ErrorCode
+	if errors.As(err, &native) {
+		switch native {
+		case playback.Invalid:
+			return catalog.Invalid
+		case playback.Unsupported:
+			return catalog.Unsupported
+		case playback.Canceled:
+			return catalog.Canceled
+		case playback.Timeout:
+			return catalog.Timeout
+		case playback.Media:
+			return catalog.Unavailable
+		case playback.IsClosed:
+			return catalog.Closed
+		}
+	}
+	return catalog.Unavailable
+}
+
 func (s *Session) State() State {
 	state := State{DetailPhase: s.detailPhase, DetailError: s.detailError, Video: cloneVideo(s.video),
 		SelectedPart: s.selected, PlaybackPart: s.playback, SelectionError: s.selectionError,
 		PlaybackRetryError: s.playbackRetryError, Playback: s.controller.Snapshot(),
+		SelectedQuality: s.selectedQuality, PlaybackQuality: s.playbackQuality, Qualities: cloneQualities(s.qualities),
 		DesiredPlaying: s.intent, Volume: s.volume, Rate: s.rate}
 	if s.pending != nil && s.pending.request.purpose != detailRequest {
 		state.ResolvingPart, state.DesiredPlaying = s.pending.request.part, s.pending.intent
@@ -175,7 +199,7 @@ func (s *Session) RetryDetail() error {
 }
 
 func (s *Session) loadDetail() {
-	s.detailPhase, s.detailError = DetailLoading, playback.NoError
+	s.detailPhase, s.detailError = DetailLoading, catalog.None
 	s.submit(detailRequest, "", false)
 }
 
@@ -220,7 +244,7 @@ func (s *Session) SelectPart(id catalog.PartID) error {
 		return playback.Invalid
 	}
 	s.selected = id
-	s.selectionError, s.selectionRetry = playback.NoError, ""
+	s.selectionError, s.selectionRetry = catalog.None, ""
 	if s.pending != nil && s.pending.request.part == id {
 		s.pending.intent = true
 		return nil
@@ -229,6 +253,7 @@ func (s *Session) SelectPart(id catalog.PartID) error {
 	// which does not advance the native playback generation.
 	s.retireRequest()
 	if id == s.playback && s.hasInput {
+		s.selectedQuality = s.playbackQuality
 		switch s.controller.Snapshot().State {
 		case playback.Loading, playback.Playing, playback.Ready, playback.Paused:
 			return s.playAccepted(true)
@@ -242,7 +267,8 @@ func (s *Session) SelectPart(id catalog.PartID) error {
 
 func (s *Session) selectPart(id catalog.PartID, intent bool) {
 	s.selected = id
-	s.selectionError, s.selectionRetry = playback.NoError, ""
+	s.selectedQuality = ""
+	s.selectionError, s.selectionRetry = catalog.None, ""
 	s.submit(selectionRequest, id, intent)
 }
 
@@ -254,14 +280,14 @@ func (s *Session) usable(expiresAt time.Time) bool {
 // reopen targets accepted playback. A different selected part's failure and
 // retry intent remain intact, including while an expired input is refreshed.
 func (s *Session) reopen(intent bool) error {
-	s.playbackRetryError = playback.NoError
+	s.playbackRetryError = catalog.None
 	if s.playback == s.selected {
-		s.selectionError, s.selectionRetry = playback.NoError, ""
+		s.selectionError, s.selectionRetry = catalog.None, ""
 	}
 	if s.usable(s.expiresAt) {
 		err := s.open(s.playback, s.input, s.expiresAt, intent)
 		if err != nil && !s.closed && s.playback != s.selected {
-			s.playbackRetryError = safeError(err)
+			s.playbackRetryError = safeContentError(err)
 		}
 		return err
 	}
@@ -290,7 +316,7 @@ func (s *Session) open(id catalog.PartID, in playback.Input, expiresAt time.Time
 		s.playback, s.input, s.expiresAt, s.hasInput = id, in, expiresAt, true
 		s.intent, s.retryIntent = intent, intent
 		s.generation, s.initializing = after.Generation, true
-		s.playbackRetryError = playback.NoError
+		s.playbackRetryError = catalog.None
 		s.observeTerminal(after)
 	}
 	if err != nil {
@@ -340,7 +366,7 @@ func (s *Session) RetryPlayback() error {
 		}
 		return playback.Invalid
 	}
-	s.playbackRetryError = playback.NoError
+	s.playbackRetryError = catalog.None
 	if s.controller.Snapshot().State == playback.Loading {
 		return nil
 	}
@@ -478,7 +504,7 @@ func (s *Session) observeTerminal(state playback.Snapshot) {
 
 // failAttempt attributes failure to the requested target, not the old native
 // engine. A playback refresh must not erase a different selection's failure.
-func (s *Session) failAttempt(attempt *sourceAttempt, code playback.ErrorCode) {
+func (s *Session) failAttempt(attempt *sourceAttempt, code catalog.Code) {
 	switch attempt.request.purpose {
 	case detailRequest:
 		s.detailPhase, s.detailError = DetailFailed, code
@@ -512,9 +538,12 @@ func (s *Session) accept(result sourceResult) {
 	}
 	if err == nil {
 		if result.request.purpose == detailRequest {
-			err = validateVideo(result.video)
+			err = catalog.ValidateVideo(result.video)
 		} else {
 			err = result.resolution.Input.Validate()
+			if err == nil {
+				err = validateQualities(result.resolution)
+			}
 			if err == nil && !s.usable(result.resolution.ExpiresAt) {
 				err = playback.Media
 			}
@@ -527,21 +556,28 @@ func (s *Session) accept(result sourceResult) {
 		err = requestErr
 	}
 	if err != nil {
-		s.failAttempt(attempt, safeError(err))
+		s.failAttempt(attempt, safeContentError(err))
 		s.retireRequest()
 		return
 	}
 	s.retireRequest()
 	if result.request.purpose == detailRequest {
 		s.video = cloneVideo(result.video)
-		s.detailPhase, s.detailError = DetailReady, playback.NoError
+		s.detailPhase, s.detailError = DetailReady, catalog.None
 		s.selectPart(s.video.Parts[0].ID, false)
 		return
 	}
 	before := s.controller.Snapshot().Generation
 	err = s.open(result.request.part, result.resolution.Input, result.resolution.ExpiresAt, attempt.intent)
+	if s.controller.Snapshot().Generation != before {
+		s.playbackQuality = result.resolution.Quality.ID
+		s.qualities = cloneQualities(result.resolution.Qualities)
+		if s.selected == s.playback {
+			s.selectedQuality = s.playbackQuality
+		}
+	}
 	if err != nil && !s.closed && (result.request.purpose == playbackRequest || s.controller.Snapshot().Generation == before) {
-		s.failAttempt(attempt, safeError(err))
+		s.failAttempt(attempt, safeContentError(err))
 	}
 }
 
@@ -562,7 +598,7 @@ func (s *Session) Tick() {
 	// Its worker remains owned and prevents another concurrent source call.
 	if s.pending != nil {
 		if err := sourceContextError(s.pending.request.ctx); err != nil {
-			s.failAttempt(s.pending, safeError(err))
+			s.failAttempt(s.pending, safeContentError(err))
 			s.retireRequest()
 		}
 	}
@@ -604,7 +640,7 @@ func (s *Session) stopSource() {
 
 func (s *Session) cancelSession(code playback.ErrorCode) {
 	if s.pending != nil {
-		s.failAttempt(s.pending, code)
+		s.failAttempt(s.pending, safeContentError(code))
 	}
 	s.stopSource()
 	// Also observe a deadline whose timer had not fired at the earlier Tick.

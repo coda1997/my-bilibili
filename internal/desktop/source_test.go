@@ -50,7 +50,7 @@ func TestDetailLoadingAndExplicitRetry(t *testing.T) {
 				t.Fatal("loading prevented fullscreen")
 			}
 			h.ui.Key(0, gui.KeyEscape)
-			h.player.state.DetailPhase, h.player.state.DetailError = app.DetailFailed, playback.Timeout
+			h.player.state.DetailPhase, h.player.state.DetailError = app.DetailFailed, catalog.Timeout
 			h.ui.Frame()
 			rect(t, h, "Could not load video details · timeout")
 			a := access(t, h, "Retry details")
@@ -61,7 +61,7 @@ func TestDetailLoadingAndExplicitRetry(t *testing.T) {
 			wantCalls(t, h)
 			click(t, h, "Retry details")
 			wantCalls(t, h, call{name: "retry-detail"})
-			h.player.state.DetailPhase, h.player.state.DetailError = app.DetailLoading, playback.NoError
+			h.player.state.DetailPhase, h.player.state.DetailError = app.DetailLoading, catalog.None
 			h.ui.Frame()
 			rect(t, h, "Loading video details…")
 			if _, found := h.ui.Find("Retry details"); found {
@@ -131,8 +131,8 @@ func TestPendingSelectionKeepsAcceptedPlaybackControls(t *testing.T) {
 func TestSeparateSourceRetryStatesAndConflictingRetries(t *testing.T) {
 	h := newHarness()
 	h.player.state.SelectedPart = "part-2"
-	h.player.state.SelectionError = playback.Media
-	h.player.state.PlaybackRetryError = playback.Timeout
+	h.player.state.SelectionError = catalog.Unavailable
+	h.player.state.PlaybackRetryError = catalog.Timeout
 	// A refresh can fail while the accepted engine remains ended rather than Failed.
 	h.player.state.Playback.State = playback.Ended
 	h.ui.Frame()
@@ -148,7 +148,7 @@ func TestSeparateSourceRetryStatesAndConflictingRetries(t *testing.T) {
 	wantCalls(t, h, call{name: "retry-selection"}, call{name: "retry-playback"})
 	h.player.calls = nil
 	h.player.state.ResolvingPart = "part-1"
-	h.player.state.PlaybackRetryError = playback.NoError
+	h.player.state.PlaybackRetryError = catalog.None
 	h.player.state.Playback.State, h.player.state.Playback.Error = playback.Failed, playback.Unsupported
 	h.ui.Frame()
 	rect(t, h, "Loading playback address for P1 · First")
@@ -175,7 +175,7 @@ func TestFirstResolutionFailureStillAllowsPartSelection(t *testing.T) {
 	h := newHarness()
 	h.player.state.PlaybackPart = ""
 	h.player.state.Playback = playback.Snapshot{State: playback.Idle}
-	h.player.state.SelectionError = playback.Media
+	h.player.state.SelectionError = catalog.Unavailable
 	h.ui.Frame()
 	if !access(t, h, "Play").Disabled {
 		t.Fatal("failed first resolution offered transport without a target")
@@ -239,7 +239,7 @@ func TestClosingRetiresGesturesMenusAndActions(t *testing.T) {
 	t.Run("detail retry", func(t *testing.T) {
 		h := newHarness()
 		h.player.state = earlyState(app.DetailFailed)
-		h.player.state.DetailError = playback.Timeout
+		h.player.state.DetailError = catalog.Timeout
 		h.player.state.Closing = true
 		h.ui.Frame()
 		if !access(t, h, "Retry details").Disabled {

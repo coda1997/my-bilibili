@@ -116,8 +116,8 @@ type danmakuTestSource struct {
 	partB chan error
 }
 
-func (s *danmakuTestSource) Resolve(ctx context.Context, id catalog.PartID) (app.Resolution, error) {
-	if id == "part-2" {
+func (s *danmakuTestSource) Resolve(ctx context.Context, request app.ResolveRequest) (app.Resolution, error) {
+	if request.Part == "part-2" {
 		select {
 		case err := <-s.partB:
 			if err != nil {
@@ -127,7 +127,7 @@ func (s *danmakuTestSource) Resolve(ctx context.Context, id catalog.PartID) (app
 			return app.Resolution{}, ctx.Err()
 		}
 	}
-	return s.Source.Resolve(ctx, id)
+	return s.Source.Resolve(ctx, request)
 }
 
 type danmakuTestEngine struct{ state playback.Snapshot }
@@ -228,7 +228,7 @@ func danmakuSessionScenario(t *testing.T, closePending bool) {
 			return
 		}
 		source.partB <- playback.Media
-		failed := pump(func(s app.State) bool { return s.SelectionError == playback.Media })
+		failed := pump(func(s app.State) bool { return s.SelectionError == catalog.Unavailable })
 		if got := renderBoundDanmaku(a, failed); !reflect.DeepEqual(got, first) {
 			t.Fatal("failed B changed accepted A comments", got)
 		}

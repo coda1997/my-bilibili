@@ -15,7 +15,6 @@ import (
 	gui "github.com/egoist/mygo/ui"
 	"my-bilibili/internal/adapters/mpv"
 	"my-bilibili/internal/app"
-	"my-bilibili/internal/catalog"
 	"my-bilibili/internal/playback"
 	"my-bilibili/internal/previewbundle"
 )
@@ -28,11 +27,13 @@ type delayedSource struct {
 	requests, active atomic.Int64
 }
 
-func (s *delayedSource) Resolve(ctx context.Context, id catalog.PartID) (app.Resolution, error) {
-	if _, err := s.Source.Resolve(ctx, id); err != nil {
+func (s *delayedSource) Resolve(ctx context.Context, request app.ResolveRequest) (app.Resolution, error) {
+	resolution, err := s.Source.Resolve(ctx, request)
+	if err != nil {
 		return app.Resolution{}, err
 	}
-	return app.Resolution{Input: playback.Input{URL: s.origin + "/delayed"}}, nil
+	resolution.Input = playback.Input{URL: s.origin + "/delayed"}
+	return resolution, nil
 }
 func automationSource(source app.Source) (app.Source, func(), error) {
 	mode := os.Getenv("MY_BILIBILI_E2E_SCENARIO")

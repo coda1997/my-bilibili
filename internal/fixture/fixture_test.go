@@ -9,6 +9,7 @@ import (
 	"errors"
 	"image/png"
 	"io"
+	"my-bilibili/internal/app"
 	"os"
 	"path/filepath"
 	"testing"
@@ -59,7 +60,7 @@ func TestOriginalResourcesAndCatalog(t *testing.T) {
 		if part.Duration != 30*time.Second {
 			t.Fatal(part)
 		}
-		r, err := s.Resolve(context.Background(), part.ID)
+		r, err := s.Resolve(context.Background(), app.ResolveRequest{Part: part.ID})
 		in := r.Input
 		if !r.ExpiresAt.IsZero() {
 			t.Fatal("bundled fixture input must not expire")
@@ -98,6 +99,32 @@ func TestOriginalResourcesAndCatalog(t *testing.T) {
 	}
 }
 
+func TestFixtureQualityIsExactOwnedAndCannotClaimServiceChoices(t *testing.T) {
+	dir := copyAssets(t)
+	s, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := app.Quality{ID: "fixture", Label: "Fixture", Width: 640, Height: 360}
+	for _, requested := range []app.QualityID{"", "fixture"} {
+		r, err := s.Resolve(context.Background(), app.ResolveRequest{Part: "part-1", Quality: requested})
+		if err != nil || r.Quality != want || len(r.Qualities) != 1 || r.Qualities[0] != want || r.RefreshOnRetry || !r.ExpiresAt.IsZero() {
+			t.Fatal("fixture did not return its one actual local choice", r.Quality, len(r.Qualities), err)
+		}
+		r.Qualities[0].Label = "caller mutation"
+	}
+	// An impossible quality must fail before the resource is read.
+	if err := os.Remove(filepath.Join(dir, "part-1.mp4")); err != nil {
+		t.Fatal(err)
+	}
+	for _, requested := range []app.QualityID{"64", "unknown", "FIXTURE"} {
+		r, err := s.Resolve(context.Background(), app.ResolveRequest{Part: "part-1", Quality: requested})
+		if err != catalog.QualityUnavailable || r.Input.FilePath != "" || r.Quality != (app.Quality{}) || len(r.Qualities) != 0 {
+			t.Fatal("unknown quality read the asset or silently chose a default", r.Quality, err)
+		}
+	}
+}
+
 func TestRelativeDirectoryCapturedAtConstruction(t *testing.T) {
 	dir := copyAssets(t)
 	t.Chdir(dir)
@@ -106,7 +133,7 @@ func TestRelativeDirectoryCapturedAtConstruction(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Chdir(t.TempDir())
-	r, err := s.Resolve(context.Background(), "part-1")
+	r, err := s.Resolve(context.Background(), app.ResolveRequest{Part: "part-1"})
 	in := r.Input
 	if err != nil {
 		t.Fatal(err)
@@ -206,7 +233,7 @@ func TestResolveRechecksFileAndRejectsUnknownIDs(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"", "../part-1.mp4", "part-3", "PART-1"} {
-		if r, err := s.Resolve(context.Background(), catalog.PartID(id)); err != playback.Invalid || !r.ExpiresAt.IsZero() || r.Input.FilePath != "" || r.Input.URL != "" || r.Input.AudioURL != "" || len(r.Input.Headers) != 0 {
+		if r, err := s.Resolve(context.Background(), app.ResolveRequest{Part: catalog.PartID(id)}); err != playback.Invalid || !r.ExpiresAt.IsZero() || r.Input.FilePath != "" || r.Input.URL != "" || r.Input.AudioURL != "" || len(r.Input.Headers) != 0 {
 			t.Fatalf("unknown ID accepted: %v", err)
 		}
 	}
@@ -214,10 +241,10 @@ func TestResolveRechecksFileAndRejectsUnknownIDs(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Resolve(context.Background(), "part-1"); err != playback.Media {
+	if _, err := s.Resolve(context.Background(), app.ResolveRequest{Part: "part-1"}); err != playback.Media {
 		t.Fatal("missing resource was not rechecked", err)
 	}
-	if _, err := s.Resolve(context.Background(), "part-2"); err != nil {
+	if _, err := s.Resolve(context.Background(), app.ResolveRequest{Part: "part-2"}); err != nil {
 		t.Fatal("unrelated part affected", err)
 	}
 }
@@ -250,7 +277,7 @@ func TestSourceRejectsCanceledAndNilContexts(t *testing.T) {
 	if _, err := s.Detail(nil); err != playback.Invalid {
 		t.Fatal("nil detail context", err)
 	}
-	if _, err := s.Resolve(nil, "part-1"); err != playback.Invalid {
+	if _, err := s.Resolve(nil, app.ResolveRequest{Part: "part-1"}); err != playback.Invalid {
 		t.Fatal("nil resolve context", err)
 	}
 	// A canceled call must stop before touching a now-missing media file.
@@ -265,7 +292,7 @@ func TestSourceRejectsCanceledAndNilContexts(t *testing.T) {
 		if video, err := s.Detail(ctx); err != ctx.Err() || len(video.Parts) != 0 {
 			t.Fatal("canceled detail published metadata", err)
 		}
-		if result, err := s.Resolve(ctx, "part-1"); err != ctx.Err() || result.Input.FilePath != "" || !result.ExpiresAt.IsZero() {
+		if result, err := s.Resolve(ctx, app.ResolveRequest{Part: "part-1"}); err != ctx.Err() || result.Input.FilePath != "" || !result.ExpiresAt.IsZero() {
 			t.Fatal("canceled resolve touched or published media", err)
 		}
 	}

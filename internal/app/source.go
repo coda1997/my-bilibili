@@ -49,6 +49,31 @@ func cloneVideo(video catalog.Video) catalog.Video {
 	return video
 }
 
+func cloneQualities(qualities []Quality) []Quality {
+	owned := make([]Quality, len(qualities))
+	copy(owned, qualities)
+	return owned
+}
+
+func validateQualities(resolution Resolution) error {
+	if len(resolution.Qualities) > 16 {
+		return catalog.InvalidResponse
+	}
+	seen := make(map[QualityID]bool, len(resolution.Qualities))
+	chosen := false
+	for _, quality := range resolution.Qualities {
+		if quality.ID == "" || seen[quality.ID] {
+			return catalog.InvalidResponse
+		}
+		seen[quality.ID] = true
+		chosen = chosen || quality == resolution.Quality
+	}
+	if !chosen {
+		return catalog.InvalidResponse
+	}
+	return nil
+}
+
 // Deadline expiry must not depend on when the context's timer goroutine gets
 // scheduled. This clock is separate from Session.now's media-expiry clock.
 func sourceContextError(ctx context.Context) error {
@@ -81,8 +106,9 @@ func runSource(ctx context.Context, source Source, requests <-chan sourceRequest
 			result.video, result.err = source.Detail(request.ctx)
 			result.video = cloneVideo(result.video)
 		} else {
-			result.resolution, result.err = source.Resolve(request.ctx, request.part)
+			result.resolution, result.err = source.Resolve(request.ctx, ResolveRequest{Part: request.part})
 			result.resolution.Input.Headers = maps.Clone(result.resolution.Input.Headers)
+			result.resolution.Qualities = cloneQualities(result.resolution.Qualities)
 		}
 		select {
 		case <-ctx.Done():

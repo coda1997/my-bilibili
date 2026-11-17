@@ -14,6 +14,8 @@ func pendingDetailObservation() Observation {
 	o.State.DetailPhase = app.DetailLoading
 	o.State.Video = catalog.Video{Parts: []catalog.Part{}}
 	o.State.SelectedPart, o.State.PlaybackPart = "", ""
+	o.State.SelectedQuality, o.State.PlaybackQuality = "", ""
+	o.State.Qualities = []app.Quality{}
 	o.State.Playback = playback.Snapshot{State: playback.Idle, Rate: 1, Volume: 1}
 	o.Source = SourceObservation{DetailRequests: 1, Active: 1, PeakActive: 1}
 	return o
@@ -24,7 +26,7 @@ func TestCompleteSourceStartupAndClosingObservations(t *testing.T) {
 	initial.State.DetailPhase = app.DetailInitial
 	initial.Source = SourceObservation{}
 	failure := pendingDetailObservation()
-	failure.State.DetailPhase, failure.State.DetailError = app.DetailFailed, playback.Timeout
+	failure.State.DetailPhase, failure.State.DetailError = app.DetailFailed, catalog.Timeout
 	failure.Source.Active = 0
 	closing := pendingDetailObservation()
 	closing.State.Playback.State = playback.Closed
@@ -33,11 +35,13 @@ func TestCompleteSourceStartupAndClosingObservations(t *testing.T) {
 	closedBeforeStart.State.Playback.State = playback.Closed
 	resolving := validObservation()
 	resolving.State.PlaybackPart, resolving.State.ResolvingPart = "", "part-1"
+	resolving.State.SelectedQuality, resolving.State.PlaybackQuality = "", ""
+	resolving.State.Qualities = []app.Quality{}
 	resolving.State.Playback = playback.Snapshot{State: playback.Idle, Rate: 1, Volume: 1}
 	resolving.State.DesiredPlaying = true
 	refresh := validObservation()
-	refresh.State.SelectedPart, refresh.State.SelectionError = "part-2", playback.Media
-	refresh.State.PlaybackRetryError = playback.Timeout
+	refresh.State.SelectedPart, refresh.State.SelectionError = "part-2", catalog.Unavailable
+	refresh.State.PlaybackRetryError = catalog.Timeout
 	refresh.State.Playback.State = playback.Playing
 	for name, observation := range map[string]Observation{
 		"initial": initial, "detail-loading": pendingDetailObservation(),
@@ -67,10 +71,10 @@ func TestSourceObservationRejectsContradictoryOrInventedState(t *testing.T) {
 		"generation-without-acceptance":  func(o *Observation) { o.State.Playback.Generation = 1 },
 		"playing-before-open":            func(o *Observation) { o.State.Playback.State = playback.Playing },
 		"failed-without-error":           func(o *Observation) { o.State.DetailPhase = app.DetailFailed },
-		"loading-with-failure":           func(o *Observation) { o.State.DetailError = playback.Media },
+		"loading-with-failure":           func(o *Observation) { o.State.DetailError = catalog.Unavailable },
 		"private-detail-error":           func(o *Observation) { o.State.DetailPhase = app.DetailFailed; o.State.DetailError = "private-sentinel" },
-		"selection-error-before-detail":  func(o *Observation) { o.State.SelectionError = playback.Media },
-		"refresh-error-without-playback": func(o *Observation) { o.State.PlaybackRetryError = playback.Media },
+		"selection-error-before-detail":  func(o *Observation) { o.State.SelectionError = catalog.Unavailable },
+		"refresh-error-without-playback": func(o *Observation) { o.State.PlaybackRetryError = catalog.Unavailable },
 		"closing-but-not-closed":         func(o *Observation) { o.State.Closing = true },
 		"negative-source-count":          func(o *Observation) { o.Source.DetailRequests = -1; o.Source.ResolveRequests = 2 },
 		"negative-resolve-count":         func(o *Observation) { o.Source.ResolveRequests = -1; o.Source.DetailRequests = 2 },

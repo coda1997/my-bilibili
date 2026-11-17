@@ -168,16 +168,20 @@ func (s *source) Detail(ctx context.Context) (catalog.Video, error) {
 	return video, nil
 }
 
-func (s *source) Resolve(ctx context.Context, id catalog.PartID) (app.Resolution, error) {
+func (s *source) Resolve(ctx context.Context, request app.ResolveRequest) (app.Resolution, error) {
 	if ctx == nil {
 		return app.Resolution{}, playback.Invalid
 	}
 	if err := ctx.Err(); err != nil {
 		return app.Resolution{}, err
 	}
-	file, ok := s.parts[id]
+	file, ok := s.parts[request.Part]
 	if !ok {
 		return app.Resolution{}, playback.Invalid
+	}
+	quality := app.Quality{ID: "fixture", Label: "Fixture", Width: 640, Height: 360}
+	if request.Quality != "" && request.Quality != quality.ID {
+		return app.Resolution{}, catalog.QualityUnavailable
 	}
 	if err := verify(ctx, s.dir, file); err != nil {
 		return app.Resolution{}, err
@@ -190,5 +194,5 @@ func (s *source) Resolve(ctx context.Context, id catalog.PartID) (app.Resolution
 		return app.Resolution{}, err
 	}
 	// Bundled local files do not expire.
-	return app.Resolution{Input: in}, nil
+	return app.Resolution{Input: in, Quality: quality, Qualities: []app.Quality{quality}}, nil
 }

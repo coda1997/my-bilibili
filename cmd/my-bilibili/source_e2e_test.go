@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"errors"
+	"my-bilibili/internal/app"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -69,7 +70,7 @@ func TestControlledSourceCancellationRemainsOwnedUntilReturn(t *testing.T) {
 						_, err := source.Detail(ctx)
 						result <- err
 					} else {
-						_, err := source.Resolve(ctx, "part-2")
+						_, err := source.Resolve(ctx, app.ResolveRequest{Part: "part-2"})
 						result <- err
 					}
 				}()
@@ -96,7 +97,7 @@ func TestControlledSourceDeadline(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		result := make(chan error, 1)
-		go func() { _, err := source.Resolve(ctx, "part-2"); result <- err }()
+		go func() { _, err := source.Resolve(ctx, app.ResolveRequest{Part: "part-2"}); result <- err }()
 		synctest.Wait()
 		if source.snapshot().Active != 1 {
 			t.Fatal("timeout source did not wait")
@@ -122,13 +123,13 @@ func TestControlledSourceFailuresRequireExplicitRetry(t *testing.T) {
 	})
 	t.Run("resolution", func(t *testing.T) {
 		source := sourceScenario(t, "source-resolve-failure")
-		if _, err := source.Resolve(context.Background(), "part-1"); err != nil {
+		if _, err := source.Resolve(context.Background(), app.ResolveRequest{Part: "part-1"}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := source.Resolve(context.Background(), "part-2"); err != playback.Media {
+		if _, err := source.Resolve(context.Background(), app.ResolveRequest{Part: "part-2"}); err != playback.Media {
 			t.Fatal(err)
 		}
-		if _, err := source.Resolve(context.Background(), "part-2"); err != nil {
+		if _, err := source.Resolve(context.Background(), app.ResolveRequest{Part: "part-2"}); err != nil {
 			t.Fatal("part retry did not recover", err)
 		}
 		if o := source.snapshot(); o.ResolveRequests != 3 || o.Active != 0 || o.PeakActive != 1 {

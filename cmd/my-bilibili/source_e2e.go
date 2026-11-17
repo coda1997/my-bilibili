@@ -94,14 +94,14 @@ func (s *controlledSource) Detail(ctx context.Context) (catalog.Video, error) {
 	return video, nil
 }
 
-func (s *controlledSource) Resolve(ctx context.Context, part catalog.PartID) (app.Resolution, error) {
-	call := s.begin(false, part)
+func (s *controlledSource) Resolve(ctx context.Context, request app.ResolveRequest) (app.Resolution, error) {
+	call := s.begin(false, request.Part)
 	defer s.finish()
-	resolution, err := s.Source.Resolve(ctx, part)
+	resolution, err := s.Source.Resolve(ctx, request)
 	if err != nil {
 		return app.Resolution{}, err
 	}
-	if part == "part-2" {
+	if request.Part == "part-2" {
 		if s.mode == "source-resolve-failure" && call == 1 {
 			return app.Resolution{}, playback.Media
 		}

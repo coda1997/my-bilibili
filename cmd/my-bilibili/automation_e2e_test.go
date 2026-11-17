@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"my-bilibili/internal/app"
 	"my-bilibili/internal/fixture"
 	"net/http"
 	"testing"
@@ -22,12 +23,12 @@ func TestControlledDelayedRequestIsObservedAndCanceled(t *testing.T) {
 	}
 	defer cleanup()
 	delayed := got.(*delayedSource)
-	r, err := got.Resolve(context.Background(), "part-1")
+	r, err := got.Resolve(context.Background(), app.ResolveRequest{Part: "part-1"})
 	in := r.Input
 	if err != nil || in.Validate() != nil {
 		t.Fatal(err)
 	}
-	if _, err := got.Resolve(context.Background(), "unknown"); err == nil {
+	if _, err := got.Resolve(context.Background(), app.ResolveRequest{Part: "unknown"}); err == nil {
 		t.Fatal("unknown ID accepted")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)

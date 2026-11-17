@@ -20,7 +20,21 @@ import (
 // No native playback or UI work belongs in a Source method.
 type Source interface {
 	Detail(context.Context) (catalog.Video, error)
-	Resolve(context.Context, catalog.PartID) (Resolution, error)
+	Resolve(context.Context, ResolveRequest) (Resolution, error)
+}
+
+// QualityID is an opaque returned choice. An empty request selects a default.
+type QualityID string
+
+type Quality struct {
+	ID            QualityID
+	Label         string
+	Width, Height int
+}
+
+type ResolveRequest struct {
+	Part    catalog.PartID
+	Quality QualityID
 }
 
 // Resolution is a playable input for one part and the time it stops being
@@ -28,8 +42,19 @@ type Source interface {
 // local file). Session never reuses an input at or past ExpiresAt minus
 // ResolutionMargin; it resolves the part again instead.
 type Resolution struct {
-	Input     playback.Input
-	ExpiresAt time.Time
+	Input          playback.Input
+	ExpiresAt      time.Time
+	Quality        Quality
+	Qualities      []Quality
+	RefreshOnRetry bool
+}
+
+type Options struct {
+	InputPolicy playback.InputPolicy
+	InitialPart catalog.PartID
+	InitialPage int
+	StartAt     time.Duration
+	Autoplay    bool
 }
 
 // ResolutionMargin keeps an input that is about to expire from being opened,
@@ -49,17 +74,22 @@ const (
 // State separates the requested part from the accepted playback attempt.
 // Volume and Rate are chosen settings; Playback contains native observations.
 type State struct {
-	DetailPhase                DetailPhase
-	DetailError                playback.ErrorCode
-	Video                      catalog.Video
-	SelectedPart, PlaybackPart catalog.PartID
-	ResolvingPart              catalog.PartID
-	SelectionError             playback.ErrorCode
-	PlaybackRetryError         playback.ErrorCode
-	Playback                   playback.Snapshot
-	DesiredPlaying             bool
-	Volume, Rate               float64
-	Closing                    bool
+	DetailPhase                      DetailPhase
+	DetailError                      catalog.Code
+	Video                            catalog.Video
+	SelectedPart, PlaybackPart       catalog.PartID
+	ResolvingPart                    catalog.PartID
+	SelectionError                   catalog.Code
+	PlaybackRetryError               catalog.Code
+	SelectedQuality, PlaybackQuality QualityID
+	Qualities                        []Quality
+	Resuming                         bool
+	ResumeError                      catalog.Code
+	WatchSequence                    uint64
+	Playback                         playback.Snapshot
+	DesiredPlaying                   bool
+	Volume, Rate                     float64
+	Closing                          bool
 }
 
 // Player is the UI-facing application boundary. All calls belong to the UI

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"my-bilibili/internal/app"
+	"my-bilibili/internal/catalog"
 	"my-bilibili/internal/playback"
 	"my-bilibili/internal/previewbundle"
 )
@@ -133,7 +134,7 @@ func runSource(ctx context.Context, executable, dir string, r *report) error {
 		}},
 		{"source-detail-retry", "source-detail-failure", func(ctx context.Context, c *client, p *ownedProcess) error {
 			o, err := c.until(ctx, 3*time.Second, func(o observed) bool {
-				return o.State.DetailPhase == app.DetailFailed && o.State.DetailError == playback.Media && o.Source.Active == 0
+				return o.State.DetailPhase == app.DetailFailed && o.State.DetailError == catalog.Unavailable && o.Source.Active == 0
 			})
 			if err != nil {
 				return err
@@ -149,7 +150,7 @@ func runSource(ctx context.Context, executable, dir string, r *report) error {
 			if err != nil {
 				return err
 			}
-			if o.Source.DetailRequests != 2 || o.Source.ResolveRequests != 1 || o.State.DetailError != playback.NoError {
+			if o.Source.DetailRequests != 2 || o.Source.ResolveRequests != 1 || o.State.DetailError != catalog.None {
 				return errors.New("detail retry did not recover once")
 			}
 			r.pass("detail-retry", "explicit retry recovered metadata and paused initial playback", &o)
@@ -204,7 +205,7 @@ func runSource(ctx context.Context, executable, dir string, r *report) error {
 				return err
 			}
 			o, err := c.until(ctx, 3*time.Second, func(o observed) bool {
-				return o.State.SelectedPart == "part-2" && o.State.SelectionError == playback.Media && o.State.PlaybackPart == "part-1" && o.State.Playback.Generation == before.State.Playback.Generation && o.State.Playback.State == playback.Playing
+				return o.State.SelectedPart == "part-2" && o.State.SelectionError == catalog.Unavailable && o.State.PlaybackPart == "part-1" && o.State.Playback.Generation == before.State.Playback.Generation && o.State.Playback.State == playback.Playing
 			})
 			if err != nil {
 				return err
@@ -214,7 +215,7 @@ func runSource(ctx context.Context, executable, dir string, r *report) error {
 				return err
 			}
 			o, err = c.until(ctx, 10*time.Second, func(o observed) bool {
-				return o.State.PlaybackPart == "part-2" && o.State.Playback.Generation > before.State.Playback.Generation && o.State.Playback.State == playback.Playing && o.State.SelectionError == playback.NoError
+				return o.State.PlaybackPart == "part-2" && o.State.Playback.Generation > before.State.Playback.Generation && o.State.Playback.State == playback.Playing && o.State.SelectionError == catalog.None
 			})
 			if err != nil {
 				return err
@@ -235,7 +236,7 @@ func runSource(ctx context.Context, executable, dir string, r *report) error {
 				return err
 			}
 			o, err := c.until(ctx, 12*time.Second, func(o observed) bool {
-				return o.State.SelectionError == playback.Timeout && o.State.ResolvingPart == "" && o.Source.Active == 0
+				return o.State.SelectionError == catalog.Timeout && o.State.ResolvingPart == "" && o.Source.Active == 0
 			})
 			if err != nil {
 				return err

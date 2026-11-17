@@ -73,6 +73,7 @@ type State struct {
 	Error                                           Code
 	QR                                              QR
 	Generation                                      uint64
+	SessionEpoch                                    uint64
 	ExpiresAt                                       time.Time
 	Stored, Unsaved, Busy, CloseRequested, Restored bool
 }
@@ -98,6 +99,13 @@ type Attempt interface {
 type Gateway interface {
 	Begin(context.Context) (Attempt, error)
 	Verify(context.Context, Material) error
+}
+
+// SessionPublisher is a bounded memory-only leaf transaction. Manager may
+// call it while locked; it must never call Manager, UI, HTTP or native storage.
+type SessionPublisher interface {
+	Activate(epoch uint64, material Material) error
+	Revoke(epoch uint64)
 }
 
 // Store is synchronous: native Keychain calls cannot be canceled once started.
