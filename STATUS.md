@@ -1,11 +1,9 @@
 # Status
 
-Updated 2026-11-18. Branch: `codex/p0-real-client`. Base: `master` at
-`34e6faf` (merged PR #15).
-
 This is the only file that carries current state. Update it in the same change
 that moves the state. History lives in `reports/` and `git log`; agents do not
-read reports by default.
+read reports by default. Exact source identity belongs to the assigned run,
+review packet, or PR candidate; do not maintain an evergreen base SHA here.
 
 ## Product
 

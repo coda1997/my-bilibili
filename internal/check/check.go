@@ -34,6 +34,13 @@ func Run(ctx context.Context, root string, out io.Writer, race bool) error {
 		run  func() error
 	}{
 		{"spec contracts", func() error { return Specs(root) }},
+		{"agent workflow integrity", func() error {
+			count, err := Workflow(root)
+			if err == nil {
+				_, err = fmt.Fprintf(out, "workflow files checked: %d\n", count)
+			}
+			return err
+		}},
 		{"Go formatting (read-only)", func() error { return Formatting(root) }},
 		{"go mod tidy -diff", command("mod", "tidy", "-diff")},
 		{"go vet ./...", command("vet", "./...")},

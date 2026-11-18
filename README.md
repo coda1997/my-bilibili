@@ -52,9 +52,11 @@ and run `./my-bilibili.app/Contents/MacOS/my-bilibili --fixture`.
 
 Install Git and Go 1.27.3, the version pinned in `go.mod`, and put both on PATH.
 The module name remains local (`my-bilibili`); it is not a published library
-import path. Foundation tools use the standard library; the M1 experiment
-pins mygo and its module graph in `go.mod`/`go.sum`. Initial module download
-needs network access. The current macOS checkout uses the owner's global
+import path. Product foundation code uses the standard library; the M1
+experiment pins mygo and its module graph in `go.mod`/`go.sum`. The development
+check also uses Goldmark and YAML v3 to validate the repository's agent Markdown
+and skill frontmatter; product packages do not import those parsers. Initial module
+download needs network access. The current macOS checkout uses the owner's global
 Homebrew Go at `/opt/homebrew/bin/go`; its local toolchain is only a backup.
 See [testing](docs/testing.md#prerequisites) for Windows and fresh-clone setup.
 Explicit native experiment commands are in
