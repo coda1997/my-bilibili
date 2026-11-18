@@ -5,6 +5,9 @@
 Install Git and the exact Go version in `go.mod` (currently 1.27.3), and make
 both available on PATH. Installation/global shell changes require the user's
 permission. Do not silently download a different toolchain to make a check pass.
+
+The project pins its dependencies in [go.mod](../go.mod) and [go.sum](../go.sum).
+For offline checks, populate the Go module cache with the pinned versions first.
 The product foundation has no parser dependency. The development checker uses
 Goldmark and YAML v3 only to validate agent Markdown and skill frontmatter;
 product packages do not import those parsers.
@@ -58,7 +61,6 @@ go test -count=1 -race -run '^TestRecordedCheckDisplayFailures$' ./cmd/dev
 go test -count=1 -race -run '^TestUnicodeWriteScopes$' ./internal/spec
 ```
 
-The template's package command must be replaced with a package that exists.
 Default tests must use controlled fixtures, not a live Bilibili account,
 cookies, authenticated media URLs, or external network access.
 
@@ -67,8 +69,8 @@ cookies, authenticated media URLs, or external network access.
 | Unit/package tests | Deterministic behavior and regression cases | Run command, candidate identity and result |
 | CLI/integration tests | Real process/filesystem interactions where exercised | Runtime OS, fixtures and observed behavior |
 | Cross-compilation | Source compiles for a target | Does not establish native execution |
-| Native UI/media smoke | Target OS behavior, input, playback and cleanup | Authorized fixtures and actual OS evidence for the exact candidate; M1 was accepted by the owner on 2026-11-13; see [acceptance](../reports/0025-m1-acceptance.md) |
-| Packaging/release | Installable artifact and promotion behavior | Separate packaging/smoke/signing policy; not implemented yet |
+| Native UI/media smoke | Target OS behavior, input, playback and cleanup | Authorized fixtures and actual OS evidence for the exact candidate |
+| Developer packaging | Contents of the built bundle and whether it launches on the tested host | Verify the exact artifact and its runtime dependencies; signing and public distribution need separate evidence |
 
 Under [ADR 0005](adr/0005-platform-priority.md), macOS is the required product
 runtime for M1, M2 and P0. Windows is optional P2: missing Windows native or
@@ -91,58 +93,26 @@ When the skill-creator tooling is available, also run its bundled
 tool path/version and any unavailable validation; this external authoring
 check is not a Python runtime requirement for the Go project.
 
-## Default playback verification
+## Native macOS client checks
 
-The default playback launcher now selects libmpv under
-[ADR 0008](adr/0008-default-libmpv.md). Its offline setup tests validate explicit
-runtime paths, local-only startup and loopback-origin inputs without loading a
-library. Native default-app validation builds `cmd/native` with `-tags e2e` and
-uses `cmd/replacement-smoke -stage capabilities` with the verified runtime
-manifest. The old `cmd/smoke` full/preview suites apply only to `cmd/mygo-native`.
-See [the command guide](../experiments/playback/cmd/README.md#default-libmpv-playback)
-and [default-switch evidence](../reports/0024-default-libmpv.md). Default selection
-does not make the fixture launcher a target URL player.
+Use an unlocked Mac with the development libmpv installed. Build the fixture
+bundle and the [preview driver](../cmd/preview-smoke) from the same commit:
 
-## Target host-policy regression
+```sh
+fixture_dir=$(mktemp -d)
+go run ./cmd/package-preview -e2e -output "$fixture_dir/my-bilibili-e2e.app"
+go build -o "$fixture_dir/preview-smoke" ./cmd/preview-smoke
+```
 
-Under [ADR 0007](adr/0007-target-host-policy.md), all valid HTTPS media hosts and
-ports are allowed in the opt-in target path. Offline regressions cover new hosts,
-localhost/IP literals, different video/audio hosts, port and URL syntax, version-2
-descriptor compatibility, private metadata and immutable source input. Default
-constructors remain fixture-only. The copied refresh helper uses the same URL
-validator and tests its synthetic output against the real target parser.
-See [report 0022](../reports/0022-target-host-removal.md) for its source location,
-exact evidence and rebuild requirements. These tests make no target requests
-and do not establish native Bilibili playback. Prior 41-assertion native results
-remain evidence for their recorded candidate; a changed candidate needs its own
-relevant native checks before a later target session.
+Pass the driver an absolute `-app` path to the bundle’s `Contents/MacOS/my-bilibili`,
+the app and driver digests (`-app-sha256`, `-driver-sha256`), a fresh absolute
+`-output` directory, and the assigned `-stage` (`full`, `fullscreen`, `source`,
+`danmaku`, or `client`).
 
-## Target failure evidence
-
-The first version-2 target invocation failed its readiness/picture gate and
-required forced cleanup; its original result is preserved. The driver now records
-separate primary and cleanup failures with fixed phases and optional complete,
-validated state/resource samples from existing RPC trees. Samples retain their
-original phase and relative time; unavailable/malformed state is omitted, never
-reported as Idle or zero ownership. No extra RPC/action, native output, locator,
-media capture or deadline change is introduced.
-
-Offline regressions exercise loading, hidden-ready and picture-pending timeouts,
-missing/partial/null/duplicate/hostile data, stale sample provenance and a primary
-failure followed by forced reap of an owned synthetic child. These tests make no
-service request and cannot close the native target failure. See
-[spec 0010](../specs/0010-target-failure-evidence/spec.md) and
-[the current handoff](../reports/0021-target-access-method.md#post-repair-target-continuation-2026-11-13). Further native
-validation requires an unlocked desktop, exact rebuilt driver pins and a newly
-recorded bounded assignment; the earlier invocation cannot be retried under its
-consumed allowance. The separately reviewed 2026-11-13 01:58 UTC attempt passes
-eight target capability/cleanup checks, including visible picture/selected tracks,
-progression, pause, seek, native volume/rate configuration, 87.7575ms playing
-cancellation and graceful exit without force. Target loading cancellation remains
-not-tested in that one-open session; current fixture coverage is separate. This
-result has independent evidence approval and supports the final scoped adapter
-recommendation; it does not imply full-duration viewing, target audibility,
-physical calibration, changed-candidate CI or owner M1 acceptance.
+The fixture bundle uses synthetic data. Real account or playback verification
+uses the [normal developer app](../README.md#run-the-macos-developer-app) and
+a separately authorized plan. Keep session material and signed media URLs out
+of evidence.
 
 ## Recorded checks
 
@@ -167,7 +137,7 @@ An evidence persistence failure must not be reported as recorded success.
 After interruption inspect the run; rerun operations whose completion is not
 established. Only the controller attaches logs beneath its own run directory.
 
-## CI today
+## GitHub Actions
 
 The canonical definition is [check.yml](../.github/workflows/check.yml): PRs,
 pushes to `main`/`master`, and manual dispatch run the complete Go checks on
@@ -175,25 +145,18 @@ Ubuntu 24.04, macOS 15, and Windows 2025. Linux/macOS jobs use `--race`; Windows
 currently uses ordinary checks. Action revisions are pinned, repository token
 permissions are read-only, and checkout does not retain Git credentials.
 
-Important limits:
-
 - Every Go package and active spec is checked, but the CI run recorder is
   hardcoded to `specs/0001-foundation`. Feature-specific evidence selection is
   not implemented. Record feature AC evidence separately; do not claim that
   the uploaded foundation record proves the feature's acceptance.
-- Match the CI run's actual head SHA to the intended candidate. A green run for
-  an earlier revision does not validate later changes. The [current handoff](../reports/0003-publication.md)
-  records the completed readiness PR and merged-master results. On a PR,
-  distinguish its source head from GitHub's tested merge candidate.
+- Record the run URL and the revision checked out by each job. For a PR, record
+  both its head and the tested merge commit. A push to `master` is a separate
+  run at the merged SHA. [STATUS](../STATUS.md) links the current results.
 - Artifacts are run logs/records, not app binaries or installers. Retention is
   14 days; retain durable conclusions and required evidence before expiry.
 - Remote status, protected branches, and required reviews are not established
   by this YAML. Check remote policy separately; never infer enforced gates.
 
-## CD later
-
-There is no current deployment, package, signing, notarization, updater, or
-release workflow. M2 calls for native preview packages and smoke evidence;
-public promotion needs a separately approved exact revision and credential
-boundary. Do not expose release secrets to PR tests or execute untrusted
-artifacts in privileged jobs. See [release policy](workflow.md#ci-storage-and-release).
+GitHub Actions does not package, sign or publish the app. A release needs a
+separately approved revision and credentials outside the PR workflow; see
+[release policy](workflow.md#ci-storage-and-release).
