@@ -10,6 +10,7 @@ import (
 
 	"my-bilibili/internal/adapters/mpv"
 	"my-bilibili/internal/app"
+	"my-bilibili/internal/catalog"
 	"my-bilibili/internal/playback"
 )
 
@@ -18,12 +19,16 @@ import (
 type Observation struct {
 	State         app.State
 	Fullscreen    bool
+	Minimized     bool
 	Resources     mpv.Resources
 	Tracks        mpv.Tracks
 	DisposalError playback.ErrorCode
 	Delay         DelayObservation
+	Source        SourceObservation
+	Danmaku       DanmakuObservation
 }
 type DelayObservation struct{ Requests, Active int64 }
+type SourceObservation struct{ DetailRequests, ResolveRequests, Active, PeakActive int64 }
 
 func ParseObservation(data []byte) (Observation, error) {
 	var o Observation
@@ -47,9 +52,19 @@ func ParseObservation(data []byte) (Observation, error) {
 	default:
 		return Observation{}, invalid
 	}
-	for _, code := range []playback.ErrorCode{s.Error, o.State.SelectionError, o.DisposalError} {
+	for _, code := range []playback.ErrorCode{s.Error, o.DisposalError} {
 		switch code {
 		case playback.NoError, playback.Invalid, playback.Unsupported, playback.Canceled, playback.Timeout, playback.Media, playback.IsClosed:
+		default:
+			return Observation{}, invalid
+		}
+	}
+	for _, code := range []catalog.Code{o.State.DetailError, o.State.SelectionError, o.State.PlaybackRetryError, o.State.ResumeError} {
+		switch code {
+		case catalog.None, catalog.Invalid, catalog.Unsupported, catalog.Canceled, catalog.Timeout, catalog.Network,
+			catalog.InvalidResponse, catalog.Unavailable, catalog.Restricted, catalog.LoginRequired,
+			catalog.SessionExpired, catalog.VerificationRequired, catalog.RateLimited,
+			catalog.ServiceUnavailable, catalog.QualityUnavailable, catalog.Closed:
 		default:
 			return Observation{}, invalid
 		}
@@ -57,27 +72,62 @@ func ParseObservation(data []byte) (Observation, error) {
 	if o.Resources.Cores < 0 || o.Resources.Renderers < 0 || o.Resources.Workers < 0 || s.Position < 0 || s.Duration < 0 || s.Rate < 0 || s.Rate > 3 || s.Volume < 0 || s.Volume > 1 || o.State.Rate < .25 || o.State.Rate > 3 || o.State.Volume < 0 || o.State.Volume > 1 {
 		return Observation{}, invalid
 	}
-	v := o.State.Video
-	if v.ID != "preview-video" || v.CoverID != "preview-cover" || v.Title == "" || v.Creator == "" || v.Description == "" || len(v.Parts) != 2 || v.Parts[0].ID != "part-1" || v.Parts[1].ID != "part-2" {
+	if !validSourceState(o.State) {
 		return Observation{}, invalid
 	}
-	for _, p := range v.Parts {
-		if p.Title == "" || p.Duration <= 0 {
-			return Observation{}, invalid
-		}
-	}
-	for _, id := range []string{string(o.State.SelectedPart), string(o.State.PlaybackPart)} {
-		if id != "part-1" && id != "part-2" {
-			return Observation{}, invalid
-		}
-	}
-	if s.Generation == 0 {
+	if o.State.Closing && (s.State != playback.Closed || o.State.ResolvingPart != "" || o.State.DesiredPlaying) {
 		return Observation{}, invalid
 	}
 	if o.Delay.Requests < 0 || o.Delay.Active < 0 || o.Delay.Active > o.Delay.Requests {
 		return Observation{}, invalid
 	}
+	source := o.Source
+	if source.DetailRequests < 0 || source.ResolveRequests < 0 || source.Active < 0 || source.PeakActive < source.Active || source.PeakActive > source.DetailRequests+source.ResolveRequests {
+		return Observation{}, invalid
+	}
+	if !validDanmakuObservation(o.Danmaku, s) {
+		return Observation{}, invalid
+	}
 	return o, nil
+}
+
+func validSourceState(state app.State) bool {
+	v, native := state.Video, state.Playback
+	part := func(id string) bool { return id == "part-1" || id == "part-2" }
+	if state.PlaybackPart == "" {
+		if native.Generation != 0 || native.State != playback.Idle && native.State != playback.Closed {
+			return false
+		}
+		if state.SelectedQuality != "" || state.PlaybackQuality != "" || len(state.Qualities) != 0 {
+			return false
+		}
+	} else if !part(string(state.PlaybackPart)) || native.Generation == 0 {
+		return false
+	} else if len(state.Qualities) != 1 || state.Qualities[0] != (app.Quality{ID: "fixture", Label: "Fixture", Width: 640, Height: 360}) || state.PlaybackQuality != "fixture" {
+		return false
+	}
+	if state.SelectedQuality != "" && state.SelectedQuality != "fixture" {
+		return false
+	}
+	switch state.DetailPhase {
+	case app.DetailInitial, app.DetailLoading, app.DetailFailed:
+		if v.ID != "" || v.Title != "" || v.Creator != "" || v.Description != "" || v.CoverID != "" || len(v.Parts) != 0 || state.SelectedPart != "" || state.PlaybackPart != "" || state.ResolvingPart != "" || state.DesiredPlaying || state.SelectionError != catalog.None || state.PlaybackRetryError != catalog.None {
+			return false
+		}
+		return (state.DetailPhase == app.DetailFailed) == (state.DetailError != catalog.None)
+	case app.DetailReady:
+		if state.DetailError != catalog.None || v.ID != "preview-video" || v.CoverID != "preview-cover" || v.Title == "" || v.Creator == "" || v.Description == "" || len(v.Parts) != 2 || v.Parts[0].ID != "part-1" || v.Parts[1].ID != "part-2" || !part(string(state.SelectedPart)) {
+			return false
+		}
+		for _, p := range v.Parts {
+			if p.Title == "" || p.Duration <= 0 {
+				return false
+			}
+		}
+		return (state.ResolvingPart == "" || part(string(state.ResolvingPart))) && (state.PlaybackRetryError == catalog.None || state.PlaybackPart != "")
+	default:
+		return false
+	}
 }
 
 // Walk the fixed observation type before unmarshalling: every declared field is

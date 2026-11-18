@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec_id": "0020-p0-qr-diagnostic",
+  "tasks": [
+    {
+      "id": "QRD-001",
+      "title": "Implement the researched QR-only format diagnostic and offline checks",
+      "depends_on": [],
+      "write_paths": ["experiments/p0/serviceprobe/qr_diagnostic.go", "experiments/p0/serviceprobe/qr_diagnostic_test.go", "experiments/p0/cmd/qr-diagnostic"],
+      "acceptance": ["QRD-AC-01", "QRD-AC-02", "QRD-AC-03"],
+      "checks": ["go test -count=1 -race ./experiments/p0/...", "go run ./cmd/dev check --race", "Independent exact-candidate code review before the extra request"]
+    },
+    {
+      "id": "QRD-002",
+      "title": "Make the one additional QR observation and explain the mismatch",
+      "depends_on": ["QRD-001"],
+      "write_paths": ["reports/0032-p0-qr-diagnostic.md"],
+      "acceptance": ["QRD-AC-04"],
+      "checks": ["One explicit QR-only --live invocation after code approval", "Preserve prior observation and cumulative review/repair/live budgets; no raw login data"]
+    }
+  ]
+}

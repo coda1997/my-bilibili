@@ -55,6 +55,7 @@ func newFullscreenFixture(t *testing.T, mode string) *fullscreenFixture {
 		fullscreenImages.full = fullscreenPNG(t, 1710, 1073)
 	})
 	o := completeObservation(t)
+	o.Danmaku.Closed = false
 	o.State.Playback.State = playback.Paused
 	o.State.Playback.Error = playback.NoError
 	o.State.Playback.Duration = 30 * time.Second

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -14,9 +15,10 @@ import (
 )
 
 type call struct {
-	name  string
-	value float64
-	part  catalog.PartID
+	name    string
+	value   float64
+	part    catalog.PartID
+	quality app.QualityID
 }
 type fakePlayer struct {
 	state app.State
@@ -25,12 +27,22 @@ type fakePlayer struct {
 	err   error
 }
 
-func (p *fakePlayer) State() app.State { return p.state }
+func (p *fakePlayer) State() app.State {
+	s := p.state
+	s.Video.Parts = slices.Clone(s.Video.Parts)
+	s.Qualities = slices.Clone(s.Qualities)
+	return s
+}
 func (p *fakePlayer) record(name string) error {
 	p.calls = append(p.calls, call{name: name})
 	return p.err
 }
 func (p *fakePlayer) Start(context.Context) error { return p.record("start") }
+func (p *fakePlayer) RetryDetail() error          { return p.record("retry-detail") }
+func (p *fakePlayer) SelectQuality(id app.QualityID) error {
+	p.calls = append(p.calls, call{name: "quality", quality: id})
+	return p.err
+}
 func (p *fakePlayer) SelectPart(id catalog.PartID) error {
 	p.calls = append(p.calls, call{name: "part", part: id})
 	return p.err
@@ -68,6 +80,7 @@ type harness struct {
 
 func newHarness() *harness {
 	h := &harness{player: &fakePlayer{state: app.State{
+		DetailPhase:  app.DetailReady,
 		Video:        catalog.Video{ID: "preview-video", Title: "Fixture preview", Creator: "Preview creator", Description: "Original local fixture description", CoverID: "preview-cover", Parts: []catalog.Part{{ID: "part-1", Title: "First", Duration: 10 * time.Second}, {ID: "part-2", Title: "Second", Duration: 10 * time.Second}}},
 		SelectedPart: "part-1", PlaybackPart: "part-1", Volume: .2, Rate: 1,
 		Playback: playback.Snapshot{State: playback.Paused, Generation: 1, Duration: 10 * time.Second, Position: time.Second},
@@ -201,7 +214,7 @@ func TestControlsMenusAndErrors(t *testing.T) {
 		t.Fatal("controls bubbled to video")
 	}
 	h.player.state.SelectedPart = "part-2"
-	h.player.state.SelectionError = playback.Media
+	h.player.state.SelectionError = catalog.Unavailable
 	h.player.state.Playback.State = playback.Failed
 	h.player.state.Playback.Error = playback.Unsupported
 	h.ui.Frame()

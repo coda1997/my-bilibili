@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec_id": "0019-p0-service-feasibility",
+  "tasks": [
+    {
+      "id": "P0F-001",
+      "title": "Implement and verify the bounded anonymous service probe",
+      "depends_on": [],
+      "write_paths": ["experiments/p0/serviceprobe", "experiments/p0/cmd/service-probe"],
+      "acceptance": ["P0F-AC-01", "P0F-AC-02"],
+      "checks": ["go test -count=1 -race ./experiments/p0/...", "go run ./cmd/dev check --race", "Independent code review before the single live invocation"]
+    },
+    {
+      "id": "P0F-002",
+      "title": "Observe one bounded invocation and record the P0 continuation",
+      "depends_on": ["P0F-001"],
+      "write_paths": ["reports/0031-p0-start.md"],
+      "acceptance": ["P0F-AC-03", "P0F-AC-04"],
+      "checks": ["One explicit --live invocation after code approval; no automatic retry", "Record exact source and sanitized outcome without claiming full login or native P0", "Verify each roadmap step against current code and prerequisite evidence"]
+    }
+  ]
+}

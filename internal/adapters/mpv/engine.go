@@ -73,11 +73,12 @@ type engine struct {
 	// Two frames total. A render holds framesMu while writing the non-displayed
 	// buffer; Draw uses TryLock and keeps the previous bitmap if rendering waits.
 	// Bitmap.Update retains its pixels, so the displayed index is never written.
-	framesMu sync.Mutex
-	frames   [2]*image.RGBA
-	front    int
-	pending  bool
-	bitmap   *gui.Bitmap // UI thread only
+	framesMu         sync.Mutex
+	frames           [2]*image.RGBA
+	front            int
+	pending          bool
+	bitmap           *gui.Bitmap // UI thread only
+	picturePresented bool        // UI thread only; true only after the bitmap's image paints.
 }
 
 func (e *engine) Snapshot() playback.Snapshot {
@@ -133,6 +134,7 @@ func (e *engine) Close() error {
 	e.mu.Unlock()
 	// Close and Draw are UI-thread operations. Worker buffer ownership ended.
 	e.frames, e.bitmap = [2]*image.RGBA{}, nil
+	e.picturePresented = false
 	return nil
 }
 
@@ -435,23 +437,5 @@ func contextError(ctx context.Context) playback.ErrorCode {
 // DrawTarget shares the existing buffer/lifetime protocol but labels the actual
 // target correctly. It is UI-thread-only and never records a frame.
 func DrawTarget(c *gui.Context, plain playback.Engine) {
-	e, ok := plain.(*engine)
-	if !ok {
-		return
-	}
-	if e.framesMu.TryLock() {
-		if e.pending {
-			e.front = 1 - e.front
-			if e.bitmap == nil {
-				e.bitmap = gui.NewBitmap(e.frames[e.front])
-			} else {
-				e.bitmap.Update(e.frames[e.front])
-			}
-			e.pending = false
-		}
-		e.framesMu.Unlock()
-	}
-	if e.bitmap != nil {
-		gui.Image(c.Key("target-video"), e.bitmap).Width(width).Height(height).Fit(gui.Contain).Label("Authorized target video")
-	}
+	DrawTargetSized(c, plain, width, height)
 }

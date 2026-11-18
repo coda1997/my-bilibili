@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "spec_id": "0027-p0-real-client",
+  "tasks": [
+    {
+      "id": "P0R-001",
+      "title": "Install the frozen feature ports and adapt existing fixture consumers without changing their behavior",
+      "depends_on": [],
+      "write_paths": ["internal/account/contracts.go", "internal/catalog/catalog.go", "internal/catalog/contracts.go", "internal/app", "internal/danmaku/load_contracts.go", "internal/history/contracts.go", "internal/fixture", "internal/desktop", "internal/previewbundle", "cmd/my-bilibili", "cmd/preview-smoke"],
+      "acceptance": ["P0R-AC-01", "P0R-AC-04", "P0R-AC-05", "P0R-AC-07", "P0R-AC-08"],
+      "checks": ["Require final 0025/0026 candidate evidence and independent 0027 architecture approval before implementation", "Freeze the complete spec signatures and semantics, including history Store Acquire/Close and safe InUse/LockUnsupported codes; this broad serial checkpoint is restricted to shared types, signature adaptations, safe-code conversion and existing fixture consumer/mocks", "Run relevant app/fixture/desktop/previewbundle/command package tests and full check --race; retain the old native/async guard tests", "Do not edit architecture checks, CI, policy, dependencies, protected storage bytes or earlier frozen inputs"]
+    },
+    {
+      "id": "P0R-002",
+      "title": "Publish and revoke verified sessions and implement fixed scoped web transport and signing",
+      "depends_on": ["P0R-001"],
+      "write_paths": ["internal/account", "internal/adapters/bilibili/account", "internal/adapters/bilibili/sessiondata", "internal/adapters/bilibili/transport"],
+      "acceptance": ["P0R-AC-02", "P0R-AC-03"],
+      "checks": ["Run account, cookie-codec, existing QR/nav and new transport race tests with synthetic material and fake RoundTrippers", "Record discriminating epoch/lock-order/revocation/destination/WBI/preparation/deadline/body-limit checks", "Preserve the version-1 Keychain encoding and all prior cookie-scope regressions; no live account or network call in worker tests"]
+    },
+    {
+      "id": "P0R-003",
+      "title": "Implement bounded discovery, direct-entry validation, detail conversion and cover loading",
+      "depends_on": ["P0R-002"],
+      "write_paths": ["internal/catalog", "internal/adapters/bilibili/catalog"],
+      "acceptance": ["P0R-AC-03", "P0R-AC-04"],
+      "checks": ["Run catalog and adapter race tests using fake fixed-route responses", "Prove query/page cancellation and bounded retention; identity/membership, supported-content and metadata validation", "Prove cookie-free cover destination, bounded dimensions/body/normalized pixels and placeholder behavior without live image downloads"]
+    },
+    {
+      "id": "P0R-004",
+      "title": "Extend the single-video session with explicit HTTPS policy, quality intent and confirmed resume seek",
+      "depends_on": ["P0R-001"],
+      "write_paths": ["internal/app", "internal/playback/remote.go", "internal/playback/remote_test.go", "internal/fixture", "internal/desktop/view_test.go", "internal/desktop/source_test.go", "internal/desktop/danmaku_test.go"],
+      "acceptance": ["P0R-AC-01", "P0R-AC-05", "P0R-AC-06"],
+      "checks": ["Run app/playback/fixture race regressions with controlled source/native clocks", "Preserve all 0025 worker, request-generation, deadline, expiry, pending-intent and selected-versus-playing tests", "Prove exact requested quality, latest captured position, no Play before ready/seek confirmation, timeout pause, retired resume and default fixture-only rejection", "Changes to existing desktop tests in this task are only shared Player/mock compatibility; product quality UI is owned by P0R-010"]
+    },
+    {
+      "id": "P0R-005",
+      "title": "Resolve permitted video parts into truthful supported DASH choices",
+      "depends_on": ["P0R-003", "P0R-004"],
+      "write_paths": ["internal/adapters/bilibili/playback"],
+      "acceptance": ["P0R-AC-03", "P0R-AC-05", "P0R-AC-06"],
+      "checks": ["Run media adapter race tests with original synthetic envelopes and sentinel locations", "Test advertised-versus-returned choices, aliases, AVC/AAC/silent/unsupported branches, membership, public headers and conservative fresh-resolution policy", "No service requests, signed URL fixtures, raw error logging or changes to the native mpv lifecycle"]
+    },
+    {
+      "id": "P0R-006",
+      "title": "Load bounded real-service danmaku segments into the established timeline contract",
+      "depends_on": ["P0R-002"],
+      "write_paths": ["internal/danmaku/load_contracts.go", "internal/danmaku/loader.go", "internal/danmaku/loader_test.go", "internal/adapters/bilibili/danmaku"],
+      "acceptance": ["P0R-AC-03", "P0R-AC-07"],
+      "checks": ["Run loader/adapter race tests with controlled completions and original synthetic protobuf bytes", "Prove absolute second-segment timestamps, inclusive-boundary dedupe, valid empty skip, unsupported mode handling and all structural/byte/count bounds", "Prove two-slot cache, current-priority cancellation, latched failure/explicit retry, same-part quality reuse and no old scope/window publication", "Do not edit the reviewed 0026 timeline or renderer contracts to fit research's different suggested caps"]
+    },
+    {
+      "id": "P0R-007",
+      "title": "Persist local history under one filesystem owner with ordered checkpoints, deletion and safe recovery",
+      "depends_on": ["P0R-001"],
+      "write_paths": ["internal/history", "internal/adapters/localhistory"],
+      "acceptance": ["P0R-AC-08"],
+      "checks": ["Run history and local-file race tests using temporary private directories and injected acquisition/write/sync/rename/release failures", "Prove restart restoration, canonical keys, sampled progress, newest revision acknowledgment, deletion/clear suppression and later explicit new visit", "Prove independent Store/Manager and helper-process exclusion before Load through final cleanup, canonical-directory aliases, stable separate lock inode, losing-owner stale Save/Reset refusal, accepted save/delete/clear preservation, explicit fresh-load retry and final release; record a compiling lock-guard-removal control", "Use standard-library nonblocking flock on darwin/linux and a compiling fail-closed LockUnsupported path elsewhere; no dependency, mygo singleton fallback or lock-file deletion", "Keep corrupt/unknown/oversized data unchanged without explicit reset, distinguish post-rename uncertainty from pre-write failure, and propagate cleanup errors without closing Done or reporting zero ownership", "No real user history or Keychain reads/deletes in tests"]
+    },
+    {
+      "id": "P0R-008",
+      "title": "Present discovery, bounded covers and history actions in native feature views",
+      "depends_on": ["P0R-003", "P0R-007"],
+      "write_paths": ["internal/desktop/catalog", "internal/desktop/covers", "internal/desktop/history"],
+      "acceptance": ["P0R-AC-04", "P0R-AC-08", "P0R-AC-09"],
+      "checks": ["Run gui.Tester/race checks for explicit search/Open actions, loading/empty/error/retry, page boundaries and typed-input focus", "Exercise history Continue/Replay/delete/clear/reset confirmation, visible InUse/LockUnsupported and Retry/Close, and safe dirty/corrupt/cleanup-error states with fake controllers", "Prove <=12 retained normalized cover bitmaps, one request/decode, pending-ID cap and reference retirement; no live media capture"]
+    },
+    {
+      "id": "P0R-009",
+      "title": "Embed the existing account view without closing its reusable manager",
+      "depends_on": ["P0R-002"],
+      "write_paths": ["internal/desktop/account", "cmd/p0-login"],
+      "acceptance": ["P0R-AC-02", "P0R-AC-09"],
+      "checks": ["Preserve standalone login normal/e2e tests and add embedded dismiss/cancel/unsaved-discard cases", "Clear QR references on hide and keep save/verification/revocation lifetimes truthful", "Address LOG-ADV-001 persistence-uncertainty wording while changing this existing UI; no new real login or deletion"]
+    },
+    {
+      "id": "P0R-010",
+      "title": "Connect the real shell and collect controlled and bounded live macOS evidence",
+      "depends_on": ["P0R-005", "P0R-006", "P0R-007", "P0R-008", "P0R-009"],
+      "write_paths": ["internal/desktop/view.go", "internal/desktop/render.go", "internal/desktop/view_test.go", "internal/desktop/source_test.go", "internal/desktop/danmaku_test.go", "internal/desktop/client.go", "internal/desktop/client_test.go", "internal/desktop/quality_test.go", "internal/adapters/mpv/engine.go", "internal/adapters/mpv/surface.go", "internal/adapters/mpv/surface_test.go", "internal/adapters/mpv/presentation.go", "internal/adapters/mpv/presentation_test.go", "cmd/my-bilibili", "cmd/package-preview", "cmd/preview-smoke", "internal/previewbundle"],
+      "acceptance": ["P0R-AC-02", "P0R-AC-04", "P0R-AC-05", "P0R-AC-06", "P0R-AC-07", "P0R-AC-08", "P0R-AC-09", "P0R-AC-10"],
+      "checks": ["Wire normal real service and separate fixture/e2e constructors; prove no normal RPC endpoint and no e2e real account/network access", "Implement only the frozen DrawTargetSized/PicturePresented native seam and its UI-thread lifecycle in the named mpv paths; preserve double-buffer ownership, nonblocking acquisition, fixture labels and native teardown", "Prove actual synthetic bitmap rasterization and prepared-but-not-painted/no-frame/closed/retained-callback cases; tracks plus advancing time without picture must fail play/resume, including a compiling predicate-removal control", "Wire history Acquire/Load before mutation and Close after final save, including in-use Retry and paint-independent minimized cleanup; never report release failure as clean close", "Run normal/e2e and bounded-verification-option offline race tests and full go run ./cmd/dev check --race at the committed candidate", "Build exact normal/e2e bundles and driver; run macOS full/source/danmaku/client stages with original strict deadlines, pixel gates and actual hashes", "Freeze one public-input live plan with the spec's request/open/process limits; reuse the identical final normal executable and protected restore-only material, recording only sanitized receipts including current-engine picture_presented", "Collect the actual search/detail/native A/V/danmaku/history-close/restart-resume loop; preserve any failure and cleanup result without automatic endpoint or credential fallback"]
+    },
+    {
+      "id": "P0R-011",
+      "title": "Record independent exact-candidate review and the delivered P0 capability matrix",
+      "depends_on": ["P0R-010"],
+      "write_paths": ["reports/0039-p0-real-client.md", "STATUS.md", "docs/architecture.md", "README.md"],
+      "acceptance": ["P0R-AC-01", "P0R-AC-10"],
+      "checks": ["Provide the independent reviewer exact commit, frozen inputs, actual checks/native receipts and retained original findings/counters", "Record claim/evidence/result/scope table, found-not-done exclusions and concrete owner queue; never self-approve or substitute a run outcome for review", "Run final appropriate repository checks for the committed handoff; report real CI only if its exact candidate run exists", "Do not push, open a PR, merge, delete real credentials/history, sign or publish a release under this task"]
+    }
+  ]
+}

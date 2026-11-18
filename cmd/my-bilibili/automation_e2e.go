@@ -15,7 +15,6 @@ import (
 	gui "github.com/egoist/mygo/ui"
 	"my-bilibili/internal/adapters/mpv"
 	"my-bilibili/internal/app"
-	"my-bilibili/internal/catalog"
 	"my-bilibili/internal/playback"
 	"my-bilibili/internal/previewbundle"
 )
@@ -28,16 +27,23 @@ type delayedSource struct {
 	requests, active atomic.Int64
 }
 
-func (s *delayedSource) Resolve(ctx context.Context, id catalog.PartID) (app.Resolution, error) {
-	if _, err := s.Source.Resolve(ctx, id); err != nil {
+func (s *delayedSource) Resolve(ctx context.Context, request app.ResolveRequest) (app.Resolution, error) {
+	resolution, err := s.Source.Resolve(ctx, request)
+	if err != nil {
 		return app.Resolution{}, err
 	}
-	return app.Resolution{Input: playback.Input{URL: s.origin + "/delayed"}}, nil
+	resolution.Input = playback.Input{URL: s.origin + "/delayed"}
+	return resolution, nil
 }
 func automationSource(source app.Source) (app.Source, func(), error) {
 	mode := os.Getenv("MY_BILIBILI_E2E_SCENARIO")
 	if mode == "" {
 		return source, func() {}, nil
+	}
+	switch mode {
+	case "source-detail", "source-detail-failure", "source-resolve", "source-resolve-failure", "source-timeout":
+		controlled := &controlledSource{Source: source, mode: mode, gate: make(chan struct{})}
+		return controlled, controlled.release, nil
 	}
 	if mode != "delayed" {
 		return nil, nil, playback.Invalid
@@ -88,16 +94,34 @@ func (a *application) automationRender(c *gui.Context) {
 		if gui.Button(c.Key("e2e-wide"), "Wide window").Clicked() {
 			a.window.SetContentSize(1120, 760)
 		}
+		if controlled, ok := a.source.(*controlledSource); ok {
+			if gui.Button(c.Key("e2e-release-source"), "Release source").Clicked() {
+				controlled.release()
+			}
+			if gui.Button(c.Key("e2e-minimized-close"), "Close after native minimize").Clicked() {
+				controlled.closeOnMinimize = true
+				a.window.Minimize()
+			}
+		}
 	})
-	observation := previewbundle.Observation{State: a.session.State(), Fullscreen: a.window.IsFullScreen(), Resources: mpv.Owned(), Tracks: mpv.Inspect(a.session.Engine()), DisposalError: ""}
+	observation := a.automationObservation(a.window.IsFullScreen(), a.window.IsMinimized())
+	b, _ := json.Marshal(observation)
+	gui.Text(c.Key("e2e-observation"), string(b)).Absolute().Left(-20000).Top(-20000).Size(1, 1)
+	a.renderFullscreen(c)
+}
+
+func (a *application) automationObservation(fullscreen, minimized bool) previewbundle.Observation {
+	observation := previewbundle.Observation{State: a.session.State(), Fullscreen: fullscreen, Minimized: minimized, Resources: mpv.Owned(), Tracks: mpv.Inspect(a.session.Engine())}
+	observation.Danmaku = observeDanmaku(a.danmaku.State())
 	if delayed, ok := a.source.(*delayedSource); ok {
 		active := delayed.active.Load()
 		observation.Delay = previewbundle.DelayObservation{Requests: delayed.requests.Load(), Active: active}
 	}
+	if controlled, ok := a.source.(*controlledSource); ok {
+		observation.Source = controlled.snapshot()
+	}
 	if a.closeError != nil {
 		observation.DisposalError = playback.Media
 	}
-	b, _ := json.Marshal(observation)
-	gui.Text(c.Key("e2e-observation"), string(b)).Absolute().Left(-20000).Top(-20000).Size(1, 1)
-	a.renderFullscreen(c)
+	return observation
 }

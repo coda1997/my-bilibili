@@ -4,8 +4,13 @@ A Go desktop Bilibili client with macOS as the required platform and Windows
 as P2 / nice-to-have, and an experiment in
 spec-driven, independently reviewed agent development.
 
-It is not yet a working Bilibili client: today it plays bundled fixture video
-through libmpv with a native Go (mygo) UI.
+The macOS developer app restores a saved Bilibili account from Keychain. Search
+for an ordinary user-uploaded video or open its BV/av identifier or canonical
+link, choose a part and an available quality, and watch with Chinese danmaku.
+Local history lets you continue the same part after restarting the app. The
+[real playback report](reports/0039-p0-real-client.md) covers the earlier
+account run; the [repair report](reports/0040-p0-focused-repair.md) records
+the offline checks and native fixture results for the corrected build.
 
 ## Start here
 
@@ -19,6 +24,29 @@ through libmpv with a native Go (mygo) UI.
 - [Native playback commands](experiments/playback/cmd/README.md#default-libmpv-playback)
 - `reports/`: dated handoffs and reviews. They are history and describe their
   own candidates.
+
+## Run the macOS developer app
+
+On the development Mac, unzip the verified developer bundle and open
+`my-bilibili.app`. The normal app uses the real service. If it already has a
+saved session it restores it automatically; otherwise sign in from the account
+pane. Use **发现** to search or open a video and **历史** to continue watching.
+History lives on this Mac; searches and playback do not post anything to Bilibili.
+If you change quality while a saved position is being restored, the new
+quality resumes from that same position.
+
+The bundle needs the existing development libmpv installation described in
+[the runtime boundary](internal/previewbundle/bundle.go). It is not a portable
+installer. To build a fresh bundle on that Mac from the repository root:
+
+```sh
+export GOTOOLCHAIN=local GOWORK=off
+go run ./cmd/package-preview -output "$PWD/my-bilibili.app"
+open ./my-bilibili.app
+```
+
+The output path must not already exist. For the offline preview, quit the app
+and run `./my-bilibili.app/Contents/MacOS/my-bilibili --fixture`.
 
 ## Prerequisites
 

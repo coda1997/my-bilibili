@@ -18,7 +18,7 @@ func ready(s observed) bool {
 	return (s.State.Playback.State == playback.Ready || s.State.Playback.State == playback.Paused) && s.State.Playback.Duration > 0 && s.State.Playback.Error == playback.NoError && s.Tracks.Video && s.Tracks.Audio && s.Resources.Cores > 0 && s.Resources.Renderers > 0 && s.Resources.Workers > 0
 }
 func disposed(s observed, code playback.ErrorCode) bool {
-	return s.State.Playback.State == playback.Closed && s.State.Playback.Error == code && s.Resources == (mpv.Resources{}) && s.DisposalError == playback.NoError && !s.Tracks.Video && !s.Tracks.Audio && !s.State.DesiredPlaying
+	return s.State.Playback.State == playback.Closed && s.State.Playback.Error == code && s.Resources == (mpv.Resources{}) && s.DisposalError == playback.NoError && !s.Tracks.Video && !s.Tracks.Audio && !s.State.DesiredPlaying && danmakuDisposed(s)
 }
 func absDuration(d time.Duration) time.Duration {
 	if d < 0 {
@@ -534,6 +534,15 @@ func preservesPaused(before, after observed) bool {
 	return a.Playback.Generation == b.Playback.Generation && b.Playback.State == playback.Paused && !b.DesiredPlaying && a.SelectedPart == b.SelectedPart && a.PlaybackPart == b.PlaybackPart && a.SelectionError == b.SelectionError && a.Playback.Error == b.Playback.Error && a.Volume == b.Volume && a.Rate == b.Rate && b.Playback.Rate == a.Playback.Rate && b.Playback.Volume == a.Playback.Volume && absDuration(a.Playback.Position-b.Playback.Position) < 150*time.Millisecond
 }
 func run(ctx context.Context, app, dir string, r *report) error {
+	if r.Stage == "client" {
+		return runClient(ctx, app, dir, r)
+	}
+	if r.Stage == "danmaku" {
+		return invocation(ctx, app, "danmaku", "", dir, r, func(ctx context.Context, c *client, p *ownedProcess) error { return c.danmaku(ctx, p, dir, r) })
+	}
+	if r.Stage == "source" {
+		return runSource(ctx, app, dir, r)
+	}
 	if err := invocation(ctx, app, "product", "", dir, r, func(ctx context.Context, c *client, p *ownedProcess) error { return c.product(ctx, p, dir, r) }); err != nil {
 		return err
 	}

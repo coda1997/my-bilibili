@@ -37,6 +37,26 @@ func TestReportPassOwnsSampledObservation(t *testing.T) {
 	}
 }
 
+func TestReportDoesNotCountPendingVisualInspectionAsPass(t *testing.T) {
+	r := &report{}
+	r.pass("native crop", "saved", nil)
+	r.Checks = append(r.Checks, check{Result: "not-tested"}, check{Result: "fail"})
+	if r.passed() != 1 {
+		t.Fatal("unperformed or failed checks counted as passes")
+	}
+}
+
+func TestReportPassOwnsDanmakuItems(t *testing.T) {
+	o := danmakuSample(t, 2*time.Second)
+	want := o.Danmaku.Items[0]
+	r := &report{}
+	r.pass("danmaku", "sampled", &o)
+	o.Danmaku.Items[0].X = -999
+	if r.Checks[0].Observation.Danmaku.Items[0] != want {
+		t.Fatal("recorded danmaku items alias later caller mutations")
+	}
+}
+
 func TestReportPassPreservesNil(t *testing.T) {
 	r := &report{}
 	r.pass("without observation", "", nil)

@@ -2,6 +2,7 @@ package previewbundle
 
 import (
 	"context"
+	"my-bilibili/internal/app"
 	"os"
 	"path/filepath"
 	"testing"
@@ -33,7 +34,7 @@ func TestBundleResourcesOutsideWorkingDirectory(t *testing.T) {
 		t.Fatal(video, err)
 	}
 	for _, part := range video.Parts {
-		r, err := source.Resolve(context.Background(), part.ID)
+		r, err := source.Resolve(context.Background(), app.ResolveRequest{Part: part.ID})
 		in := r.Input
 		if err != nil || !filepath.IsAbs(in.FilePath) {
 			t.Fatal(in, err)

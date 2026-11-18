@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec_id": "0022-p0-empty-danmaku",
+  "tasks": [
+    {
+      "id": "DME-001",
+      "title": "Skip valid empty-text entries without weakening parser limits",
+      "depends_on": [],
+      "write_paths": ["experiments/p0/serviceprobe/protobuf.go", "experiments/p0/serviceprobe/protobuf_test.go", "experiments/p0/serviceprobe/probe.go", "experiments/p0/serviceprobe/empty_text_test.go"],
+      "acceptance": ["DME-AC-01", "DME-AC-02", "DME-AC-03"],
+      "checks": ["Compiled causal before/after and skip/limit/inconclusive controls", "go test -count=1 -race ./experiments/p0/...", "go run ./cmd/dev check --race", "Independent exact-candidate code review"]
+    },
+    {
+      "id": "DME-002",
+      "title": "Verify actual segment parsing once and record login continuation",
+      "depends_on": ["DME-001"],
+      "write_paths": ["reports/0034-p0-empty-danmaku.md"],
+      "acceptance": ["DME-AC-04"],
+      "checks": ["One existing bounded probe after approval; safe counters only", "Preserve prior failures and continue to authorized login preparation"]
+    }
+  ]
+}

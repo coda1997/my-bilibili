@@ -49,3 +49,12 @@ update the assets and embedded manifest together as a reviewed source change.
 FFmpeg/FFprobe are asset-authoring/inspection tools only. They are not required
 by `fixture.New`, the packaged app, or default Go tests. Encoder output can vary
 with toolchain builds; new output needs a new reviewed integrity manifest.
+
+`fixture.Danmaku(partID)` independently returns 64 original in-memory comments
+for either fixed part, without reading these assets or a service. The opening
+phrases are `中文弹幕测试` and `第二分P弹幕`. Ordinary scrolling in both directions
+and fixed top/bottom entries cover pause/seek/settings scenarios; a dense group
+near 12 seconds exercises the bounded lane admission. Each call owns its returned
+slice. These comments were authored for spec0026 on 2026-11-17; no service data,
+sender identity or downloaded text was copied. Media assets and their integrity
+manifest are unchanged.

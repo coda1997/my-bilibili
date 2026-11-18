@@ -28,30 +28,48 @@ Do not create empty packages for every imagined future feature.
 
 Business modules must not import UI types, platform handles, database drivers,
 or Bilibili transport DTOs. Cross-module dependencies must be explicit.
-`internal/architecture` enforces two rules in tests: `internal/catalog` and
-`internal/app` depend only on each other, `internal/playback` and the standard
-library; product packages (`cmd/my-bilibili`, `internal/...`) never import
-`experiments/`. Other boundaries here are documented, not yet enforced.
+`internal/architecture` checks the app/catalog import boundary, prevents the
+account domain from depending on HTTP or nonstandard packages, and prevents
+product packages from depending on `experiments/`.
 
 ## Packages
 
-| Package | Owns |
+| Owner | Responsibility |
 | --- | --- |
-| `internal/catalog` | Framework-free video and part model |
-| `internal/app` | Session: application intent, part selection, `Source` contract, observable state |
-| `internal/playback` | Plain playback boundary: `Input`, `Engine`, `Controller`, snapshots, safe error codes |
-| `internal/adapters/mpv` | libmpv adapter implementing `playback.Opener`/`Engine`; runtime build notes |
-| `internal/desktop` | mygo view and rendering of `app.State` |
-| `internal/fixture` | Hash-verified bundled fixture `Source` |
-| `internal/previewbundle` | macOS developer bundle layout and runtime checks |
-| `cmd/my-bilibili` | Composition root |
-| `experiments/` | Probes and harnesses kept as evidence tools; product code must not import them |
+| `internal/account`; `internal/adapters/credentials` | Login, restore and revocation; the platform adapter stores and verifies session material in Keychain. |
+| `internal/adapters/bilibili` | Private session encoding and scoped read-only web transport. Catalog, playback and danmaku adapters turn service responses into plain feature types. |
+| `internal/catalog` | Parse direct entries, search and paginate. Own video and part identities, results and the cover boundary. |
+| `internal/app` | Own one video's details, selected versus playing part/quality, source requests and confirmed resume seek. |
+| `internal/playback`; `internal/adapters/mpv` | Validate input under the chosen policy and own the native playback engine. The mpv adapter reports when the current engine has actually painted a picture. |
+| `internal/danmaku` | Load bounded segments for the accepted part/generation and schedule visible comments against native playback time. |
+| `internal/history`; `internal/adapters/localhistory` | Track visits and progress; acquire exclusive ownership before reading or mutating the local history file and release it after the final save. |
+| `internal/desktop` | Native discovery, history, account and player views. Render fitted video and Chinese text without owning transport data. |
+| `cmd/my-bilibili` | Compose the normal or synthetic backends, publish verified account changes, retire outgoing work and close the window after ownership ends. |
+| `internal/fixture`; `internal/previewbundle` | Verified bundled media, runtime checks, developer packaging and strict evidence formats. Product code does not import the probes in `experiments/`. |
 
-`app.Source` returns a `Resolution`: a playback input plus an optional expiry.
-Session reuses a cached input only before `ExpiresAt - ResolutionMargin` and
-otherwise resolves again. Source calls currently run synchronously on the UI
-thread; moving them off it, with stale-result handling, is required before a
-network-backed source.
+A verified account publishes a service scope that can be revoked. Switching
+account or closing the app cancels outstanding work; late responses cannot
+replace the active session. Credentials stay on their permitted API routes.
+The normal app explicitly opts into HTTPS media playback. The media opener
+accepts only playback headers under that policy; it does not receive account
+cookies. The fixture player keeps its local-file policy.
+
+`app.Source` returns a playback input with an optional expiry. A single worker
+resolves the latest requested part/quality; its timeout includes queue wait.
+Only a UI-thread tick can accept the current result. The player refreshes a
+cached input inside its expiry margin. A quality change keeps the current
+part and restores position; an explicit part change starts a new visit. To
+resume after a restart, the composition root opens the stored video and part,
+resolves fresh media and confirms the seek before resuming playback.
+
+The danmaku loader keeps bounded current and adjacent segments. The renderer
+shapes only the active comments, clips them to the fitted video and releases
+old layouts when the active playback generation changes. Its timebase is the
+sampled playback position, including after seek, speed or quality changes.
+History saves progress locally under an exclusive lock; deleting the current
+visit suppresses its recreation on a quality change. A later explicit visit can
+create a new record. See [the P0 contract](../specs/0027-p0-real-client/spec.md)
+and [verification on macOS](../reports/0039-p0-real-client.md).
 
 ## Async contract requirements
 

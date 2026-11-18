@@ -65,7 +65,7 @@ func New(resourceDir string) (app.Source, error) {
 	}
 	s := &source{dir: dir, parts: make(map[catalog.PartID]asset)}
 	for _, file := range manifest.Files {
-		if err := verify(dir, file); err != nil {
+		if err := verify(context.Background(), dir, file); err != nil {
 			return nil, err
 		}
 		switch file.Name {
@@ -101,43 +101,98 @@ func New(resourceDir string) (app.Source, error) {
 	return s, nil
 }
 
-func verify(dir string, file asset) error {
+func verify(ctx context.Context, dir string, file asset) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	path := filepath.Join(dir, file.Name)
 	info, err := os.Lstat(path)
 	if err != nil || !info.Mode().IsRegular() || info.Size() != file.Bytes {
 		return playback.Media
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return playback.Media
 	}
+	return verifyContents(ctx, f, file)
+}
+
+// verifyContents owns and closes the reader on every path. Cancellation is
+// checked around bounded reads; a stalled OS file syscall is not interruptible
+// through this context. The extra byte detects growth since the size check.
+func verifyContents(ctx context.Context, f io.ReadCloser, file asset) (err error) {
+	defer func() {
+		if closeErr := f.Close(); err == nil && closeErr != nil {
+			err = playback.Media
+		}
+	}()
 	h := sha256.New()
-	_, readErr := io.Copy(h, f)
-	closeErr := f.Close()
-	if readErr != nil || closeErr != nil || hex.EncodeToString(h.Sum(nil)) != file.SHA256 {
+	r := io.LimitReader(f, file.Bytes+1)
+	buffer := make([]byte, 32*1024)
+	var size int64
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		n, readErr := r.Read(buffer)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		size += int64(n)
+		_, _ = h.Write(buffer[:n])
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return playback.Media
+		}
+	}
+	if size != file.Bytes || hex.EncodeToString(h.Sum(nil)) != file.SHA256 {
 		return playback.Media
 	}
 	return nil
 }
 
-func (s *source) Detail(context.Context) (catalog.Video, error) {
+func (s *source) Detail(ctx context.Context) (catalog.Video, error) {
+	if ctx == nil {
+		return catalog.Video{}, playback.Invalid
+	}
+	if err := ctx.Err(); err != nil {
+		return catalog.Video{}, err
+	}
 	video := s.video
 	video.Parts = append([]catalog.Part(nil), video.Parts...)
 	return video, nil
 }
 
-func (s *source) Resolve(_ context.Context, id catalog.PartID) (app.Resolution, error) {
-	file, ok := s.parts[id]
+func (s *source) Resolve(ctx context.Context, request app.ResolveRequest) (app.Resolution, error) {
+	if ctx == nil {
+		return app.Resolution{}, playback.Invalid
+	}
+	if err := ctx.Err(); err != nil {
+		return app.Resolution{}, err
+	}
+	file, ok := s.parts[request.Part]
 	if !ok {
 		return app.Resolution{}, playback.Invalid
 	}
-	if err := verify(s.dir, file); err != nil {
+	quality := app.Quality{ID: "fixture", Label: "Fixture", Width: 640, Height: 360}
+	if request.Quality != "" && request.Quality != quality.ID {
+		return app.Resolution{}, catalog.QualityUnavailable
+	}
+	if err := verify(ctx, s.dir, file); err != nil {
 		return app.Resolution{}, err
 	}
 	in := playback.Input{FilePath: filepath.Join(s.dir, file.Name)}
 	if err := in.Validate(); err != nil {
 		return app.Resolution{}, playback.Invalid
 	}
+	if err := ctx.Err(); err != nil {
+		return app.Resolution{}, err
+	}
 	// Bundled local files do not expire.
-	return app.Resolution{Input: in}, nil
+	return app.Resolution{Input: in, Quality: quality, Qualities: []app.Quality{quality}}, nil
 }
