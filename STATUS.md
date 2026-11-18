@@ -19,7 +19,7 @@ read reports by default.
 | QR login and Keychain session (P0) | Real scan, Keychain save/readback, service verification and same-binary restart restoration passed on 2026-11-17. Session retained; branch not merged, no PR | [real login and restore](reports/0036-p0-login-restored.md) |
 | Asynchronous detail/media loading | Implemented and independently approved at `371428b`; full race and fresh macOS full/source native suites pass (30 + 25 checks) | [0037](reports/0037-p0-async-source.md) |
 | Native Chinese danmaku | Implemented and independently approved at cebd417; full race, native full/source/danmaku stages (30+25+30 checks) and independent Chinese pixel/timebase verification pass | [0038](reports/0038-p0-native-danmaku.md) |
-| Real Bilibili content and local history/resume | Implemented at `1082c36`; full and tagged race pass. Native full/source/danmaku pass; client passes history recovery and restart, then stops at a later quality-menu check. Real-service loop and final independent review remain pending | [spec 0027](specs/0027-p0-real-client/spec.md), [assignment](specs/0027-p0-real-client/assignment.md) |
+| Real Bilibili content and local history/resume | Implemented with navigation-verifier repair at `7e24796`; full and tagged race pass. Current native verification is paused because the execution Mac is locked and the owner cannot currently unlock it. Real-service loop and final independent review remain pending | [spec 0027](specs/0027-p0-real-client/spec.md), [assignment](specs/0027-p0-real-client/assignment.md) |
 | libmpv distribution (bundling, licence, signing) | Not designed; a development library path is hardcoded | — |
 | Windows | P2, not tested | [ADR 0005](docs/adr/0005-platform-priority.md) |
 
@@ -31,20 +31,20 @@ read reports by default.
 | M1 macOS playback feasibility | Accepted 2026-11-13 |
 | M2 one complete development loop | Merged (PR #9). Owner functional feedback recorded; formal milestone acceptance not recorded |
 | M3 one issue-to-PR loop | Accepted 2026-11-17 |
-| P0 client | In progress; implementation integrated, verification paused pending the scoped navigation-readiness extension |
+| P0 client | In progress; navigation repair implemented and checked, native/live verification paused until the execution Mac is unlocked |
 
 Exit criteria are in [stage zero](docs/stage-zero.md).
 
 ## Next actions
 
-1. Await the owner's pending decision on at most two additional scoped repair/
-   verification iterations for P0R-OBS-003. The prepared proposal waits for the
-   target tab's rendered selected state before using remounted controls. Changes
-   are limited to `cmd/preview-smoke/client_controls.go` and corresponding tests.
-   It preserves the native deadline, quality, history and cleanup requirements.
-2. If authorized, start a continuation run with the same frozen spec and
-   preserved counters, apply that repair, check the exact committed candidate,
-   and complete the required native stages. Do not retry under the closed run.
+1. Wait for the owner to confirm that Dada's execution MacBook Air is awake
+   and unlocked. The host reported `screen_locked`; on 2026-11-18 the owner
+   answered "暂时无法解锁". Do not retry native window operations or private
+   handoff before that confirmation. No repair-allowance question is pending.
+2. After confirmation, start a continuation run with the same frozen spec and
+   counters, recheck actual accessibility and keep the Mac awake. Reuse the
+   exact `7e24796` artifacts for a fresh native full attempt, then source/
+   danmaku/client stages. Preserve the first failure and all strict deadlines.
 3. Use the identical final normal executable for the prepared bounded
    two-launch real-service verification: restored login, search/details,
    playback, danmaku, saved progress and restart/resume. Preserve the Keychain
@@ -58,14 +58,14 @@ Exit criteria are in [stage zero](docs/stage-zero.md).
 
 ## Owner action queue
 
-Batched per [owner actions](docs/workflow.md#owner-actions). The owner resumed
-P0 verification and confirmed the execution Mac unlocked on 2026-11-17.
+Batched per [owner actions](docs/workflow.md#owner-actions). The Mac was
+previously unlocked; a new locked-screen result was observed on 2026-11-18,
+and the owner cannot currently unlock it.
 
 | Action | Prepared | Time | Unblocks | Report back |
 | --- | --- | --- | --- | --- |
-| Allow at most two additional scoped navigation-readiness repair/verification iterations for P0R-OBS-003 | Reproduced missing navigation-completion wait and unapplied shared-tab proposal; original native failure preserved | 1 min | Complete client verification, then real-service loop and final review | Answer the pending question: "追加最多 2 轮，继续完成 P0" or pause |
 | Authorize a PR for `codex/p0-login-foundation` when ready | Rebased branch and scoped evidence in the login handoff | 2 min | PR review and candidate CI | "Open the login PR" |
-| Keep the execution Mac unlocked for native verification | Login/restore and 85 current-candidate fixture checks complete; remaining client and live scenarios follow after the scoped continuation | During native checks | Native P0 verification | Report any native authorization prompt or failure |
+| Wake and unlock Dada's MacBook Air, then keep it unlocked during verification | Navigation repair, full/tagged race and exact normal/e2e/driver builds ready at `7e24796`; login retained | 1 min, then during native checks | Remaining native checks, real-service loop and final review | "已解锁，继续 P0" |
 
 Done 2026-11-17: the owner approved the spec 0024 policy changes (lanes,
 evidence identity, adopted clauses, owner queue) and local commit authority.
@@ -75,6 +75,10 @@ publication of the P0 branch. No P0 PR, merge or release has been performed.
 Done 2026-11-18: the owner added one scoped history-notice repair/verification
 iteration. `1082c36` implements it; regression/race checks and actual native
 history-notice/recovery verification pass. That additional iteration is used.
+The owner then authorized at most two more navigation-readiness repair/
+verification iterations. `7e24796` implements the shared selected-frame wait
+and passes the offline gates; one of those two iterations remains available
+within the approved navigation-only scope.
 
 ## Follow-ups
 
@@ -88,40 +92,43 @@ history-notice/recovery verification pass. That additional iteration is used.
 
 ## Verification checkpoint and blockers
 
-Exact implementation candidate: `1082c365249a2284f3823c0992da3b1ac019ffde`.
-The recorded full race check and relevant e2e-tagged race suites pass. Native
-full/source/danmaku stages pass 30/25/30 checks. The client stage passes 44
-checks, including in-use history notice/recovery, minimized close, saved
-progress, fresh-process same-part resume and confirmed deletion. P0R-OBS-002's
-native notice gate now passes. All scene processes close with zero owned
-resources and no forced cleanup.
+Exact implementation candidate: `7e24796ea40459a2071dd3bfbd0c5d2d1e1c1bd8`.
+Recorded full race, relevant e2e-tagged race and targeted navigation/notice
+tests pass. Two compiling controls discriminate the navigation wait and its
+shared two-second budget. Normal/e2e apps and the driver were built from a
+clean exact checkout; all prior assertions and tests remain intact.
 
-P0R-OBS-003 is the new required-verification gap (R1 class 5): the final
-history-restart scene times out waiting for quality-1 after switching back
-to the player. Deletion surviving that quality change and a later new visit/
-Clear remain unverified. The real-service plan remains unconsumed.
+The first current-candidate native full invocation passes 11 checks, then
+times out on fullscreen-entry correspondence: one native request, no entry
+completion callback. Cleanup is graceful without force. A subsequent AX-only
+host observation explicitly reports `screen_locked`. The current lock is
+observed; its causal relation to the earlier timeout is inferred. Fullscreen
+code is unchanged from the prior passing candidate. No new native retry or
+repair has been attempted. Source/danmaku/client are not yet run at `7e24796`.
 
-Observed: `clientAction` returns on the automation acknowledgment without
-observing the selected tab. The pinned automation protocol reads the last
-rendered frame; tab changes remount player controls with new identities.
-A scratch queued-action/next-frame regression reproduces the missing wait.
-Inferred: this gap explains the native popup timeout; the original raw trees
-were not retained, so actual re-verification is still required. One shared
-navigation-completion proposal addresses this second observed frame-readiness
-gap (R8), rather than separate per-tab fixes. It has not been applied.
+Prior evidence at `1082c36` remains 30/25/30 native prerequisite passes plus
+44 client passes, including P0R-OBS-002's repaired notice, in-use recovery,
+minimized close, synthetic restart/resume and confirmed deletion. Its later
+quality-popup timeout is P0R-OBS-003 (R1 class 5). The new repair observes the
+actual selected tab before using remounted player controls, addressing the
+source-backed missing-frame wait; its native resolution remains unverified.
+Deletion surviving quality replacement and later new-visit/Clear checks are
+still pending, as are the real two-launch loop and final independent review.
 
-Original run `20261117T152122Z-27437f77126e` remains closed `needs-human` at
-event 23; authorized continuation `20261118T013405Z-20371a25d352` closed
-`needs-human` at event 7 after the new native failure. P0R-010
-corrections are 4/4 consumed (three original plus one explicitly added).
-Retained failure counts: slider 2, history notice 1, later quality popup 1.
-Formal reviews remain 2/3 used, leaving final combined round 3/global 20;
-issue budget remains 0/5. The original reviewer remains available. Do not
-reset counters or retry the failed native stage without the scoped extension.
+Runs `20261117T152122Z-27437f77126e` (event 23),
+`20261118T013405Z-20371a25d352` (event 7), and
+`20261118T020849Z-a1ae44538d65` (event 7) are closed `needs-human` and must
+not be appended to. P0R-010 corrections are 5 used / 6 authorized; one
+navigation-only repair iteration remains. Retained failures: slider 2,
+history notice 1, later quality popup 1, current fullscreen entry 1. Formal
+reviews are 2/3 used, leaving final combined round 3/global 20; issues stay
+0/5. Original reviewer remains available. Preserve counters on continuation.
 
-Local-only current evidence is in `.agent/p0-real-continued-final/`: exact
-artifacts, native reports, `native-client-failure.md`, scratch diagnostic and
-`navigation-readiness-proposal.patch`. Earlier `.agent/p0-real-final/` evidence
-and closed run records remain unchanged. Logs and worker evidence are not
-backed up by this status file. No candidate CI, final independent approval
-or full-P0 completion is claimed.
+Current local-only artifacts/evidence are in `.agent/p0-real-navigation-final/`,
+including `artifacts.json`, first native report and `locked-desktop-checkpoint.md`;
+the run's `evidence/pause.md` records the owner's unavailable-unlock answer.
+Earlier `.agent/p0-real-continued-final/` and `.agent/p0-real-final/` evidence
+remain unchanged. All owned test processes exited; temporary keep-awake was
+stopped for the pause. Actual login remains retained and no real-service plan
+request has been made. Logs are not backed up by this status file. No current
+candidate CI, independent approval or full-P0 completion is claimed.
