@@ -99,7 +99,7 @@ func TestWorkflowAcceptsValidMarkdownForms(t *testing.T) {
 		{
 			name: "valid footnote and bracket identifiers",
 			setup: func(t *testing.T, root string) {
-				writeTestFile(t, root, "README.md", "# Root\nText[^1] indexes grid[row][col].\n\n[^1]: explanatory note\n")
+				writeTestFile(t, root, "README.md", "# Root\nText[^1] indexes grid[row][col].\n\n[^1]: note\n")
 			},
 		},
 		{
@@ -174,6 +174,14 @@ func TestWorkflowAcceptsValidMarkdownForms(t *testing.T) {
 			setup: func(t *testing.T, root string) {
 				writeTestFile(t, root, "docs/foo(1).md", "# Parentheses\n")
 				writeTestFile(t, root, "README.md", "# Root\n[fixture](docs/foo(1).md)\n")
+			},
+		},
+		{
+			name: "Markdown escapes and entities in link targets",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/foo(1).md", "# Parentheses\n")
+				writeTestFile(t, root, "docs/a&b.md", "# Ampersand\n")
+				writeTestFile(t, root, "README.md", "# Root\n[inline](docs/foo\\(1\\).md)\n[reference][guide]\n[entity](docs/a&amp;b.md)\n\n[guide]: docs/foo\\(1\\).md\n")
 			},
 		},
 		{
@@ -345,9 +353,27 @@ func TestWorkflowRejectsDamagedInputs(t *testing.T) {
 			},
 		},
 		{
+			name: "duplicate skill route with different label formatting",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "AGENTS.md", "# Agents\n## Task routing\n\n- Planning: [`sample`](.agents/skills/sample/SKILL.md).\n- Repair: [sample](./.agents/skills/sample/SKILL.md).\n")
+			},
+		},
+		{
 			name: "broken reference link",
 			mutate: func(t *testing.T, root string) {
 				writeTestFile(t, root, "README.md", "# Root\n[missing][guide]\n\n[guide]: missing.md\n")
+			},
+		},
+		{
+			name: "broken unused reference link",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "README.md", "# Root\n\n[guide]: missing.md\n")
+			},
+		},
+		{
+			name: "broken link in unused footnote",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "README.md", "# Root\n\n[^1]: [missing](missing.md)\n")
 			},
 		},
 		{
@@ -381,6 +407,56 @@ func TestWorkflowRejectsSkillSymlinkEntry(t *testing.T) {
 	}
 }
 
+func TestWorkflowRejectsWrongCaseInventoryFile(t *testing.T) {
+	root := writeWorkflowFixture(t)
+	if err := os.Remove(filepath.Join(root, "README.md")); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, root, "readme.md", "# Root\n")
+	if _, err := Workflow(root); err == nil || !strings.Contains(err.Error(), `path "README.md" uses wrong case`) || !strings.Contains(err.Error(), `"readme.md"`) {
+		t.Fatalf("want exact-case inventory diagnostic, got %v", err)
+	}
+}
+
+func TestWorkflowRejectsSymlinkEscapeBeforeCheckingSuffix(t *testing.T) {
+	root := writeWorkflowFixture(t)
+	outside := t.TempDir()
+	writeTestFile(t, outside, "Outside.md", "# Outside\n")
+	if err := os.Symlink(outside, filepath.Join(root, "linked")); err != nil {
+		t.Skipf("symlink fixture unavailable: %v", err)
+	}
+	sep := string(filepath.Separator)
+	target := filepath.Join(root, "linked") + sep + ".." + sep + "README.md"
+	if err := os.Symlink(target, filepath.Join(root, "through")); err != nil {
+		t.Fatal(err)
+	}
+	for _, destination := range []string{"linked/outside.md", "through"} {
+		writeTestFile(t, root, "README.md", "# Root\n[outside]("+destination+")\n")
+		if _, err := Workflow(root); err == nil || !strings.Contains(err.Error(), "symlink outside the repository") || strings.Contains(err.Error(), "Outside.md") {
+			t.Errorf("%s: want boundary diagnostic without outside path details, got %v", destination, err)
+		}
+	}
+}
+
+func TestWorkflowAcceptsInRootSymlinks(t *testing.T) {
+	root := writeWorkflowFixture(t)
+	if err := os.Symlink("docs", filepath.Join(root, "relative")); err != nil {
+		t.Skipf("symlink fixture unavailable: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(root, "docs"), filepath.Join(root, "absolute")); err != nil {
+		t.Fatal(err)
+	}
+	sep := string(filepath.Separator)
+	target := filepath.Dir(root) + sep + "." + sep + filepath.Base(root) + sep + "docs"
+	if err := os.Symlink(target, filepath.Join(root, "dot-absolute")); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, root, "README.md", "# Root\n[relative](relative/workflow.md#workflow)\n[absolute](absolute/workflow.md#workflow)\n[dot absolute](dot-absolute/workflow.md#workflow)\n")
+	if _, err := Workflow(root); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestClassifySkillEntryRejectsSymlinkOnEveryPlatform(t *testing.T) {
 	if _, err := classifySkillEntry("linked", fs.ModeSymlink, false); err == nil {
 		t.Fatal("accepted symlink skill entry")
@@ -398,17 +474,14 @@ func TestWalkNodeTextPropagatesVisitorError(t *testing.T) {
 	}
 }
 
-func TestResolveInsideRootRejectsSymlinkEscape(t *testing.T) {
-	root := t.TempDir()
-	outside := filepath.Join(filepath.Dir(root), "outside.md")
-	_, err := resolveInsideRootWith(root, "linked.md", func(path string) (string, error) {
-		if path != filepath.Join(root, "linked.md") {
-			t.Fatalf("resolved wrong input: %s", path)
-		}
-		return outside, nil
-	})
-	if err == nil {
-		t.Fatal("accepted evaluated link outside the repository")
+func TestWorkflowRejectsLinkCycles(t *testing.T) {
+	root := writeWorkflowFixture(t)
+	if err := os.Symlink("loop", filepath.Join(root, "loop")); err != nil {
+		t.Skipf("symlink fixture unavailable: %v", err)
+	}
+	writeTestFile(t, root, "README.md", "# Root\n[loop](loop)\n")
+	if _, err := Workflow(root); err == nil || !strings.Contains(err.Error(), "symbolic link limit") {
+		t.Fatalf("want bounded symlink resolution, got %v", err)
 	}
 }
 

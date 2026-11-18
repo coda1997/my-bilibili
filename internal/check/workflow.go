@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -14,8 +15,11 @@ import (
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
+	extensionast "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 	"gopkg.in/yaml.v3"
 )
 
@@ -34,19 +38,31 @@ var workflowFixedFiles = []string{
 }
 
 var (
-	workflowMarkdownParser = goldmark.DefaultParser()
-	bareRouteToken         = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
-	windowsDrivePath       = regexp.MustCompile(`^[A-Za-z]:[\\/]`)
+	unusedFootnotesKey     = parser.NewContextKey()
+	workflowMarkdownParser = goldmark.New(
+		goldmark.WithExtensions(extension.Footnote),
+		goldmark.WithParserOptions(parser.WithASTTransformers(
+			util.Prioritized(collectUnusedFootnotes{}, 998),
+		)),
+	).Parser()
+	bareRouteToken   = regexp.MustCompile(`^[a-z][a-z0-9-]*$`)
+	windowsDrivePath = regexp.MustCompile(`^[A-Za-z]:[\\/]`)
 )
 
 type markdownDocument struct {
-	source     []byte
-	root       ast.Node
-	references []parser.Reference
+	source          []byte
+	root            ast.Node
+	references      []parser.Reference
+	unusedFootnotes []*extensionast.Footnote
+}
+
+type workflowPaths struct {
+	root       *os.Root
+	sourceRoot string
 }
 
 type workflowLinkContext struct {
-	root        string
+	paths       workflowPaths
 	documents   map[string]markdownDocument
 	anchors     map[string]map[string]bool
 	resolutions map[string]pathResolution
@@ -58,21 +74,27 @@ type pathResolution struct {
 }
 
 func Workflow(root string) (int, error) {
-	root, err := filepath.Abs(root)
+	absolute, err := filepath.Abs(root)
 	if err != nil {
 		return 0, err
 	}
-	root, err = filepath.EvalSymlinks(root)
+	resolved, err := filepath.EvalSymlinks(absolute)
 	if err != nil {
 		return 0, err
 	}
-	files, skills, err := workflowInventory(root)
+	rootFS, err := os.OpenRoot(resolved)
+	if err != nil {
+		return 0, err
+	}
+	defer rootFS.Close()
+	paths := workflowPaths{root: rootFS, sourceRoot: absolute}
+	files, skills, err := workflowInventory(paths)
 	if err != nil {
 		return 0, err
 	}
 	documents := make(map[string]markdownDocument, len(files))
 	for _, file := range files {
-		data, err := readWorkflowFile(root, file)
+		data, err := paths.readFile(file)
 		if err != nil {
 			return 0, err
 		}
@@ -86,7 +108,7 @@ func Workflow(root string) (int, error) {
 		return 0, err
 	}
 	linkContext := &workflowLinkContext{
-		root:        root,
+		paths:       paths,
 		documents:   documents,
 		anchors:     make(map[string]map[string]bool),
 		resolutions: make(map[string]pathResolution),
@@ -99,7 +121,7 @@ func Workflow(root string) (int, error) {
 	return len(files), nil
 }
 
-func workflowInventory(root string) ([]string, map[string]string, error) {
+func workflowInventory(paths workflowPaths) ([]string, map[string]string, error) {
 	seen := make(map[string]bool)
 	var files []string
 	add := func(relative string) {
@@ -113,7 +135,7 @@ func workflowInventory(root string) ([]string, map[string]string, error) {
 		add(relative)
 	}
 
-	entries, err := readWorkflowDir(filepath.Join(root, ".agents", "skills"), ".agents/skills")
+	entries, err := paths.readDir(".agents/skills")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -131,7 +153,7 @@ func workflowInventory(root string) ([]string, map[string]string, error) {
 			continue
 		}
 		relative := filepath.ToSlash(filepath.Join(".agents/skills", name, "SKILL.md"))
-		data, err := readWorkflowFile(root, relative)
+		data, err := paths.readFile(relative)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -155,7 +177,7 @@ func workflowInventory(root string) ([]string, map[string]string, error) {
 		return nil, nil, errors.New(".agents/skills: no skill directories found")
 	}
 
-	templates, err := readWorkflowDir(filepath.Join(root, "docs", "templates"), "docs/templates")
+	templates, err := paths.readDir("docs/templates")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -176,45 +198,31 @@ func workflowInventory(root string) ([]string, map[string]string, error) {
 	return files, skills, nil
 }
 
-func readWorkflowDir(path, relative string) ([]os.DirEntry, error) {
-	info, err := os.Lstat(path)
+func (paths workflowPaths) readDir(relative string) ([]fs.DirEntry, error) {
+	resolved, err := paths.resolve(relative, false)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", relative, err)
 	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
-		return nil, fmt.Errorf("%s: workflow root must be a directory, not a symlink", relative)
-	}
-	entries, err := os.ReadDir(path)
+	entries, err := fs.ReadDir(paths.root.FS(), resolved)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", relative, err)
 	}
 	return entries, nil
 }
 
-func readWorkflowFile(root, relative string) ([]byte, error) {
-	if !fs.ValidPath(relative) {
-		return nil, fmt.Errorf("%s: invalid repository path", relative)
+func (paths workflowPaths) readFile(relative string) ([]byte, error) {
+	resolved, err := paths.resolve(relative, false)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", relative, err)
 	}
-	current := root
-	parts := strings.Split(relative, "/")
-	for i, part := range parts {
-		current = filepath.Join(current, part)
-		info, err := os.Lstat(current)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", relative, err)
-		}
-		prefix := filepath.ToSlash(strings.Join(parts[:i+1], "/"))
-		if info.Mode()&os.ModeSymlink != 0 {
-			return nil, fmt.Errorf("%s: symlink is not allowed in workflow inputs", prefix)
-		}
-		if i < len(parts)-1 && !info.IsDir() {
-			return nil, fmt.Errorf("%s: workflow parent is not a directory", prefix)
-		}
-		if i == len(parts)-1 && !info.Mode().IsRegular() {
-			return nil, fmt.Errorf("%s: workflow input is not a regular file", relative)
-		}
+	info, err := paths.root.Lstat(resolved)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", relative, err)
 	}
-	data, err := os.ReadFile(current)
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s: workflow input is not a regular file", relative)
+	}
+	data, err := paths.root.ReadFile(resolved)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", relative, err)
 	}
@@ -253,13 +261,28 @@ func skillFrontmatter(data []byte) (string, string, error) {
 	return metadata.Name, metadata.Description, nil
 }
 
+type collectUnusedFootnotes struct{}
+
+func (collectUnusedFootnotes) Transform(document *ast.Document, _ text.Reader, context parser.Context) {
+	// The footnote renderer's transform removes these definitions from the AST.
+	var unused []*extensionast.Footnote
+	_ = ast.Walk(document, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
+		if note, ok := node.(*extensionast.Footnote); entering && ok && note.Index < 0 {
+			unused = append(unused, note)
+		}
+		return ast.WalkContinue, nil
+	})
+	context.Set(unusedFootnotesKey, unused)
+}
+
 func parseMarkdownDocument(source []byte) markdownDocument {
 	context := parser.NewContext()
 	root := workflowMarkdownParser.Parse(text.NewReader(source), parser.WithContext(context))
 	return markdownDocument{
-		source:     source,
-		root:       root,
-		references: context.References(),
+		source:          source,
+		root:            root,
+		references:      context.References(),
+		unusedFootnotes: context.Get(unusedFootnotesKey).([]*extensionast.Footnote),
 	}
 }
 
@@ -295,20 +318,31 @@ func validateSkillRoutes(document markdownDocument, skills map[string]string) er
 			if !ok || !insideListItem(link) {
 				return ast.WalkContinue, nil
 			}
-			name, isRoute, err := routeLinkName(link, document.source)
+			name, named, err := routeLinkName(link, document.source)
 			if err != nil {
 				return ast.WalkStop, err
 			}
-			if !isRoute {
+			target, err := parseLocalMarkdownTarget("AGENTS.md", string(link.Destination))
+			if err != nil {
+				return ast.WalkStop, err
+			}
+			var targetPath string
+			if target != nil {
+				targetPath = markdownTargetPath("AGENTS.md", target.Path)
+			}
+			if !named {
+				parts := strings.Split(targetPath, "/")
+				if len(parts) == 4 && parts[0] == ".agents" && parts[1] == "skills" && parts[3] == "SKILL.md" {
+					return ast.WalkStop, fmt.Errorf("AGENTS.md: skill entrypoint %q must have a code label matching the skill name", targetPath)
+				}
 				return ast.WalkContinue, nil
 			}
 			relative, exists := skills[name]
 			if !exists {
 				return ast.WalkStop, fmt.Errorf("AGENTS.md: routed skill %q has no .agents/skills/%s/SKILL.md", name, name)
 			}
-			wantTarget := ".agents/skills/" + name + "/SKILL.md"
-			if string(link.Destination) != wantTarget {
-				return ast.WalkStop, fmt.Errorf("AGENTS.md: routed skill %q must link to %s", name, wantTarget)
+			if target == nil || targetPath != relative || target.ForceQuery || target.RawQuery != "" || target.Fragment != "" {
+				return ast.WalkStop, fmt.Errorf("AGENTS.md: routed skill %q must link to %s", name, relative)
 			}
 			counts[name]++
 			if counts[name] > 1 {
@@ -334,14 +368,11 @@ func validateSkillRoutes(document markdownDocument, skills map[string]string) er
 func validateMarkdownLinks(context *workflowLinkContext, relative string, document markdownDocument) error {
 	for _, reference := range document.references {
 		label := string(reference.Label())
-		if strings.HasPrefix(label, "^") {
-			continue
-		}
 		if err := validateMarkdownTarget(context, relative, label, string(reference.Destination())); err != nil {
 			return err
 		}
 	}
-	return ast.Walk(document.root, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
+	validate := func(node ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
 		}
@@ -356,36 +387,58 @@ func validateMarkdownLinks(context *workflowLinkContext, relative string, docume
 			}
 		}
 		return ast.WalkContinue, nil
-	})
+	}
+	for _, definition := range document.unusedFootnotes {
+		if err := ast.Walk(definition, validate); err != nil {
+			return err
+		}
+	}
+	return ast.Walk(document.root, validate)
+}
+
+func parseLocalMarkdownTarget(relative, target string) (*url.URL, error) {
+	if isWindowsLocalPath(target) {
+		return nil, fmt.Errorf("%s: link %q is a Windows local absolute path outside the repository", relative, target)
+	}
+	normalized := string(util.URLEscape([]byte(target), true))
+	if isWindowsLocalPath(normalized) {
+		return nil, fmt.Errorf("%s: link %q is a Windows local absolute path outside the repository", relative, target)
+	}
+	parsed, err := url.Parse(normalized)
+	if err != nil {
+		return nil, fmt.Errorf("%s: invalid Markdown link %q: %w", relative, target, err)
+	}
+	if parsed.Scheme != "" || parsed.Host != "" || strings.HasPrefix(normalized, "//") {
+		return nil, nil
+	}
+	if filepath.IsAbs(filepath.FromSlash(parsed.Path)) {
+		return nil, fmt.Errorf("%s: absolute repository link %q is not allowed", relative, target)
+	}
+	return parsed, nil
+}
+
+func markdownTargetPath(relative, destination string) string {
+	if destination == "" {
+		return relative
+	}
+	return filepath.ToSlash(filepath.Join(filepath.Dir(filepath.FromSlash(relative)), filepath.FromSlash(destination)))
 }
 
 func validateMarkdownTarget(context *workflowLinkContext, relative, label, target string) error {
-	if isWindowsLocalPath(target) {
-		return fmt.Errorf("%s: link %q is a Windows local absolute path outside the repository", relative, target)
+	parsed, err := parseLocalMarkdownTarget(relative, target)
+	if err != nil || parsed == nil {
+		return err
 	}
-	parsed, err := url.Parse(target)
-	if err != nil {
-		return fmt.Errorf("%s: invalid Markdown link %q: %w", relative, target, err)
-	}
-	if parsed.Scheme != "" || parsed.Host != "" || strings.HasPrefix(target, "//") {
-		return nil
-	}
-	if filepath.IsAbs(filepath.FromSlash(parsed.Path)) {
-		return fmt.Errorf("%s: absolute repository link %q is not allowed", relative, target)
-	}
-	targetPath := relative
-	if parsed.Path != "" {
-		targetPath = filepath.ToSlash(filepath.Join(filepath.Dir(filepath.FromSlash(relative)), filepath.FromSlash(parsed.Path)))
-	}
+	targetPath := markdownTargetPath(relative, parsed.Path)
 	resolution, ok := context.resolutions[targetPath]
 	if !ok {
-		resolution.path, resolution.err = resolveInsideRoot(context.root, targetPath)
+		resolution.path, resolution.err = context.paths.resolve(targetPath, true)
 		context.resolutions[targetPath] = resolution
 	}
 	if resolution.err != nil {
-		return fmt.Errorf("%s: %w", relative, resolution.err)
+		return fmt.Errorf("%s: link %q: %w", relative, target, resolution.err)
 	}
-	info, err := os.Stat(resolution.path)
+	info, err := context.paths.root.Stat(resolution.path)
 	if err != nil {
 		return fmt.Errorf("%s: reference %q link %q does not resolve: %w", relative, label, target, err)
 	}
@@ -395,7 +448,7 @@ func validateMarkdownTarget(context *workflowLinkContext, relative, label, targe
 	if info.IsDir() || !strings.EqualFold(filepath.Ext(resolution.path), ".md") {
 		return fmt.Errorf("%s: link %q has a fragment but target is not Markdown", relative, target)
 	}
-	anchors, err := context.markdownAnchors(targetPath, resolution.path)
+	anchors, err := context.markdownAnchors(resolution.path)
 	if err != nil {
 		return fmt.Errorf("%s: read fragment target %q: %w", relative, target, err)
 	}
@@ -406,18 +459,18 @@ func validateMarkdownTarget(context *workflowLinkContext, relative, label, targe
 	return nil
 }
 
-func (context *workflowLinkContext) markdownAnchors(relative, resolved string) (map[string]bool, error) {
+func (context *workflowLinkContext) markdownAnchors(resolved string) (map[string]bool, error) {
 	if anchors, ok := context.anchors[resolved]; ok {
 		return anchors, nil
 	}
-	document, ok := context.documents[relative]
+	document, ok := context.documents[resolved]
 	if !ok {
-		data, err := os.ReadFile(resolved)
+		data, err := context.paths.root.ReadFile(resolved)
 		if err != nil {
 			return nil, err
 		}
 		document = parseMarkdownDocument(data)
-		context.documents[relative] = document
+		context.documents[resolved] = document
 	}
 	anchors, err := markdownAnchors(document)
 	if err != nil {
@@ -537,79 +590,117 @@ func isWindowsLocalPath(path string) bool {
 	return windowsDrivePath.MatchString(path) || strings.HasPrefix(path, `\\`)
 }
 
-func resolveInsideRoot(root, relative string) (string, error) {
-	lexical := filepath.Clean(filepath.Join(root, filepath.FromSlash(relative)))
-	within, err := filepath.Rel(root, lexical)
-	if err != nil {
-		return "", err
+func (paths workflowPaths) resolve(relative string, allowSymlinks bool) (string, error) {
+	if relative == ".." || strings.HasPrefix(relative, "../") {
+		return "", errors.New("path resolves outside the repository")
 	}
-	if err := exactCasePath(root, within); err != nil {
-		return "", fmt.Errorf("link %q: %w", relative, err)
+	if !fs.ValidPath(relative) {
+		return "", fmt.Errorf("invalid repository path %q", relative)
 	}
-	return resolveInsideRootWith(root, relative, filepath.EvalSymlinks)
-}
-
-func resolveInsideRootWith(root, relative string, evalSymlinks func(string) (string, error)) (string, error) {
-	lexical := filepath.Clean(filepath.Join(root, filepath.FromSlash(relative)))
-	within, err := filepath.Rel(root, lexical)
-	if err != nil {
-		return "", err
-	}
-	if within == ".." || strings.HasPrefix(within, ".."+string(filepath.Separator)) || filepath.IsAbs(within) {
-		return "", fmt.Errorf("link %q resolves outside the repository", relative)
-	}
-	resolved, err := evalSymlinks(lexical)
-	if err != nil {
-		return "", fmt.Errorf("link %q does not resolve: %w", relative, err)
-	}
-	within, err = filepath.Rel(root, resolved)
-	if err != nil {
-		return "", err
-	}
-	if within == ".." || strings.HasPrefix(within, ".."+string(filepath.Separator)) || filepath.IsAbs(within) {
-		return "", fmt.Errorf("link %q resolves through a symlink outside the repository", relative)
-	}
-	return resolved, nil
-}
-
-func exactCasePath(root, relative string) error {
-	relative = filepath.Clean(relative)
-	if relative == "." {
-		return nil
-	}
-	within, err := filepath.Rel(root, filepath.Join(root, relative))
-	if err != nil {
-		return err
-	}
-	if within == ".." || strings.HasPrefix(within, ".."+string(filepath.Separator)) || filepath.IsAbs(within) {
-		return fmt.Errorf("path %q resolves outside the repository", relative)
-	}
-	current := root
-	parts := strings.Split(within, string(filepath.Separator))
-	for index, part := range parts {
-		entries, err := os.ReadDir(current)
+	const maxSymlinks = 255
+	var directories []string
+	symlinks := 0
+	pending := strings.Split(relative, "/")
+	for len(pending) > 0 {
+		part := pending[0]
+		pending = pending[1:]
+		switch part {
+		case "", ".":
+			continue
+		case "..":
+			if len(directories) == 0 {
+				return "", errors.New("path resolves through a symlink outside the repository")
+			}
+			directories = directories[:len(directories)-1]
+			continue
+		}
+		parent := path.Join(".", strings.Join(directories, "/"))
+		name := path.Join(parent, part)
+		entry, err := exactWorkflowEntry(paths.root.FS(), parent, part)
 		if err != nil {
-			return err
+			return "", err
 		}
-		found := false
-		caseMismatch := ""
-		for _, entry := range entries {
-			if entry.Name() == part {
-				found = true
-				break
+		if entry.Type()&fs.ModeSymlink == 0 {
+			if len(pending) == 0 {
+				return name, nil
 			}
-			if caseMismatch == "" && strings.EqualFold(entry.Name(), part) {
-				caseMismatch = entry.Name()
+			if !entry.IsDir() {
+				return "", fmt.Errorf("path %q is not a directory", name)
 			}
+			directories = append(directories, part)
+			continue
 		}
-		path := filepath.ToSlash(filepath.Join(parts[:index+1]...))
-		if !found {
-			if caseMismatch != "" {
-				return fmt.Errorf("path %q uses wrong case %q; expected %q", path, part, caseMismatch)
-			}
-			return fmt.Errorf("path %q does not exist", path)
+		if !allowSymlinks {
+			return "", fmt.Errorf("%s: symlink is not allowed in workflow inputs", name)
 		}
-		current = filepath.Join(current, part)
+		symlinks++
+		if symlinks > maxSymlinks {
+			return "", fmt.Errorf("path %q exceeds the symbolic link limit", name)
+		}
+		target, err := paths.root.Readlink(name)
+		if err != nil {
+			return "", err
+		}
+		if filepath.IsAbs(target) {
+			var ok bool
+			target, ok = paths.relativeLinkTarget(target)
+			if !ok {
+				return "", fmt.Errorf("path %q resolves through a symlink outside the repository", name)
+			}
+			directories = directories[:0]
+		} else if filepath.VolumeName(target) != "" || strings.HasPrefix(filepath.ToSlash(target), "/") {
+			return "", fmt.Errorf("path %q resolves through a symlink outside the repository", name)
+		}
+		pending = append(strings.Split(filepath.ToSlash(target), "/"), pending...)
 	}
-	return nil
+	return path.Join(".", strings.Join(directories, "/")), nil
+}
+
+func (paths workflowPaths) relativeLinkTarget(absolute string) (string, bool) {
+	volume := filepath.VolumeName(absolute)
+	target := strings.Split(filepath.ToSlash(absolute[len(volume):]), "/")
+	// Match the known root without cleaning any unresolved suffix components.
+roots:
+	for _, root := range []string{paths.root.Name(), paths.sourceRoot} {
+		rootVolume := filepath.VolumeName(root)
+		if !strings.EqualFold(volume, rootVolume) {
+			continue
+		}
+		remaining := target
+		for _, part := range strings.Split(filepath.ToSlash(root[len(rootVolume):]), "/") {
+			if part == "" {
+				continue
+			}
+			for len(remaining) > 0 && (remaining[0] == "" || remaining[0] == ".") {
+				remaining = remaining[1:]
+			}
+			if len(remaining) == 0 || (remaining[0] != part && (filepath.Separator != '\\' || !strings.EqualFold(remaining[0], part))) {
+				continue roots
+			}
+			remaining = remaining[1:]
+		}
+		return strings.Join(remaining, "/"), true
+	}
+	return "", false
+}
+
+func exactWorkflowEntry(root fs.FS, parent, part string) (fs.DirEntry, error) {
+	entries, err := fs.ReadDir(root, parent)
+	if err != nil {
+		return nil, err
+	}
+	caseMismatch := ""
+	for _, entry := range entries {
+		if entry.Name() == part {
+			return entry, nil
+		}
+		if caseMismatch == "" && strings.EqualFold(entry.Name(), part) {
+			caseMismatch = entry.Name()
+		}
+	}
+	name := path.Join(parent, part)
+	if caseMismatch != "" {
+		return nil, fmt.Errorf("path %q uses wrong case %q; expected %q", name, part, caseMismatch)
+	}
+	return nil, fmt.Errorf("path %q does not exist", name)
 }
