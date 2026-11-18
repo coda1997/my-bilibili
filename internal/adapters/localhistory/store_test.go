@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"my-bilibili/internal/catalog"
 	"my-bilibili/internal/history"
 	"my-bilibili/internal/playback"
 )
@@ -269,6 +270,65 @@ func pumpHistory(t *testing.T, manager *history.Manager, predicate func(history.
 		time.Sleep(time.Millisecond)
 	}
 	t.Fatalf("manager did not settle: %+v", manager.State())
+}
+
+func TestLongCatalogTitlesSurviveHistoryRestart(t *testing.T) {
+	for _, field := range []string{"video", "part"} {
+		t.Run(field, func(t *testing.T) {
+			record := original("123")
+			// A rune boundary at byte 255 would leave only leading whitespace.
+			visible := "片名"
+			want := visible
+			if field == "part" {
+				// The remaining text can still exceed the history limit after padding is removed.
+				visible = strings.Repeat("片", 85) + "ab"
+				want = strings.Repeat("片", 85) + "a"
+			}
+			padded := strings.Repeat("　", 85) + visible
+			if field == "video" {
+				record.Title = padded
+			} else {
+				record.PartTitle = padded
+			}
+			video := catalog.Video{ID: record.Ref.Video, Title: record.Title, Creator: "Owner", Parts: []catalog.Part{{ID: record.Ref.Part, Title: record.PartTitle, Duration: record.Duration}}}
+			if err := catalog.ValidateVideo(video); err != nil {
+				t.Fatalf("invalid catalog fixture: %v", err)
+			}
+			dir := privateDir(t)
+			m, err := history.New(privateStore(t, dir))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := m.Start(); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				m.RequestClose(true)
+				pumpHistory(t, m, func(s history.State) bool { return s.Phase == history.Done })
+			})
+			pumpHistory(t, m, func(s history.State) bool { return s.Phase == history.Ready })
+			if err := m.Observe(history.Sample{Visit: 1, Record: record, Playback: playback.Paused}); err != nil {
+				t.Fatal(err)
+			}
+			pumpHistory(t, m, func(s history.State) bool { return !s.Busy })
+			if s := m.State(); s.Phase != history.Ready || s.Dirty || s.Error != history.None {
+				t.Fatalf("valid catalog title failed to save: phase=%s error=%s dirty=%t", s.Phase, s.Error, s.Dirty)
+			}
+			m.RequestClose(false)
+			pumpHistory(t, m, func(s history.State) bool { return s.Phase == history.Done })
+			store := privateStore(t, dir)
+			mustAcquire(t, store)
+			rows, err := store.Load()
+			if field == "video" {
+				record.Title = want
+			} else {
+				record.PartTitle = want
+			}
+			if err != nil || len(rows) != 1 || rows[0].Ref != record.Ref || rows[0].Title != record.Title || rows[0].PartTitle != record.PartTitle || rows[0].Position != record.Position {
+				t.Fatalf("saved titles or progress failed to round trip: %+v, %v", rows, err)
+			}
+		})
+	}
 }
 
 func TestIndependentManagersRetryLatestOwnedSnapshot(t *testing.T) {

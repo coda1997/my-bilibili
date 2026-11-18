@@ -21,8 +21,8 @@ func (s *Session) initialSelection() {
 	s.submitTarget(selectionRequest, ResolveRequest{Part: s.selected}, s.options.Autoplay, s.options.StartAt, true)
 }
 
-// SelectQuality replaces only the accepted part. Its live position is sampled
-// when the result is accepted, so slow resolution cannot rewind recent viewing.
+// SelectQuality replaces only the accepted part. On acceptance it carries an
+// unconfirmed seek forward, or takes the latest position if playback has resumed.
 func (s *Session) SelectQuality(id QualityID) error {
 	if err := s.detailReady(); err != nil {
 		return err

@@ -313,10 +313,7 @@ func (s *Session) reopen(intent, newWatch, fromZero bool) error {
 	if s.playback == s.selected {
 		s.selectionError, s.selectionRetry = catalog.None, ""
 	}
-	startAt := s.controller.Snapshot().Position
-	if s.resume.active || s.resume.err != catalog.None {
-		startAt = s.resume.target
-	}
+	startAt := s.replacementPosition()
 	if fromZero {
 		startAt = 0
 	}
@@ -635,7 +632,7 @@ func (s *Session) accept(result sourceResult) {
 		return
 	}
 	if result.request.purpose == qualityRequest {
-		attempt.startAt = s.controller.Snapshot().Position
+		attempt.startAt = s.replacementPosition()
 	}
 	before := s.controller.Snapshot().Generation
 	err = s.open(result.request.part, result.resolution.Input, result.resolution.ExpiresAt, attempt.intent, attempt.startAt, attempt.newWatch)

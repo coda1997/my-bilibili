@@ -37,7 +37,7 @@ Exit criteria are in [stage zero](docs/stage-zero.md).
 
 ## Next actions
 
-1. Owner: decide on the [scoped repair proposal](reports/0039-p0-real-client.md#proposed-decision). One repair/verification iteration and one independent closure review would cover P0R-CODE-001 (pending seek), P0R-HISTORY-001 (blank truncated title) and P0R-AT-001 (CID regression). The existing allowance is exhausted. No further repair or real launch has started.
+1. The owner authorized one offline repair/verification iteration for P0R-CODE-001, P0R-HISTORY-001 and P0R-AT-001, followed by one targeted closure by the original reviewer. Fixes and discriminating regression tests are present; complete the full, tagged and synthetic native checks, then record the independent disposition. No real account actions.
 2. The normal developer bundle is available on the execution Mac. Portable
    libmpv, signing/notarization, Windows playback and release are separate work.
 
@@ -45,7 +45,6 @@ Exit criteria are in [stage zero](docs/stage-zero.md).
 
 | Action | Prepared | Time | Unblocks | Report back |
 | --- | --- | --- | --- | --- |
-| Decide on the three P0 review findings | [Reproductions and proposed scope](reports/0039-p0-real-client.md#three-open-findings) | 2 min | Scoped offline corrections and independent closure; no new login needed | “修这三项，追加一轮修复验证和一次定向复核” |
 | Authorize a PR for `codex/p0-login-foundation` when ready | Rebased branch and scoped evidence in the login handoff | 2 min | PR review and candidate CI | “Open the login PR” |
 
 Done 2026-11-18: the owner unlocked the execution Mac and later authorized
@@ -79,7 +78,7 @@ Run `20261118T122807Z-2217126d5dfb` holds the supplement, independent artifact a
 Its closed predecessor `20261118T120915Z-30716ecf14b2` holds the final repair,
 full/tagged race evidence and first pair summary. Earlier records preserve
 slider, notice, popup, fullscreen, checked-tab and resize/search failures.
-P0R-010 repairs 6/6, formal review 3/3 (global 20), remote issues 0/5. The final technical decision is `request changes`; continuation needs an owner decision. No current-candidate CI run or release.
+The preceding plan used repairs 6/6 and reviews 3/3 (global 20). Its request for changes led to one owner-authorized additional repair/verification and one closure, cumulative limits 7 and 4 (global 21). Current offline run: 20261118T125821Z-84ff4504ca07. Remote issues 0/5. No current-candidate CI run or release.
 
 Developer ZIP: `.agent/p0-real-checked-final/my-bilibili-macOS-arm64-dev-250c5d7.zip`.
 Its normal executable matches the tested one. The installed development libmpv

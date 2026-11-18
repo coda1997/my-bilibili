@@ -15,6 +15,15 @@ type resumeState struct {
 	err                                  catalog.Code
 }
 
+// Until a seek is confirmed, the engine position does not represent the
+// saved progress that a same-part replacement must carry forward.
+func (s *Session) replacementPosition() time.Duration {
+	if s.resume.active || s.resume.err != catalog.None {
+		return s.resume.target
+	}
+	return s.controller.Snapshot().Position
+}
+
 func (s *Session) resumeFailed(code catalog.Code) {
 	s.resume.active, s.resume.err = false, code
 	s.intent, s.initializing = false, false

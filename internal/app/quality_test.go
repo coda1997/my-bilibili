@@ -33,6 +33,45 @@ func completeQuality(t *testing.T, h *harness, call *sourceCall, id QualityID, r
 	h.s.Tick()
 }
 
+func TestQualityPreservesUnconfirmedHistorySeek(t *testing.T) {
+	const target = 12 * time.Second
+	for _, when := range []string{"before-ready", "seek-in-flight"} {
+		t.Run(when, func(t *testing.T) {
+			h, source := controlledHarness(t, false)
+			h.s.options = Options{StartAt: target, Autoplay: true}
+			completeQuality(t, h, initialResolve(t, h, source), "low", false)
+			old := h.engine()
+			old.deferCommands = true
+			if when == "seek-in-flight" {
+				h.tick(playback.Ready)
+			}
+			if !h.s.State().Resuming || h.s.State().Playback.Position != 0 {
+				t.Fatal("initial history seek already settled")
+			}
+			requireError(t, h.s.SelectQuality("high"), nil)
+			replacement := source.next(t, "p1")
+			if when == "seek-in-flight" {
+				requireError(t, h.s.Pause(), nil)
+			}
+			visit := h.s.State().WatchSequence
+			completeQuality(t, h, replacement, "high", false)
+			current := h.engine()
+			h.tick(playback.Ready)
+			if old.closed != 1 || h.s.State().WatchSequence != visit || current.snapshot.Position != target || countKind(current, playback.Seek) != 1 || countKind(current, playback.Play) != 0 {
+				t.Fatalf("replacement before confirmation: position=%v seek=%d play=%d old closed=%d", current.snapshot.Position, countKind(current, playback.Seek), countKind(current, playback.Play), old.closed)
+			}
+			h.tick(playback.Paused)
+			wantPlay := 1
+			if when == "seek-in-flight" {
+				wantPlay = 0
+			}
+			if h.s.State().Resuming || h.s.State().PlaybackQuality != "high" || countKind(current, playback.Seek) != 1 || countKind(current, playback.Play) != wantPlay {
+				t.Fatal("replacement lost latest playback intent after confirming history seek")
+			}
+		})
+	}
+}
+
 func TestQualityCapturesLatestPositionAndTransportIntent(t *testing.T) {
 	for _, playing := range []bool{true, false} {
 		h, source := qualityHarness(t, false)

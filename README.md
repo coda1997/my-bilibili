@@ -31,9 +31,8 @@ On the development Mac, unzip the verified developer bundle and open
 saved session it restores it automatically; otherwise sign in from the account
 pane. Use **发现** to search or open a video and **历史** to continue watching.
 History lives on this Mac; searches and playback do not post anything to Bilibili.
-For this candidate, wait for the saved position to resume and playback to
-advance before changing quality. Switching while the first seek is still
-pending can start playback from the beginning.
+If you change quality while a saved position is being restored, the new
+quality resumes from that same position.
 
 The bundle needs the existing development libmpv installation described in
 [the runtime boundary](internal/previewbundle/bundle.go). It is not a portable

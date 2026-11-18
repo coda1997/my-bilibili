@@ -161,7 +161,13 @@ func truncateTitle(text string) string {
 	for !utf8.RuneStart(text[end]) {
 		end--
 	}
-	return text[:end]
+	prefix := text[:end]
+	if strings.TrimSpace(prefix) == "" {
+		// The byte cap fell before the first visible rune. Keep the title instead
+		// of saving a whitespace-only prefix; apply the same cap to the remainder.
+		return truncateTitle(strings.TrimSpace(text[end:]))
+	}
+	return prefix
 }
 
 func (m *Manager) changed() {

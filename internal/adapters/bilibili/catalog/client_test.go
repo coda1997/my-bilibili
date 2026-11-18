@@ -177,6 +177,9 @@ func TestDetailCriticalFieldsIdentityOrderAndContentClass(t *testing.T) {
 		{"desc-limit", func(d map[string]any) { d["desc"] = strings.Repeat("x", 65537) }, domain.InvalidResponse},
 		{"parts-empty", func(d map[string]any) { d["pages"] = []any{} }, domain.InvalidResponse},
 		{"cid", func(d map[string]any) { d["pages"].([]any)[0].(map[string]any)["cid"] = 0 }, domain.InvalidResponse},
+		// The first-page identity stays valid so it cannot mask the per-part CID check.
+		{"second-cid-zero", func(d map[string]any) { d["pages"].([]any)[1].(map[string]any)["cid"] = 0 }, domain.InvalidResponse},
+		{"second-cid-negative", func(d map[string]any) { d["pages"].([]any)[1].(map[string]any)["cid"] = -1 }, domain.InvalidResponse},
 		{"order", func(d map[string]any) { d["pages"].([]any)[0].(map[string]any)["page"] = 2 }, domain.InvalidResponse},
 		{"duration", func(d map[string]any) { d["pages"].([]any)[0].(map[string]any)["duration"] = 0 }, domain.InvalidResponse},
 		{"duration-limit", func(d map[string]any) { d["pages"].([]any)[0].(map[string]any)["duration"] = 604801 }, domain.InvalidResponse},
