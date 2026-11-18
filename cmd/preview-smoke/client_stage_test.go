@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
+	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -118,6 +121,143 @@ func TestClientWindowIdentityRemainsSeparateFromFixture(t *testing.T) {
 		c.clientMode = !mode
 		if _, err := c.identify(context.Background()); err == nil {
 			t.Fatal("wrong application mode's window accepted")
+		}
+	}
+}
+
+func historyNoticeNode() map[string]any {
+	n := popupNode("history-error")
+	n["label"] = "另一个应用正在使用本地历史记录。"
+	return n
+}
+
+// An acknowledged navigation action does not guarantee a newly rendered tree.
+func TestClientTextStateWaitsForRenderedNotice(t *testing.T) {
+	frames := 0
+	c, trace := popupClient(t, func(request popupRequest) map[string]any {
+		if request.Method != "tree" {
+			t.Error("notice observation issued an action")
+			return popupOK()
+		}
+		frames++
+		if frames == 1 {
+			return popupTree(popupNode("client-history"))
+		}
+		return popupTree(historyNoticeNode())
+	})
+	if err := c.clientTextState(context.Background(), "history-error"); err != nil {
+		t.Fatalf("read the pre-action frame instead of awaiting the history notice: %v", err)
+	}
+	if trace.count("tree", "") < 2 || trace.count("act", "") != 0 {
+		t.Fatal("notice did not wait for a fresh rendered tree without replaying an action")
+	}
+}
+
+func TestClientTextStateRejectsInvalidNotice(t *testing.T) {
+	for _, name := range []string{"empty", "whitespace", "duplicate", "missing-geometry", "malformed-label", "disappeared"} {
+		t.Run(name, func(t *testing.T) {
+			frames := 0
+			c, trace := popupClient(t, func(request popupRequest) map[string]any {
+				frames++
+				n := historyNoticeNode()
+				switch name {
+				case "empty":
+					n["label"] = ""
+				case "whitespace":
+					n["label"] = " \t\n"
+				case "duplicate":
+					return popupTree(n, historyNoticeNode())
+				case "missing-geometry":
+					delete(n["bounds"].(map[string]any), "width")
+				case "malformed-label":
+					n["label"] = map[string]any{"payload": "private sentinel"}
+				case "disappeared":
+					if frames > 1 {
+						return popupTree(popupNode("client-history"))
+					}
+				}
+				return popupTree(n)
+			})
+			err := c.clientTextState(context.Background(), "history-error")
+			if err == nil || strings.Contains(err.Error(), "private sentinel") {
+				t.Fatalf("invalid notice was accepted or its content leaked: %v", err)
+			}
+			expectedReads := 2
+			if name == "duplicate" || name == "missing-geometry" {
+				expectedReads = 1
+			}
+			if trace.count("tree", "") != expectedReads || trace.count("act", "") != 0 {
+				t.Fatal("invalid notice was retried or caused an action")
+			}
+		})
+	}
+}
+
+func TestClientTextStateHonorsCancellationAndParentDeadline(t *testing.T) {
+	for _, canceled := range []bool{false, true} {
+		name := "parent-deadline"
+		if canceled {
+			name = "cancellation"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 80*time.Millisecond)
+			defer cancel()
+			c, trace := popupClient(t, func(request popupRequest) map[string]any {
+				if canceled {
+					cancel()
+				}
+				return popupTree(popupNode("client-history"))
+			})
+			want := context.DeadlineExceeded
+			if canceled {
+				want = context.Canceled
+			}
+			start := time.Now()
+			if err := c.clientTextState(ctx, "history-error"); !errors.Is(err, want) {
+				t.Fatalf("lost parent context failure: %v", err)
+			}
+			if time.Since(start) > 500*time.Millisecond || trace.count("act", "") != 0 {
+				t.Fatal("notice wait escaped its parent budget or replayed an action")
+			}
+		})
+	}
+}
+
+type noticeDeadlineConn struct {
+	net.Conn
+	deadlines []time.Time
+}
+
+func (c *noticeDeadlineConn) SetDeadline(deadline time.Time) error {
+	c.deadlines = append(c.deadlines, deadline)
+	return c.Conn.SetDeadline(deadline)
+}
+
+func TestClientTextStateSharesTwoSecondBudgetWithLabelRead(t *testing.T) {
+	frames := 0
+	c, _ := popupClient(t, func(request popupRequest) map[string]any {
+		frames++
+		if frames == 1 {
+			return popupTree(popupNode("client-history"))
+		}
+		return popupTree(historyNoticeNode())
+	})
+	conn := &noticeDeadlineConn{Conn: c.conn}
+	c.conn = conn
+	start := time.Now()
+	if err := c.clientTextState(context.Background(), "history-error"); err != nil {
+		t.Fatal(err)
+	}
+	if len(conn.deadlines) != 3 {
+		t.Fatal("did not observe prior frame, rendered notice and its label")
+	}
+	budget := conn.deadlines[0].Sub(start)
+	if budget < 1900*time.Millisecond || budget > 2100*time.Millisecond {
+		t.Fatalf("notice does not own its two-second budget: %v", budget)
+	}
+	for _, deadline := range conn.deadlines[1:] {
+		if !deadline.Equal(conn.deadlines[0]) {
+			t.Fatal("readiness or label observation renewed the notice budget")
 		}
 	}
 }

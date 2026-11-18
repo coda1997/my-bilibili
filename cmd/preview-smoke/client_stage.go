@@ -141,6 +141,11 @@ func (c *client) clientPartTwo(ctx context.Context, before clientObserved) (clie
 }
 
 func (c *client) clientTextState(ctx context.Context, key string) error {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if err := c.clientControl(ctx, key); err != nil {
+		return err
+	}
 	nodes, err := c.tree(ctx)
 	if err != nil {
 		return err
