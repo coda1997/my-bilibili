@@ -19,7 +19,7 @@ read reports by default.
 | QR login and Keychain session (P0) | Real scan, Keychain save/readback, service verification and same-binary restart restoration passed on 2026-11-17. Session retained; branch not merged, no PR | [real login and restore](reports/0036-p0-login-restored.md) |
 | Asynchronous detail/media loading | Implemented and independently approved at `371428b`; full race and fresh macOS full/source native suites pass (30 + 25 checks) | [0037](reports/0037-p0-async-source.md) |
 | Native Chinese danmaku | Implemented and independently approved at cebd417; full race, native full/source/danmaku stages (30+25+30 checks) and independent Chinese pixel/timebase verification pass | [0038](reports/0038-p0-native-danmaku.md) |
-| Real Bilibili content and local history/resume | Both real parts, native A/V, a quality change, visible danmaku, local history and restart into each saved part verified on macOS at `250c5d7`. Independent review requested changes: early quality switching, history title persistence and missing CID regression | [P0 evidence](reports/0039-p0-real-client.md), [spec 0027](specs/0027-p0-real-client/spec.md) |
+| Real Bilibili content and local history/resume | Both real parts, native A/V, a quality change, visible danmaku, local history and restart into each saved part verified on macOS at `250c5d7`. Its three review findings were fixed and independently closed at `4443b69` using offline tests and 46 fixture-native checks | [Real-account evidence](reports/0039-p0-real-client.md), [repair and closure](reports/0040-p0-focused-repair.md), [spec 0027](specs/0027-p0-real-client/spec.md) |
 | libmpv distribution (bundling, licence, signing) | Not designed; a development library path is hardcoded | — |
 | Windows | P2, not tested | [ADR 0005](docs/adr/0005-platform-priority.md) |
 
@@ -31,13 +31,13 @@ read reports by default.
 | M1 macOS playback feasibility | Accepted 2026-11-13 |
 | M2 one complete development loop | Merged (PR #9). Owner functional feedback recorded; formal milestone acceptance not recorded |
 | M3 one issue-to-PR loop | Accepted 2026-11-17 |
-| P0 client | Real playback and both restarts verified; three open findings in the completed independent review. P0 has not been accepted |
+| P0 client | Real playback/restores on the prior revision; all three findings independently closed on the repaired revision. No open finding in the authorized scope. Owner milestone acceptance is not recorded |
 
 Exit criteria are in [stage zero](docs/stage-zero.md).
 
 ## Next actions
 
-1. The owner authorized one offline repair/verification iteration for P0R-CODE-001, P0R-HISTORY-001 and P0R-AT-001, followed by one targeted closure by the original reviewer. Fixes and discriminating regression tests are present; complete the full, tagged and synthetic native checks, then record the independent disposition. No real account actions.
+1. No further engineering or account action is pending for the three findings. The [corrected developer build and disposition](reports/0040-p0-focused-repair.md) are ready for owner consideration. Any live check of the corrected revision needs a separate bounded plan; remote actions were not authorized.
 2. The normal developer bundle is available on the execution Mac. Portable
    libmpv, signing/notarization, Windows playback and release are separate work.
 
@@ -50,7 +50,7 @@ Exit criteria are in [stage zero](docs/stage-zero.md).
 Done 2026-11-18: the owner unlocked the execution Mac and later authorized
 one new bounded plan for the available second part. The original verification
 and supplement are now fully used; both pairs reused the saved Keychain login.
-The original reviewer closed OBS-002/003/004 at round 3/global 20 and requested changes for the three new findings.
+The original reviewer closed OBS-002/003/004 at round 3/global 20 and requested changes. The owner then authorized one offline response and original-reviewer closure; all three new findings closed at round 4/global 21.
 
 ## Follow-ups
 
@@ -65,7 +65,9 @@ The original reviewer closed OBS-002/003/004 at round 3/global 20 and requested 
 
 ## Verification and availability
 
-Exact runtime candidate: `250c5d71cac58712084bc54d9247c4aeee8548d5`.
+Corrected offline candidate: `4443b69ad2fa1f7daf2feef03b51a0ef68c3732a`. Its full and tagged race gates passed, along with 46 synthetic native client checks. The [repair report](reports/0040-p0-focused-repair.md) lists the controlled regressions and package identity. No real account actions were performed for this revision.
+
+Earlier real-account candidate: `250c5d71cac58712084bc54d9247c4aeee8548d5`.
 The [P0 evidence report](reports/0039-p0-real-client.md) maps the ten acceptance
 criteria to their checks and original files. The full and tagged race gates
 passed. Four Mac native reports contain 30/25/30/46 passing checks. In the
@@ -78,9 +80,8 @@ Run `20261118T122807Z-2217126d5dfb` holds the supplement, independent artifact a
 Its closed predecessor `20261118T120915Z-30716ecf14b2` holds the final repair,
 full/tagged race evidence and first pair summary. Earlier records preserve
 slider, notice, popup, fullscreen, checked-tab and resize/search failures.
-The preceding plan used repairs 6/6 and reviews 3/3 (global 20). Its request for changes led to one owner-authorized additional repair/verification and one closure, cumulative limits 7 and 4 (global 21). Current offline run: 20261118T125821Z-84ff4504ca07. Remote issues 0/5. No current-candidate CI run or release.
+The preceding plan used repairs 6/6 and reviews 3/3 (global 20). Its request for changes led to one owner-authorized additional repair/verification and one closure, cumulative limits 7 and 4 (global 21). Completed offline run: 20261118T125821Z-84ff4504ca07, with the original decision in evidence/original-closure.md; repairs 7/7 and reviews 4/4 used. Remote issues 0/5. No current-candidate CI run or release.
 
-Developer ZIP: `.agent/p0-real-checked-final/my-bilibili-macOS-arm64-dev-250c5d7.zip`.
-Its normal executable matches the tested one. The installed development libmpv
+Corrected developer ZIP: `.agent/p0-three-finding-repair/my-bilibili-macOS-arm64-dev-4443b69.zip`. Its normal executable matches the fresh build; only its fixture-only counterpart was run. The earlier real-tested ZIP remains under `.agent/p0-real-checked-final/`. The installed development libmpv
 is required. Evidence and the binary are local artifacts, not part of a clone.
 No real logout, history deletion, live-content screenshots, push or release.

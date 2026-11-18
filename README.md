@@ -8,8 +8,9 @@ The macOS developer app restores a saved Bilibili account from Keychain. Search
 for an ordinary user-uploaded video or open its BV/av identifier or canonical
 link, choose a part and an available quality, and watch with Chinese danmaku.
 Local history lets you continue the same part after restarting the app. The
-[verification report](reports/0039-p0-real-client.md) distinguishes actual
-service playback from fixture tests and lists the remaining limitations.
+[real playback report](reports/0039-p0-real-client.md) covers the earlier
+account run; the [repair report](reports/0040-p0-focused-repair.md) records
+the offline checks and native fixture results for the corrected build.
 
 ## Start here
 
