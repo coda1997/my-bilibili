@@ -266,3 +266,32 @@ func TestClientNavigationSharesItsTwoSecondBudget(t *testing.T) {
 		}
 	}
 }
+
+// The native shell uses buttons for its four tabs. In its automation tree the
+// active button carries checked; the button on the previous page can still be
+// checked in the first frame after the target action is acknowledged.
+func TestClientNavigationWaitsForCheckedTargetButton(t *testing.T) {
+	for _, key := range []string{"client-catalog", "client-player", "client-history", "client-account"} {
+		t.Run(key, func(t *testing.T) {
+			frames := 0
+			c, trace := popupClient(t, func(r popupRequest) map[string]any {
+				if r.Method == "act" {
+					return popupOK()
+				}
+				frames++
+				if frames < 3 {
+					return popupTree(popupNode(key, "focusable"), popupNode("prior-tab", "focusable", "checked"))
+				}
+				return popupTree(popupNode(key, "focusable", "checked"), popupNode("prior-tab", "focusable"))
+			})
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+			if err := c.clientAction(ctx, key); err != nil {
+				t.Fatalf("checked target button was not recognized: %v", err)
+			}
+			if frames != 3 || trace.count("act", key) != 1 {
+				t.Fatalf("frames=%d tab presses=%d; want three frames and one press", frames, trace.count("act", key))
+			}
+		})
+	}
+}

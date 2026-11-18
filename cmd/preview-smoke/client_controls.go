@@ -105,8 +105,10 @@ func (c *client) clientTab(ctx context.Context, key string) error {
 		if err != nil {
 			return err
 		}
+		// These four navigation controls are native buttons. Their rendered
+		// automation nodes use checked to identify the active page.
 		for _, state := range n.States {
-			if state == "selected" {
+			if state == "checked" || state == "selected" {
 				return nil
 			}
 		}
