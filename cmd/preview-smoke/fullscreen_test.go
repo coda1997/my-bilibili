@@ -173,22 +173,21 @@ func (f *fullscreenFixture) counts() (int, int, bool) {
 }
 
 func TestFullscreenCyclesWaitForRestoredExitGeometry(t *testing.T) {
-	f := newFullscreenFixture(t, "delayed-exit")
-	c, trace := popupClient(t, f.reply)
-	// Each transition owns its production deadline; a whole-cycle test limit
-	// must not expire while a valid capture is still being processed.
-	ctx := t.Context()
-	r := &report{}
-	if _, err := c.fullscreenCycles(ctx, t.TempDir(), r, f.state); err != nil {
-		t.Fatal(err)
-	}
-	actions, captures, premature := f.counts()
-	if premature {
-		t.Fatal("next entry sent before native content bounds restored")
-	}
-	if actions != 6 || captures != 3 || trace.count("input", "") != 1 || trace.count("act", "fullscreen-toggle") != 5 || len(r.Checks) != 3 {
-		t.Fatalf("three cycles/final Escape changed: actions=%d captures=%d checks=%d", actions, captures, len(r.Checks))
-	}
+	synctest.Test(t, func(t *testing.T) {
+		f := newFullscreenFixture(t, "delayed-exit")
+		c, trace := popupClient(t, f.reply)
+		r := &report{}
+		if _, err := c.fullscreenCycles(t.Context(), t.TempDir(), r, f.state); err != nil {
+			t.Fatal(err)
+		}
+		actions, captures, premature := f.counts()
+		if premature {
+			t.Fatal("next entry sent before native content bounds restored")
+		}
+		if actions != 6 || captures != 3 || trace.count("input", "") != 1 || trace.count("act", "fullscreen-toggle") != 5 || len(r.Checks) != 3 {
+			t.Fatalf("three cycles/final Escape changed: actions=%d captures=%d checks=%d", actions, captures, len(r.Checks))
+		}
+	})
 }
 func TestFullscreenCyclesRejectContradictoryEntry(t *testing.T) {
 	for _, mode := range []string{"transient-entry", "ordinary-full-layout", "incoherent", "moving-full-geometry", "before-picture", "capture-contradiction"} {
@@ -242,18 +241,17 @@ func TestFullscreenCyclesActionErrorAndCancellation(t *testing.T) {
 }
 
 func TestFullscreenCyclesPollMixedExitFrame(t *testing.T) {
-	f := newFullscreenFixture(t, "exit-render-lag")
-	c, _ := popupClient(t, f.reply)
-	// Each transition owns its production deadline; a whole-cycle test limit
-	// must not expire while a valid capture is still being processed.
-	ctx := t.Context()
-	r := &report{}
-	if _, err := c.fullscreenCycles(ctx, t.TempDir(), r, f.state); err != nil {
-		t.Fatalf("legal cached-false/old-full-layout transient rejected: %v", err)
-	}
-	if len(r.Checks) != 3 {
-		t.Fatal("lost completing sequence")
-	}
+	synctest.Test(t, func(t *testing.T) {
+		f := newFullscreenFixture(t, "exit-render-lag")
+		c, _ := popupClient(t, f.reply)
+		r := &report{}
+		if _, err := c.fullscreenCycles(t.Context(), t.TempDir(), r, f.state); err != nil {
+			t.Fatalf("legal cached-false/old-full-layout transient rejected: %v", err)
+		}
+		if len(r.Checks) != 3 {
+			t.Fatal("lost completing sequence")
+		}
+	})
 }
 func TestFullscreenCyclesRecheckBeforeNextEntry(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
@@ -495,31 +493,35 @@ func TestFullscreenCyclesWaitForNativeCompletion(t *testing.T) {
 		{name: "slow-capture", mode: "callback-exit-delay", captureDelay: 900 * time.Millisecond},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			f := newFullscreenFixture(t, test.mode)
-			f.captureDelay = test.captureDelay
-			c, _ := popupClient(t, f.reply)
-			r := &report{}
-			_, err := c.fullscreenCycles(t.Context(), t.TempDir(), r, f.state)
-			actions, captures, premature := f.counts()
-			if premature {
-				t.Fatal("sent next transition before native completion despite matching geometry and rendered state")
-			}
-			if err != nil || actions != 6 || captures != 3 || len(r.Checks) != 3 {
-				t.Fatalf("cycles did not complete: %v actions=%d captures=%d", err, actions, captures)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				f := newFullscreenFixture(t, test.mode)
+				f.captureDelay = test.captureDelay
+				c, _ := popupClient(t, f.reply)
+				r := &report{}
+				_, err := c.fullscreenCycles(t.Context(), t.TempDir(), r, f.state)
+				actions, captures, premature := f.counts()
+				if premature {
+					t.Fatal("sent next transition before native completion despite matching geometry and rendered state")
+				}
+				if err != nil || actions != 6 || captures != 3 || len(r.Checks) != 3 {
+					t.Fatalf("cycles did not complete: %v actions=%d captures=%d", err, actions, captures)
+				}
+			})
 		})
 	}
 }
 func TestFullscreenCyclesMissingNativeCompletionStops(t *testing.T) {
-	f := newFullscreenFixture(t, "callback-never")
-	// Entry must finish before the missing exit callback's deadline starts.
-	// This valid capture plus the entry wait exceeds the former 1.2s parent.
-	f.captureDelay = 900 * time.Millisecond
-	c, _ := popupClient(t, f.reply)
-	r := &report{}
-	_, err := c.fullscreenCycles(t.Context(), t.TempDir(), r, f.state)
-	actions, captures, premature := f.counts()
-	if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "fullscreen cycle 1 exit-correspondence") || premature || actions != 2 || captures != 1 || len(r.Checks) != 0 {
-		t.Fatalf("missing callback accepted or wrong phase expired: %v actions=%d captures=%d premature=%v checks=%d", err, actions, captures, premature, len(r.Checks))
-	}
+	synctest.Test(t, func(t *testing.T) {
+		f := newFullscreenFixture(t, "callback-never")
+		// Entry must finish before the missing exit callback's deadline starts.
+		// This valid capture plus the entry wait exceeds the former 1.2s parent.
+		f.captureDelay = 900 * time.Millisecond
+		c, _ := popupClient(t, f.reply)
+		r := &report{}
+		_, err := c.fullscreenCycles(t.Context(), t.TempDir(), r, f.state)
+		actions, captures, premature := f.counts()
+		if !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "fullscreen cycle 1 exit-correspondence") || premature || actions != 2 || captures != 1 || len(r.Checks) != 0 {
+			t.Fatalf("missing callback accepted or wrong phase expired: %v actions=%d captures=%d premature=%v checks=%d", err, actions, captures, premature, len(r.Checks))
+		}
+	})
 }
