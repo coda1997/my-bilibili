@@ -31,15 +31,15 @@ read reports by default.
 | M1 macOS playback feasibility | Accepted 2026-11-13 |
 | M2 one complete development loop | Merged (PR #9). Owner functional feedback recorded; formal milestone acceptance not recorded |
 | M3 one issue-to-PR loop | Accepted 2026-11-17 |
-| P0 client | Real playback/restores on the prior revision; all three findings independently closed on the repaired revision. No open finding in the authorized scope. Owner milestone acceptance is not recorded |
+| P0 macOS client | **Accepted 2026-11-18** by the owner at `4443b69`. [Acceptance record](reports/0041-p0-acceptance.md) |
 
 Exit criteria are in [stage zero](docs/stage-zero.md).
 
 ## Next actions
 
-1. No further engineering or account action is pending for the three findings. The [corrected developer build and disposition](reports/0040-p0-focused-repair.md) are ready for owner consideration. Any live check of the corrected revision needs a separate bounded plan; remote actions were not authorized.
-2. The normal developer bundle is available on the execution Mac. Portable
-   libmpv, signing/notarization, Windows playback and release are separate work.
+The accepted P0 [developer build](reports/0040-p0-focused-repair.md) is available
+on the execution Mac. No further account check is pending for this milestone.
+Portable libmpv, signing/notarization, Windows playback and release are separate work.
 
 ## Owner action queue
 
