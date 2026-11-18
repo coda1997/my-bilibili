@@ -146,10 +146,6 @@ func TestExclusiveOwnersAliasesStableLockAndFreshLoad(t *testing.T) {
 		t.Fatal("missing file", err)
 	}
 	mustSave(t, a, []history.Record{original("123")})
-	firstData, err := os.Stat(a.dataPath)
-	if err != nil {
-		t.Fatal(err)
-	}
 	alias := filepath.Join(privateDir(t), "alias")
 	if err := os.Symlink(directory, alias); err != nil {
 		t.Fatal(err)
@@ -163,7 +159,29 @@ func TestExclusiveOwnersAliasesStableLockAndFreshLoad(t *testing.T) {
 	}
 	helper(t, directory, "busy")
 	for _, records := range [][]history.Record{{original("456")}, {}} {
+		// Pin the old file so its inode cannot be reused while we compare the replacement.
+		previous, err := os.Open(a.dataPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = previous.Close() })
+		previousInfo, err := previous.Stat()
+		if err != nil {
+			t.Fatal(err)
+		}
+		previousBytes := readBytes(t, a.dataPath)
 		mustSave(t, a, records)
+		currentInfo, err := os.Stat(a.dataPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if os.SameFile(previousInfo, currentInfo) {
+			t.Fatal("save overwrote the open history file in place")
+		}
+		retained, err := io.ReadAll(previous)
+		if err != nil || !bytes.Equal(retained, previousBytes) {
+			t.Fatal("open history reader lost its previous contents", err)
+		}
 		before := readBytes(t, a.dataPath)
 		if _, err := b.Load(); err == nil {
 			t.Fatal("losing owner read history")
@@ -181,10 +199,6 @@ func TestExclusiveOwnersAliasesStableLockAndFreshLoad(t *testing.T) {
 		if err != nil || !os.SameFile(firstLock, currentLock) {
 			t.Fatal("lock inode replaced")
 		}
-	}
-	lastData, err := os.Stat(a.dataPath)
-	if err != nil || os.SameFile(firstData, lastData) {
-		t.Fatal("data was not atomically replaced")
 	}
 	if err := a.Close(); err != nil {
 		t.Fatal(err)
