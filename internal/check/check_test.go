@@ -453,10 +453,16 @@ func TestWorkflowRejectsSymlinkEscapeBeforeCheckingSuffix(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(root, "linked")); err != nil {
 		t.Skipf("symlink fixture unavailable: %v", err)
 	}
-	sep := string(filepath.Separator)
-	target := filepath.Join(root, "linked") + sep + ".." + sep + "README.md"
-	if err := os.Symlink(target, filepath.Join(root, "through")); err != nil {
+	target := filepath.FromSlash("linked/../README.md")
+	if filepath.Separator != '\\' {
+		target = root + string(filepath.Separator) + target
+	}
+	through := filepath.Join(root, "through")
+	if err := os.Symlink(target, through); err != nil {
 		t.Fatal(err)
+	}
+	if stored, err := os.Readlink(through); err != nil || stored != target {
+		t.Fatalf("fixture must preserve the unresolved symlink target: got %q, err=%v", stored, err)
 	}
 	for _, destination := range []string{"linked/outside.md", "through"} {
 		writeTestFile(t, root, "README.md", "# Root\n[outside]("+destination+")\n")

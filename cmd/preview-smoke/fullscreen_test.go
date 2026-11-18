@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"my-bilibili/internal/playback"
@@ -192,23 +193,28 @@ func TestFullscreenCyclesWaitForRestoredExitGeometry(t *testing.T) {
 func TestFullscreenCyclesRejectContradictoryEntry(t *testing.T) {
 	for _, mode := range []string{"transient-entry", "ordinary-full-layout", "incoherent", "moving-full-geometry", "before-picture", "capture-contradiction"} {
 		t.Run(mode, func(t *testing.T) {
-			f := newFullscreenFixture(t, mode)
-			c, _ := popupClient(t, f.reply)
-			ctx, cancel := context.WithTimeout(context.Background(), 900*time.Millisecond)
-			defer cancel()
-			start := time.Now()
-			r := &report{}
-			_, err := c.fullscreenCycles(ctx, t.TempDir(), r, f.state)
-			actions, captures, premature := f.counts()
-			if mode == "before-picture" && captures != 0 {
-				t.Fatal("captured after entry precondition became false")
-			}
-			if premature || actions != 1 {
-				t.Fatalf("reverse action sent from contradictory observation: actions=%d err=%v", actions, err)
-			}
-			if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) > 1600*time.Millisecond || len(r.Checks) != 0 {
-				t.Fatalf("noncompletion ignored shared deadline or recorded PASS: %v", err)
-			}
+			synctest.Test(t, func(t *testing.T) {
+				f := newFullscreenFixture(t, mode)
+				c, _ := popupClient(t, f.reply)
+				ctx, cancel := context.WithTimeout(t.Context(), 900*time.Millisecond)
+				defer cancel()
+				start := time.Now()
+				r := &report{}
+				_, err := c.fullscreenCycles(ctx, t.TempDir(), r, f.state)
+				actions, captures, premature := f.counts()
+				if mode == "before-picture" && captures != 0 {
+					t.Fatal("captured after entry precondition became false")
+				}
+				if premature || actions != 1 {
+					t.Fatalf("reverse action sent from contradictory observation: actions=%d err=%v", actions, err)
+				}
+				if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) > 1600*time.Millisecond || len(r.Checks) != 0 {
+					t.Fatalf("noncompletion ignored shared deadline or recorded PASS: %v", err)
+				}
+				if mode == "capture-contradiction" && (captures != 1 || !strings.Contains(err.Error(), "fullscreen cycle 1 entry-post-capture")) {
+					t.Fatalf("did not reject contradictory post-capture observation: captures=%d err=%v", captures, err)
+				}
+			})
 		})
 	}
 }
@@ -250,15 +256,18 @@ func TestFullscreenCyclesPollMixedExitFrame(t *testing.T) {
 	}
 }
 func TestFullscreenCyclesRecheckBeforeNextEntry(t *testing.T) {
-	f := newFullscreenFixture(t, "before-next-entry")
-	c, _ := popupClient(t, f.reply)
-	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
-	defer cancel()
-	_, err := c.fullscreenCycles(ctx, t.TempDir(), &report{}, f.state)
-	actions, _, premature := f.counts()
-	if premature || actions != 2 || !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("next entry lacked restored ordinary precondition: actions=%d err=%v", actions, err)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		f := newFullscreenFixture(t, "before-next-entry")
+		c, _ := popupClient(t, f.reply)
+		ctx, cancel := context.WithTimeout(t.Context(), 1500*time.Millisecond)
+		defer cancel()
+		r := &report{}
+		_, err := c.fullscreenCycles(ctx, t.TempDir(), r, f.state)
+		actions, captures, premature := f.counts()
+		if premature || actions != 2 || captures != 1 || len(r.Checks) != 1 || !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "fullscreen cycle 2 entry-precondition") {
+			t.Fatalf("next entry lacked restored ordinary precondition: actions=%d captures=%d checks=%d err=%v", actions, captures, len(r.Checks), err)
+		}
+	})
 }
 
 func TestFullscreenCyclesRejectUnavailableGeometry(t *testing.T) {
@@ -342,16 +351,18 @@ func TestFullscreenCyclesRejectAmbiguousNodesAndSessionChange(t *testing.T) {
 }
 
 func TestFullscreenCyclesRecheckBeforeEscape(t *testing.T) {
-	f := newFullscreenFixture(t, "escape-contradiction")
-	c, trace := popupClient(t, f.reply)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	r := &report{}
-	_, err := c.fullscreenCycles(ctx, t.TempDir(), r, f.state)
-	actions, captures, _ := f.counts()
-	if actions != 5 || captures != 3 || trace.count("input", "") != 0 || len(r.Checks) != 2 || !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("Escape sent without post-picture precondition: actions=%d captures=%d err=%v", actions, captures, err)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		f := newFullscreenFixture(t, "escape-contradiction")
+		c, trace := popupClient(t, f.reply)
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		r := &report{}
+		_, err := c.fullscreenCycles(ctx, t.TempDir(), r, f.state)
+		actions, captures, _ := f.counts()
+		if actions != 5 || captures != 3 || trace.count("input", "") != 0 || len(r.Checks) != 2 || !errors.Is(err, context.DeadlineExceeded) || !strings.Contains(err.Error(), "fullscreen cycle 3 entry-post-capture") {
+			t.Fatalf("Escape sent without post-picture precondition: actions=%d captures=%d err=%v", actions, captures, err)
+		}
+	})
 }
 
 func TestFullscreenCyclesPostCaptureErrorAndCancellation(t *testing.T) {
