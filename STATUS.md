@@ -19,7 +19,7 @@ read reports by default.
 | QR login and Keychain session (P0) | Real scan, Keychain save/readback, service verification and same-binary restart restoration passed on 2026-11-17. Session retained; branch not merged, no PR | [real login and restore](reports/0036-p0-login-restored.md) |
 | Asynchronous detail/media loading | Implemented and independently approved at `371428b`; full race and fresh macOS full/source native suites pass (30 + 25 checks) | [0037](reports/0037-p0-async-source.md) |
 | Native Chinese danmaku | Implemented and independently approved at cebd417; full race, native full/source/danmaku stages (30+25+30 checks) and independent Chinese pixel/timebase verification pass | [0038](reports/0038-p0-native-danmaku.md) |
-| Real Bilibili content and local history/resume | P0R-001 through P0R-010 implemented at `48c1c96`; full race and tagged race checks pass. Native full/source/danmaku pass; client verification stopped at history-notice readiness. Real-service loop and final independent review remain pending | [spec 0027](specs/0027-p0-real-client/spec.md), [assignment](specs/0027-p0-real-client/assignment.md) |
+| Real Bilibili content and local history/resume | Implemented at `1082c36`; full and tagged race pass. Native full/source/danmaku pass; client passes history recovery and restart, then stops at a later quality-menu check. Real-service loop and final independent review remain pending | [spec 0027](specs/0027-p0-real-client/spec.md), [assignment](specs/0027-p0-real-client/assignment.md) |
 | libmpv distribution (bundling, licence, signing) | Not designed; a development library path is hardcoded | — |
 | Windows | P2, not tested | [ADR 0005](docs/adr/0005-platform-priority.md) |
 
@@ -31,16 +31,17 @@ read reports by default.
 | M1 macOS playback feasibility | Accepted 2026-11-13 |
 | M2 one complete development loop | Merged (PR #9). Owner functional feedback recorded; formal milestone acceptance not recorded |
 | M3 one issue-to-PR loop | Accepted 2026-11-17 |
-| P0 client | In progress; implementation integrated, verification paused pending one additional scoped repair iteration |
+| P0 client | In progress; implementation integrated, verification paused pending the scoped navigation-readiness extension |
 
 Exit criteria are in [stage zero](docs/stage-zero.md).
 
 ## Next actions
 
-1. Await the owner's pending decision on one additional repair/verification
-   iteration for P0R-OBS-002. The proposed change only waits for the rendered
-   history notice in `cmd/preview-smoke/client_stage.go`, with regression tests;
-   it retains the existing deadline, notice assertion and cleanup requirements.
+1. Await the owner's pending decision on at most two additional scoped repair/
+   verification iterations for P0R-OBS-003. The prepared proposal waits for the
+   target tab's rendered selected state before using remounted controls. Changes
+   are limited to `cmd/preview-smoke/client_controls.go` and corresponding tests.
+   It preserves the native deadline, quality, history and cleanup requirements.
 2. If authorized, start a continuation run with the same frozen spec and
    preserved counters, apply that repair, check the exact committed candidate,
    and complete the required native stages. Do not retry under the closed run.
@@ -62,7 +63,7 @@ P0 verification and confirmed the execution Mac unlocked on 2026-11-17.
 
 | Action | Prepared | Time | Unblocks | Report back |
 | --- | --- | --- | --- | --- |
-| Allow one additional scoped repair/verification iteration for P0R-OBS-002 | Reproduced stale-frame driver defect and unapplied patch; original native failure preserved | 1 min | Client verification, then real-service loop and final review | Answer the pending question: "增加 1 轮，继续完成 P0" or pause |
+| Allow at most two additional scoped navigation-readiness repair/verification iterations for P0R-OBS-003 | Reproduced missing navigation-completion wait and unapplied shared-tab proposal; original native failure preserved | 1 min | Complete client verification, then real-service loop and final review | Answer the pending question: "追加最多 2 轮，继续完成 P0" or pause |
 | Authorize a PR for `codex/p0-login-foundation` when ready | Rebased branch and scoped evidence in the login handoff | 2 min | PR review and candidate CI | "Open the login PR" |
 | Keep the execution Mac unlocked for native verification | Login/restore and 85 current-candidate fixture checks complete; remaining client and live scenarios follow after the scoped continuation | During native checks | Native P0 verification | Report any native authorization prompt or failure |
 
@@ -71,42 +72,56 @@ evidence identity, adopted clauses, owner queue) and local commit authority.
 PR #15 is merged; the owner requested this rebase and previously authorized
 publication of the P0 branch. No P0 PR, merge or release has been performed.
 
+Done 2026-11-18: the owner added one scoped history-notice repair/verification
+iteration. `1082c36` implements it; regression/race checks and actual native
+history-notice/recovery verification pass. That additional iteration is used.
+
 ## Follow-ups
 
 - Import guard covers darwin/arm64 non-test imports only; extend it to the
   other CI targets and test files (review advisory, spec 0024).
 - Add expiry tests for `Toggle` from Ended and reselecting the current part
   (review advisory, spec 0024).
-- LOG-ADV-001: clarify uncertain persistence in the save-failure wording during
-  the next account UI copy adjustment. Nonblocking; retained in the login
-  handoff, with no remote issue for this wording-only advisory.
+- LOG-ADV-001 was addressed by the account-pane integration at `cc039a8`: an
+  unconfirmed save no longer claims no credentials were stored. Disposition
+  closed without another review round or remote issue.
 
 ## Verification checkpoint and blockers
 
-Exact implementation candidate: `48c1c9626ebb4192658e235a7a05967f28099dde`.
+Exact implementation candidate: `1082c365249a2284f3823c0992da3b1ac019ffde`.
 The recorded full race check and relevant e2e-tagged race suites pass. Native
-full/source/danmaku stages pass 30/25/30 checks. The native client stage passes
-31 checks, then fails at `history-in-use` with the expected notice unavailable.
-Cleanup succeeds without force; occupied-history recovery, close-held and
-synthetic history restart remain unverified. The real-service plan is unconsumed.
+full/source/danmaku stages pass 30/25/30 checks. The client stage passes 44
+checks, including in-use history notice/recovery, minimized close, saved
+progress, fresh-process same-part resume and confirmed deletion. P0R-OBS-002's
+native notice gate now passes. All scene processes close with zero owned
+resources and no forced cleanup.
 
-P0R-OBS-002 is an open required-verification gap (R1 class 5). Observed:
-`clientTextState` reads one tree and immediately rejects an absent notice; the
-documented automation tree represents the last rendered frame. A scratch
-regression returning an earlier frame followed by the notice reproduces that
-driver defect. Inferred: this timing defect explains the original native
-failure. The original raw tree was not retained, so native re-verification
-is required to establish that the proposed repair resolves it.
+P0R-OBS-003 is the new required-verification gap (R1 class 5): the final
+history-restart scene times out waiting for quality-1 after switching back
+to the player. Deletion surviving that quality change and a later new visit/
+Clear remain unverified. The real-service plan remains unconsumed.
 
-Run `20261117T152122Z-27437f77126e` closed `needs-human` at event 23. P0R-010
-automatic corrections are 3/3 consumed; no fourth fix or native retry occurred.
-The earlier slider failure count remains 2; this history-notice failure count
-is 1. Formal reviews are 2/3 used, leaving final combined round 3/global 20;
-issue budget remains 0/5. The original reviewer remains available. Do not reset
-these counts or append to the closed run.
+Observed: `clientAction` returns on the automation acknowledgment without
+observing the selected tab. The pinned automation protocol reads the last
+rendered frame; tab changes remount player controls with new identities.
+A scratch queued-action/next-frame regression reproduces the missing wait.
+Inferred: this gap explains the native popup timeout; the original raw trees
+were not retained, so actual re-verification is still required. One shared
+navigation-completion proposal addresses this second observed frame-readiness
+gap (R8), rather than separate per-tab fixes. It has not been applied.
 
-Local-only evidence remains under `.agent/p0-real-final/`: `artifacts.json`,
-`native-client/report.json`, `native-client-failure.md`, the scratch regression
-and the unapplied `history-visibility-proposal.patch`. The complete run and
-worker evidence are also local and not backed up by this status file. No
-candidate CI, final independent approval or full-P0 completion is claimed.
+Original run `20261117T152122Z-27437f77126e` remains closed `needs-human` at
+event 23; authorized continuation `20261118T013405Z-20371a25d352` closed
+`needs-human` at event 7 after the new native failure. P0R-010
+corrections are 4/4 consumed (three original plus one explicitly added).
+Retained failure counts: slider 2, history notice 1, later quality popup 1.
+Formal reviews remain 2/3 used, leaving final combined round 3/global 20;
+issue budget remains 0/5. The original reviewer remains available. Do not
+reset counters or retry the failed native stage without the scoped extension.
+
+Local-only current evidence is in `.agent/p0-real-continued-final/`: exact
+artifacts, native reports, `native-client-failure.md`, scratch diagnostic and
+`navigation-readiness-proposal.patch`. Earlier `.agent/p0-real-final/` evidence
+and closed run records remain unchanged. Logs and worker evidence are not
+backed up by this status file. No candidate CI, final independent approval
+or full-P0 completion is claimed.
