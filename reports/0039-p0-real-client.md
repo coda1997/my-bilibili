@@ -1,0 +1,54 @@
+# P0: a real, resumable Bilibili client on macOS
+
+November 18, 2026. Full-lane [spec 0027](../specs/0027-p0-real-client/spec.md), implementation `250c5d71cac58712084bc54d9247c4aeee8548d5`. Two bounded pairs of normal application launches exercised the restored account. Both pairs completed. The prepared macOS developer bundle is available locally; no remote CI, PR, signing or release was run.
+
+**Decision: request changes.** The original independent reviewer validated the recorded real playback and restart paths. Two reproducible behavior defects and one missing regression keep P0 open. The build below is available for testing; it has not received technical or owner acceptance.
+
+## What was observed
+
+A real search returned 20 videos. The chosen ordinary upload had two parts. In the first pair of launches the app played part 1, replaced its quality using another of three returned choices and displayed danmaku. It saved the position at **2.125 s**. A fresh process restored the same part; the current engine had painted a picture with selected video and audio tracks and its clock was advancing at **2.208 s**.
+
+The original plan had stayed on part 1, so that success did not prove part switching. The owner authorized a separate plan using the identical normal executable and the same public video. Play succeeded on part 1 and again on part 2 with a new native generation. On part 2 there was a visible comment at **11.708 s**. The app saved **11.750 s**, reopened the stored part in a fresh process, and advanced to **11.833 s** with picture and tracks present. All four processes reused the login in Keychain and exited normally with no remaining owners or forced cleanup.
+
+## Evidence for this revision
+
+| Claim / AC | Evidence | Result and limit |
+| --- | --- | --- |
+| Package boundaries, account lifetime, scoped web requests (01–03) | Full repository race check, prior controlled transport/account regressions, normal restore and final request-count receipts | Passed offline gates; actual restore in all four launches. No real sign-out or deletion. The prior [QR login report](0036-p0-login-restored.md) documents the single initial scan. |
+| Search, direct entry, detail and covers (04) | Native client search/Open/cover scenarios; real search/detail receipts | Real search returned 20 items and the video returned two parts. Direct BV/link, pagination/error recovery and cover handling used controlled inputs; actual bounded plans made zero cover requests. AC-03/04 still lack a regression isolating the positive-CID guard. |
+| Media, quality, parts and resume (05–06) | Native full/source/client reports; two pairs of real play/resume receipts | Picture from the accepted engine, A/V tracks and advancing time; alternate quality and alternate part each exercised. Switching quality before a saved seek finishes is still incorrect (P0R-CODE-001). Neither track selection nor these receipts measure physical audibility or calibrated synchronization. |
+| Segmented Chinese danmaku (07) | Native fixture overlay, timing and glyph images; real danmaku stage in each pair | A comment was visible on both real parts; no real media, text, frame or signed URL was saved as evidence. |
+| Local history and safe close (08–09) | Native client isolated history recovery, minimized close, delete/quality/new visit/Clear; both real saved/restarted parts | Deleting a synthetic visit survived a quality change. Restart restored the exact saved part and progress for both real visits. A valid title can still prevent a checkpoint (P0R-HISTORY-001); rapid quality selection is reachable from the normal shell. No real history deletion. |
+| Verification and developer artifact (10) | Full `--race` and relevant e2e-tagged race; four native reports; normal binary and ZIP manifests | Passing native checks: **30 full, 25 source, 30 danmaku, 46 client** (131). The original reviewer verified the binary and withheld AC-10 technical approval for the three findings below. The development runtime is required on the execution Mac. |
+
+The 30-second native fixture exercised segment prefetch and eviction at 5, 18 and 5 seconds. Crossing the six-minute segment boundary was tested in the decoder and loader, not by playing that far on this Mac. The independent reviewer read 中文弹幕测试 on part 1 and 第二分P弹幕 on part 2 and verified that old glyphs did not persist and that the fitted video bounds clipped the text.
+
+Both plans had independent limits of two processes, 240 seconds per process, 24 API calls, two homepage bootstraps, four covers and four media opens. Actual cumulative counts per plan (API / bootstrap / covers / opens): **14 / 1 / 0 / 3** for part 1 and quality; **15 / 1 / 0 / 3** for the supplementary part change. HTTP range requests by the player are outside these counters. Quality was intentionally skipped in the second pair because it was exercised in the first.
+
+## Review and scope
+
+The original architecture reviewer approved the revised spec at round 2 (global 18). P0R-ARCH-001 concerns exclusive history ownership; its contract disposition was closed. P0R-ARCH-002's current-engine picture predicate was an addressed advisory. The same original independent reviewer (`/root/p0_real_review`) completed round 3/3 (global 20) at the exact implementation SHA and requested changes. P0R-OBS-002 (history notices and recovery), P0R-OBS-003 (quality, deletion, new visit and Clear) and P0R-OBS-004 (real alternate part and restart) were independently closed. P0R-OBS-001 and the resize/search timing observation remain reliability notes. No high-severity claim is awaiting a ruling.
+
+The reviewer independently passed the unmodified repository race check and the tagged composition/driver/observation race suites. A separate offline audit verified the bundle, ZIP, all four real receipt streams, 72 strict fixture observations and 36 strict client observations. In an optional broad run with the CID guard removed, an unrelated slider test failed to establish a zero-byte timed-out write. That run did not pass; it is neither a failure of the unmodified race gate nor evidence about CID validation.
+
+The final verifier fix recognizes the actual active navigation button without replaying the click or extending its two-second deadline. Its regression failed on the preceding revision for all four buttons and passed on this one. Earlier history notice, quality-popup, fullscreen and slider failures remain recorded. A prior search timed out during a layout resize; an old frame and a changed control identity were observed. The final native search passed without a search-code change. That layout timing explanation is a hypothesis, not a separately established user-facing defect. Corrections: 6/6; remote issues: 0/5. No unrelated expansion, Windows playback, portable libmpv, installer, signing or publication.
+
+## Three open findings
+
+| Case in the tested revision | Reproduction / observed result | What to verify in a correction |
+| --- | --- | --- |
+| **P0R-CODE-001** · P2, correctness (class 1). Change quality while a saved seek is pending | A reviewer test starts with 12 s saved and changes quality before the engine confirms the seek. The replacement played at 0 s, with one play command and no seek. | Keep the 12 s target through the change, or defer the change until it is safe. Confirm that play waits for the intended seek; normal quality changes must still preserve the current position. |
+| **P0R-HISTORY-001** · P2, correctness (class 1). Persist a valid title with a long whitespace prefix | Both video-title and part-title variants were accepted by catalog validation. Truncating 256 leading spaces plus one visible character produced an all-space history title; a temporary store rejected the checkpoint. Existing data corruption and a real service occurrence were not observed. | Keep a valid, nonblank UTF-8 title within the byte limit; save and reload both variants using an isolated store. |
+| **P0R-AT-001** · P2, untested guard (class 4). Reject an invalid part identifier (CID) | The implementation rejects a nonpositive CID, but its existing test also failed a separate first-part identity check. Removing the positive-CID guard left the affected suites green. The catalog worker reported 58/58 discriminatory checks; the retained outputs show 56/58. A separate compiling control does detect the page-order guard. | Supply a later part with a zero or negative CID and no other mismatch. The test should pass on correct code and fail when the positive-CID guard is removed. |
+
+## Proposed decision
+
+Authorize one bounded repair and verification iteration across these three findings, then one closure review by the original independent reviewer, limited to those changes. Preserve the existing counts. Start with the two failing behavior reproductions and the undetected CID guard removal; commit the equivalent regressions, apply the narrow fixes and run the full and tagged race gates plus affected synthetic native cases on the new revision. Do not count this revision’s real runs as tests of changed code. The proposed iteration needs no QR scan, real account access or additional live launch; any new live verification for milestone acceptance must have a separate, bounded plan. Alternatively keep this build for development and leave P0 open. No implementation or further review has been started.
+
+The local inventory retains the slider/resize observations and a proposal shared with [the earlier masked-guard case](0037-p0-async-source.md): derive future control counts from their actual results, separating compile failures, unexpected passes and intended assertion failures. No automated-check change or remote issue was made.
+
+## Reproduction and availability
+
+The checked normal bundle/ZIP is in `.agent/p0-real-checked-final/`. File: `my-bilibili-macOS-arm64-dev-250c5d7.zip`, SHA-256 `0d74a4e1d893c02abf094f91a59f9bc91071da1df7e712d2505cfbfe03093893`. The local manifest confirms the archived executable is byte-for-byte identical to the one used in all four real launches. The ZIP contains the app and public fixtures; the development libmpv and the user's Keychain/history are not packaged.
+
+Native reports, fixture-only images, artifact hashes and first real pair are in the same local build directory. Run `20261118T120915Z-30716ecf14b2` holds the compiled red/green regression, full/tagged race evidence and first pair summary. Run `20261118T122807Z-2217126d5dfb` holds both supplemental `live-part2-*/{receipts.jsonl,result.json}`, `part2-result.md`, the final assignment, `independent-artifact-audit.json` and the original independent decision at `evidence/final-code-native-review.md`. The latter is a request for changes. These ignored local files are not attachments in a fresh clone. Preserve closed runs; [STATUS](../STATUS.md) names the next action.

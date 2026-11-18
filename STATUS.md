@@ -19,7 +19,7 @@ read reports by default.
 | QR login and Keychain session (P0) | Real scan, Keychain save/readback, service verification and same-binary restart restoration passed on 2026-11-17. Session retained; branch not merged, no PR | [real login and restore](reports/0036-p0-login-restored.md) |
 | Asynchronous detail/media loading | Implemented and independently approved at `371428b`; full race and fresh macOS full/source native suites pass (30 + 25 checks) | [0037](reports/0037-p0-async-source.md) |
 | Native Chinese danmaku | Implemented and independently approved at cebd417; full race, native full/source/danmaku stages (30+25+30 checks) and independent Chinese pixel/timebase verification pass | [0038](reports/0038-p0-native-danmaku.md) |
-| Real Bilibili content and local history/resume | Real restored-login search, playback, quality change, visible danmaku, progress and same-part restart passed on macOS at `250c5d7`. Alternate-part live playback and final independent review remain open | [spec 0027](specs/0027-p0-real-client/spec.md), [assignment](specs/0027-p0-real-client/assignment.md) |
+| Real Bilibili content and local history/resume | Both real parts, native A/V, a quality change, visible danmaku, local history and restart into each saved part verified on macOS at `250c5d7`. Independent review requested changes: early quality switching, history title persistence and missing CID regression | [P0 evidence](reports/0039-p0-real-client.md), [spec 0027](specs/0027-p0-real-client/spec.md) |
 | libmpv distribution (bundling, licence, signing) | Not designed; a development library path is hardcoded | — |
 | Windows | P2, not tested | [ADR 0005](docs/adr/0005-platform-priority.md) |
 
@@ -31,37 +31,31 @@ read reports by default.
 | M1 macOS playback feasibility | Accepted 2026-11-13 |
 | M2 one complete development loop | Merged (PR #9). Owner functional feedback recorded; formal milestone acceptance not recorded |
 | M3 one issue-to-PR loop | Accepted 2026-11-17 |
-| P0 client | Real play and restart/resume verified; supplementary alternate-part evidence and final independent review pending |
+| P0 client | Real playback and both restarts verified; three open findings in the completed independent review. P0 has not been accepted |
 
 Exit criteria are in [stage zero](docs/stage-zero.md).
 
 ## Next actions
 
-1. Both approved real launches passed. The target offered two parts, but the
-   frozen plan selected part 1. Ask the owner for a supplementary pair of
-   launches to exercise the other available part. Fresh public plans have
-   been parsed offline; they keep the same target, binary and Keychain session.
-2. If authorized, verify real part 1 → part 2 with native picture, A/V,
-   danmaku and saved progress, then restart into the saved part. Stop after a
-   failed launch. Leave the consumed original plan unchanged.
-3. Attach the missing evidence and send the packet to the original independent
-   reviewer for final round 3. Complete report 0039, README and architecture
-   after review. Local developer build available now; no push, PR or release.
+1. Owner: decide on the [scoped repair proposal](reports/0039-p0-real-client.md#proposed-decision). One repair/verification iteration and one independent closure review would cover P0R-CODE-001 (pending seek), P0R-HISTORY-001 (blank truncated title) and P0R-AT-001 (CID regression). The existing allowance is exhausted. No further repair or real launch has started.
+2. The normal developer bundle is available on the execution Mac. Portable
+   libmpv, signing/notarization, Windows playback and release are separate work.
 
 ## Owner action queue
 
 | Action | Prepared | Time | Unblocks | Report back |
 | --- | --- | --- | --- | --- |
-| Authorize one extra bounded live run for the second part | Same normal app and sanitized collector; parser-checked inputs and hashes in `.agent/p0-real-checked-final/proposed-second-part/` | Up to two launches of four minutes; no new scan planned | Live alternate part, then final review | “补测第二分集，继续 P0” |
+| Decide on the three P0 review findings | [Reproductions and proposed scope](reports/0039-p0-real-client.md#three-open-findings) | 2 min | Scoped offline corrections and independent closure; no new login needed | “修这三项，追加一轮修复验证和一次定向复核” |
 | Authorize a PR for `codex/p0-login-foundation` when ready | Rebased branch and scoped evidence in the login handoff | 2 min | PR review and candidate CI | “Open the login PR” |
 
-Done 2026-11-18: the owner unlocked the Mac. All authorized verifier repairs
-are used. The history notice and target-tab readiness now pass their original
-native checks. Both normal launches reused the stored session. Earlier policy
-approval, local commit authority and PR #15 rebase retain their existing scope.
+Done 2026-11-18: the owner unlocked the execution Mac and later authorized
+one new bounded plan for the available second part. The original verification
+and supplement are now fully used; both pairs reused the saved Keychain login.
+The original reviewer closed OBS-002/003/004 at round 3/global 20 and requested changes for the three new findings.
 
 ## Follow-ups
 
+- P0R-OBS-001/resize-search and the unrelated slider setup failure in the optional mutated run remain local reliability observations. For P0R-AT-001 and the earlier ASY-CODE-001, the local inventory proposes deriving control counts from actual outcomes (no change to trusted checks).
 - Import guard covers darwin/arm64 non-test imports only; extend it to the
   other CI targets and test files (review advisory, spec 0024).
 - Add expiry tests for `Toggle` from Ended and reselecting the current part
@@ -70,35 +64,24 @@ approval, local commit authority and PR #15 rebase retain their existing scope.
   unconfirmed save no longer claims no credentials were stored. Disposition
   closed without another review round or remote issue.
 
-## Verification checkpoint and blockers
+## Verification and availability
 
-Exact source: `250c5d71cac58712084bc54d9247c4aeee8548d5`. Normal/e2e/driver were built from a clean checkout;
-identities in `.agent/p0-real-checked-final/artifacts.json`. No CI for this
-SHA or final independent approval is claimed.
+Exact runtime candidate: `250c5d71cac58712084bc54d9247c4aeee8548d5`.
+The [P0 evidence report](reports/0039-p0-real-client.md) maps the ten acceptance
+criteria to their checks and original files. The full and tagged race gates
+passed. Four Mac native reports contain 30/25/30/46 passing checks. In the
+original normal pair, a quality change kept part 1, which resumed at 2.208 s.
+In the supplement, part 2 showed a comment at 11.708 s, saved at 11.750 s and
+resumed in another process at 11.833 s. Both pairs exited normally. Counts per
+plan (API/bootstrap/covers/media opens): 14/1/0/3 and 15/1/0/3, respectively.
 
-| Claim | Actual evidence | Result and scope |
-| --- | --- | --- |
-| Offline verification | Current run `evidence/check-2504189964.log`, tagged race and checked-button red/green logs | Full and tagged race pass. The new regression first failed on all four native button states |
-| Native playback / source / danmaku / full client | Each `native-*/report.json` in the final artifact directory | 30/25/30/46 pass. Includes three fullscreen cycles, search, synthetic part changes, deletion surviving quality change, a new visit and confirmed Clear. Clean exit throughout |
-| Actual session, search, native quality and danmaku | Final `live-1/{result.json,receipts.jsonl}` | 20 search results; 2 parts, 3 quality choices; current-engine picture and A/V on two generations; visible danmaku. Saved 2125 ms before orderly exit |
-| Actual restart/Continue | Final `live-2/{result.json,receipts.jsonl}` | Same part restored; picture and advancing time at 2208 ms; 2250 ms saved. Both processes exited 0 with no forced cleanup or remaining owners |
-| Missing live evidence | Current run `evidence/real-loop.md` | Two permitted launches consumed. Cumulative 14/24 API, 1/2 bootstrap, 0/4 cover and 3/4 media opens. Actual alternate part has not been exercised |
+Run `20261118T122807Z-2217126d5dfb` holds the supplement, independent artifact audit and original final review (`evidence/final-code-native-review.md`).
+Its closed predecessor `20261118T120915Z-30716ecf14b2` holds the final repair,
+full/tagged race evidence and first pair summary. Earlier records preserve
+slider, notice, popup, fullscreen, checked-tab and resize/search failures.
+P0R-010 repairs 6/6, formal review 3/3 (global 20), remote issues 0/5. The final technical decision is `request changes`; continuation needs an owner decision. No current-candidate CI run or release.
 
-Run `20261118T120915Z-30716ecf14b2` continues closed runs ending 27437f77126e, 20371a25d352
-and a1ae44538d65. P0R-010 repairs 6/6; reviews 2/3 (final combined round
-3/global 20 reserved); issues 0/5. Retained previous failures: slider 2,
-history notice 1, later quality popup 1 and fullscreen callback 1. At 7e24796
-the full client also failed once on search after resize, and its separately
-isolated history run timed out on the checked tab. The four real navigation
-buttons exposed checked, and the verifier now recognizes that signal. A
-separate fixture observation confirmed different control identities before
-and after resize, but attributing the single search failure to that timing
-is an inference. Search passed unchanged on the final sweep. Original
-findings await the assigned reviewer's formal disposition.
-
-Local delivery: `.agent/p0-real-checked-final/my-bilibili.app` and the verified
-`my-bilibili-macOS-arm64-dev-250c5d7.zip` contain the normal developer build.
-The installed development libmpv is still required. Evidence, the staged review
-packet and public supplement are ignored local artifacts, not remote attachments.
-Both app processes exited; temporary keep-awake was stopped. No real logout,
-history deletion, live-content screenshots, push or release was performed.
+Developer ZIP: `.agent/p0-real-checked-final/my-bilibili-macOS-arm64-dev-250c5d7.zip`.
+Its normal executable matches the tested one. The installed development libmpv
+is required. Evidence and the binary are local artifacts, not part of a clone.
+No real logout, history deletion, live-content screenshots, push or release.
