@@ -19,7 +19,7 @@ read reports by default.
 | QR login and Keychain session (P0) | Real scan, Keychain save/readback, service verification and same-binary restart restoration passed on 2026-11-17. Session retained; branch not merged, no PR | [real login and restore](reports/0036-p0-login-restored.md) |
 | Asynchronous detail/media loading | Implemented and independently approved at `371428b`; full race and fresh macOS full/source native suites pass (30 + 25 checks) | [0037](reports/0037-p0-async-source.md) |
 | Native Chinese danmaku | Implemented and independently approved at cebd417; full race, native full/source/danmaku stages (30+25+30 checks) and independent Chinese pixel/timebase verification pass | [0038](reports/0038-p0-native-danmaku.md) |
-| Real Bilibili content and local history/resume | Implemented with navigation-verifier repair at `7e24796`; full and tagged race pass. Current native verification is paused because the execution Mac is locked and the owner cannot currently unlock it. Real-service loop and final independent review remain pending | [spec 0027](specs/0027-p0-real-client/spec.md), [assignment](specs/0027-p0-real-client/assignment.md) |
+| Real Bilibili content and local history/resume | Real restored-login search, playback, quality change, visible danmaku, progress and same-part restart passed on macOS at `250c5d7`. Alternate-part live playback and final independent review remain open | [spec 0027](specs/0027-p0-real-client/spec.md), [assignment](specs/0027-p0-real-client/assignment.md) |
 | libmpv distribution (bundling, licence, signing) | Not designed; a development library path is hardcoded | — |
 | Windows | P2, not tested | [ADR 0005](docs/adr/0005-platform-priority.md) |
 
@@ -31,54 +31,34 @@ read reports by default.
 | M1 macOS playback feasibility | Accepted 2026-11-13 |
 | M2 one complete development loop | Merged (PR #9). Owner functional feedback recorded; formal milestone acceptance not recorded |
 | M3 one issue-to-PR loop | Accepted 2026-11-17 |
-| P0 client | In progress; navigation repair implemented and checked, native/live verification paused until the execution Mac is unlocked |
+| P0 client | Real play and restart/resume verified; supplementary alternate-part evidence and final independent review pending |
 
 Exit criteria are in [stage zero](docs/stage-zero.md).
 
 ## Next actions
 
-1. Wait for the owner to confirm that Dada's execution MacBook Air is awake
-   and unlocked. The host reported `screen_locked`; on 2026-11-18 the owner
-   answered "暂时无法解锁". Do not retry native window operations or private
-   handoff before that confirmation. No repair-allowance question is pending.
-2. After confirmation, start a continuation run with the same frozen spec and
-   counters, recheck actual accessibility and keep the Mac awake. Reuse the
-   exact `7e24796` artifacts for a fresh native full attempt, then source/
-   danmaku/client stages. Preserve the first failure and all strict deadlines.
-3. Use the identical final normal executable for the prepared bounded
-   two-launch real-service verification: restored login, search/details,
-   playback, danmaku, saved progress and restart/resume. Preserve the Keychain
-   session; actual login/restoration already passed in
-   [0036](reports/0036-p0-login-restored.md).
-4. Submit complete exact-candidate evidence to the original independent reviewer
-   for the remaining final round, then deliver report 0039 and the developer
-   application. Full P0 has not yet passed.
-5. PR publication and libmpv distribution remain separate follow-ups. No new
-   push, PR, merge, signing or release is authorized by this continuation.
+1. Both approved real launches passed. The target offered two parts, but the
+   frozen plan selected part 1. Ask the owner for a supplementary pair of
+   launches to exercise the other available part. Fresh public plans have
+   been parsed offline; they keep the same target, binary and Keychain session.
+2. If authorized, verify real part 1 → part 2 with native picture, A/V,
+   danmaku and saved progress, then restart into the saved part. Stop after a
+   failed launch. Leave the consumed original plan unchanged.
+3. Attach the missing evidence and send the packet to the original independent
+   reviewer for final round 3. Complete report 0039, README and architecture
+   after review. Local developer build available now; no push, PR or release.
 
 ## Owner action queue
 
-Batched per [owner actions](docs/workflow.md#owner-actions). The Mac was
-previously unlocked; a new locked-screen result was observed on 2026-11-18,
-and the owner cannot currently unlock it.
-
 | Action | Prepared | Time | Unblocks | Report back |
 | --- | --- | --- | --- | --- |
-| Authorize a PR for `codex/p0-login-foundation` when ready | Rebased branch and scoped evidence in the login handoff | 2 min | PR review and candidate CI | "Open the login PR" |
-| Wake and unlock Dada's MacBook Air, then keep it unlocked during verification | Navigation repair, full/tagged race and exact normal/e2e/driver builds ready at `7e24796`; login retained | 1 min, then during native checks | Remaining native checks, real-service loop and final review | "已解锁，继续 P0" |
+| Authorize one extra bounded live run for the second part | Same normal app and sanitized collector; parser-checked inputs and hashes in `.agent/p0-real-checked-final/proposed-second-part/` | Up to two launches of four minutes; no new scan planned | Live alternate part, then final review | “补测第二分集，继续 P0” |
+| Authorize a PR for `codex/p0-login-foundation` when ready | Rebased branch and scoped evidence in the login handoff | 2 min | PR review and candidate CI | “Open the login PR” |
 
-Done 2026-11-17: the owner approved the spec 0024 policy changes (lanes,
-evidence identity, adopted clauses, owner queue) and local commit authority.
-PR #15 is merged; the owner requested this rebase and previously authorized
-publication of the P0 branch. No P0 PR, merge or release has been performed.
-
-Done 2026-11-18: the owner added one scoped history-notice repair/verification
-iteration. `1082c36` implements it; regression/race checks and actual native
-history-notice/recovery verification pass. That additional iteration is used.
-The owner then authorized at most two more navigation-readiness repair/
-verification iterations. `7e24796` implements the shared selected-frame wait
-and passes the offline gates; one of those two iterations remains available
-within the approved navigation-only scope.
+Done 2026-11-18: the owner unlocked the Mac. All authorized verifier repairs
+are used. The history notice and target-tab readiness now pass their original
+native checks. Both normal launches reused the stored session. Earlier policy
+approval, local commit authority and PR #15 rebase retain their existing scope.
 
 ## Follow-ups
 
@@ -92,43 +72,33 @@ within the approved navigation-only scope.
 
 ## Verification checkpoint and blockers
 
-Exact implementation candidate: `7e24796ea40459a2071dd3bfbd0c5d2d1e1c1bd8`.
-Recorded full race, relevant e2e-tagged race and targeted navigation/notice
-tests pass. Two compiling controls discriminate the navigation wait and its
-shared two-second budget. Normal/e2e apps and the driver were built from a
-clean exact checkout; all prior assertions and tests remain intact.
+Exact source: `250c5d71cac58712084bc54d9247c4aeee8548d5`. Normal/e2e/driver were built from a clean checkout;
+identities in `.agent/p0-real-checked-final/artifacts.json`. No CI for this
+SHA or final independent approval is claimed.
 
-The first current-candidate native full invocation passes 11 checks, then
-times out on fullscreen-entry correspondence: one native request, no entry
-completion callback. Cleanup is graceful without force. A subsequent AX-only
-host observation explicitly reports `screen_locked`. The current lock is
-observed; its causal relation to the earlier timeout is inferred. Fullscreen
-code is unchanged from the prior passing candidate. No new native retry or
-repair has been attempted. Source/danmaku/client are not yet run at `7e24796`.
+| Claim | Actual evidence | Result and scope |
+| --- | --- | --- |
+| Offline verification | Current run `evidence/check-2504189964.log`, tagged race and checked-button red/green logs | Full and tagged race pass. The new regression first failed on all four native button states |
+| Native playback / source / danmaku / full client | Each `native-*/report.json` in the final artifact directory | 30/25/30/46 pass. Includes three fullscreen cycles, search, synthetic part changes, deletion surviving quality change, a new visit and confirmed Clear. Clean exit throughout |
+| Actual session, search, native quality and danmaku | Final `live-1/{result.json,receipts.jsonl}` | 20 search results; 2 parts, 3 quality choices; current-engine picture and A/V on two generations; visible danmaku. Saved 2125 ms before orderly exit |
+| Actual restart/Continue | Final `live-2/{result.json,receipts.jsonl}` | Same part restored; picture and advancing time at 2208 ms; 2250 ms saved. Both processes exited 0 with no forced cleanup or remaining owners |
+| Missing live evidence | Current run `evidence/real-loop.md` | Two permitted launches consumed. Cumulative 14/24 API, 1/2 bootstrap, 0/4 cover and 3/4 media opens. Actual alternate part has not been exercised |
 
-Prior evidence at `1082c36` remains 30/25/30 native prerequisite passes plus
-44 client passes, including P0R-OBS-002's repaired notice, in-use recovery,
-minimized close, synthetic restart/resume and confirmed deletion. Its later
-quality-popup timeout is P0R-OBS-003 (R1 class 5). The new repair observes the
-actual selected tab before using remounted player controls, addressing the
-source-backed missing-frame wait; its native resolution remains unverified.
-Deletion surviving quality replacement and later new-visit/Clear checks are
-still pending, as are the real two-launch loop and final independent review.
+Run `20261118T120915Z-30716ecf14b2` continues closed runs ending 27437f77126e, 20371a25d352
+and a1ae44538d65. P0R-010 repairs 6/6; reviews 2/3 (final combined round
+3/global 20 reserved); issues 0/5. Retained previous failures: slider 2,
+history notice 1, later quality popup 1 and fullscreen callback 1. At 7e24796
+the full client also failed once on search after resize, and its separately
+isolated history run timed out on the checked tab. The four real navigation
+buttons exposed checked, and the verifier now recognizes that signal. A
+separate fixture observation confirmed different control identities before
+and after resize, but attributing the single search failure to that timing
+is an inference. Search passed unchanged on the final sweep. Original
+findings await the assigned reviewer's formal disposition.
 
-Runs `20261117T152122Z-27437f77126e` (event 23),
-`20261118T013405Z-20371a25d352` (event 7), and
-`20261118T020849Z-a1ae44538d65` (event 7) are closed `needs-human` and must
-not be appended to. P0R-010 corrections are 5 used / 6 authorized; one
-navigation-only repair iteration remains. Retained failures: slider 2,
-history notice 1, later quality popup 1, current fullscreen entry 1. Formal
-reviews are 2/3 used, leaving final combined round 3/global 20; issues stay
-0/5. Original reviewer remains available. Preserve counters on continuation.
-
-Current local-only artifacts/evidence are in `.agent/p0-real-navigation-final/`,
-including `artifacts.json`, first native report and `locked-desktop-checkpoint.md`;
-the run's `evidence/pause.md` records the owner's unavailable-unlock answer.
-Earlier `.agent/p0-real-continued-final/` and `.agent/p0-real-final/` evidence
-remain unchanged. All owned test processes exited; temporary keep-awake was
-stopped for the pause. Actual login remains retained and no real-service plan
-request has been made. Logs are not backed up by this status file. No current
-candidate CI, independent approval or full-P0 completion is claimed.
+Local delivery: `.agent/p0-real-checked-final/my-bilibili.app` and the verified
+`my-bilibili-macOS-arm64-dev-250c5d7.zip` contain the normal developer build.
+The installed development libmpv is still required. Evidence, the staged review
+packet and public supplement are ignored local artifacts, not remote attachments.
+Both app processes exited; temporary keep-awake was stopped. No real logout,
+history deletion, live-content screenshots, push or release was performed.
