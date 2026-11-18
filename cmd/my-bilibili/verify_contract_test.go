@@ -12,8 +12,8 @@ import (
 )
 
 func TestVerificationControllerNeedsEveryFixedActionWithoutInvokingThem(t *testing.T) {
-	r, _ := verifyTestRun(t)
-	m := newVerifyMachine(t, r)
+	m := newVerifyActionMachine(t, verifyTestPlan(1))
+	r := m.r
 	if m.opens != 0 || m.searches != 0 || m.plays != 0 || m.pauses != 0 || m.closes != 0 || r.budget.snapshot().MediaOpens != 0 {
 		t.Fatal("controller construction invoked normal actions")
 	}

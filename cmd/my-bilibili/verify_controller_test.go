@@ -49,7 +49,32 @@ func newVerifyMachine(t *testing.T, r *verificationRun) *verifyMachine {
 	if err != nil {
 		t.Fatal("machine Store load failed")
 	}
-	m := &verifyMachine{t: t, r: r, h: h, store: spy, now: r.started.Add(time.Millisecond)}
+	return verifyMachineForSnapshot(t, r, spy, records)
+}
+
+// Playback and navigation cases start after history has loaded. Only the
+// filesystem integration tests acquire a Store and establish this proof via I/O.
+func newVerifyActionMachine(t *testing.T, fields map[string]any) *verifyMachine {
+	t.Helper()
+	plan, err := parseVerificationPlan(verifyTestJSON(t, fields))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := verifyTestBudget(t, verificationCounts{}, plan.Launch)
+	r.plan = plan
+	r.runDirectory = t.TempDir()
+	r.continuationPath = filepath.Join(r.runDirectory, "continuation.json")
+	spy := &verifyHistorySpy{}
+	if _, err := r.HistoryStore(spy); err != nil {
+		t.Fatal(err)
+	}
+	r.history.last.Loaded = true
+	return verifyMachineForSnapshot(t, r, spy, nil)
+}
+
+func verifyMachineForSnapshot(t *testing.T, r *verificationRun, spy *verifyHistorySpy, records []history.Record) *verifyMachine {
+	t.Helper()
+	m := &verifyMachine{t: t, r: r, h: r.history, store: spy, now: r.started.Add(time.Millisecond)}
 	r.now = func() time.Time { return m.now }
 	m.s = verificationSnapshot{Account: account.State{Phase: account.SignedIn, Stored: true, Restored: true, SessionEpoch: 1}, Search: catalog.SearchState{Phase: catalog.SearchInitial}, History: history.State{Phase: history.Ready, Records: records}, ScopeRevision: 1, PlayerMounted: true, WindowVisible: true}
 	actions := verificationActions{Snapshot: func() verificationSnapshot { return m.s },
@@ -89,10 +114,11 @@ func newVerifyMachine(t *testing.T, r *verificationRun) *verifyMachine {
 		Seek:         func(at time.Duration) error { m.seeks++; m.seek = at; return nil },
 		RequestClose: func() { m.closes++ },
 	}
-	m.v, err = newVerificationController(r, actions)
+	v, err := newVerificationController(r, actions)
 	if err != nil {
 		t.Fatal("machine controller constructor failed")
 	}
+	m.v = v
 	return m
 }
 func (m *verifyMachine) native(part catalog.PartID, quality app.QualityID, position time.Duration) {
@@ -321,8 +347,7 @@ func TestVerificationFixedTwoLaunchFlowUsesExactCheckpointAndSafeReceipts(t *tes
 func TestVerificationPlayRequiresPictureVisibilityExpectedAudioAndProgress(t *testing.T) {
 	for _, kind := range []string{"no-picture", "not-mounted", "minimized", "missing-audio", "unexpected-audio", "no-progress", "no-core", "stale-generation"} {
 		t.Run(kind, func(t *testing.T) {
-			r, _ := verifyTestRun(t)
-			m := newVerifyMachine(t, r)
+			m := newVerifyActionMachine(t, verifyTestPlan(1))
 			m.beginFirst()
 			for i := 0; i < 3; i++ {
 				m.s.Player.Playback.State = playback.Playing
@@ -351,7 +376,7 @@ func TestVerificationPlayRequiresPictureVisibilityExpectedAudioAndProgress(t *te
 			if m.v.phase != "play-initial" || m.pauses != 0 || m.v.complete {
 				t.Fatal("tracks/time or command intent replaced actual picture/progress proof")
 			}
-			m.now = r.started.Add(verificationProcessLimit)
+			m.now = m.r.started.Add(verificationProcessLimit)
 			m.v.Tick(m.now)
 			if !m.v.Stopped() || m.closes != 1 || m.v.failure != string(catalog.Timeout) {
 				t.Fatal("missing native proof escaped bounded stop")
@@ -363,7 +388,6 @@ func TestVerificationPlayRequiresPictureVisibilityExpectedAudioAndProgress(t *te
 func TestVerificationOptionalIndicesAndRefusalsNeverSubstituteOrRetry(t *testing.T) {
 	for _, kind := range []string{"result-index", "part-index", "quality-index", "refusal", "epoch", "navigation", "unknown-action-error"} {
 		t.Run(kind, func(t *testing.T) {
-			f := verifyTestPaths(t)
 			p := verifyTestPlan(1)
 			if kind == "result-index" {
 				p["video_id"], p["selected_result"] = "", 2
@@ -374,8 +398,7 @@ func TestVerificationOptionalIndicesAndRefusalsNeverSubstituteOrRetry(t *testing
 			if kind == "quality-index" {
 				p["quality_index"] = 3
 			}
-			f.writePlan(t, p)
-			m := newVerifyMachine(t, f.prepare(t))
+			m := newVerifyActionMachine(t, p)
 			if kind == "unknown-action-error" {
 				m.v.actions.Search = func(string) error { return errors.New(verifyTestPrivate) }
 			}
@@ -407,8 +430,7 @@ func TestVerificationOptionalIndicesAndRefusalsNeverSubstituteOrRetry(t *testing
 }
 
 func TestVerificationDanmakuSeekRequiresObservedPositionPictureAndNewProgress(t *testing.T) {
-	r, _ := verifyTestRun(t)
-	m := newVerifyMachine(t, r)
+	m := newVerifyActionMachine(t, verifyTestPlan(1))
 	m.beginFirst()
 	m.firstProof()
 	m.comments(0)
@@ -443,8 +465,7 @@ func TestVerificationDanmakuSeekRequiresObservedPositionPictureAndNewProgress(t 
 		t.Fatal("confirmed seek/paint/progression did not accept actual visible comments")
 	}
 	for _, kind := range []string{"bad-time", "unconfirmed", "old-window"} {
-		r, _ := verifyTestRun(t)
-		m := newVerifyMachine(t, r)
+		m := newVerifyActionMachine(t, verifyTestPlan(1))
 		m.beginFirst()
 		m.firstProof()
 		m.comments(0)
@@ -630,8 +651,8 @@ func TestVerificationSecondLaunchPreservesOwnedContinuationOnFinalFailure(t *tes
 }
 
 func TestVerificationPrivateSnapshotsAndErrorsCannotBecomeDiagnostics(t *testing.T) {
-	r, _ := verifyTestRun(t)
-	m := newVerifyMachine(t, r)
+	m := newVerifyActionMachine(t, verifyTestPlan(1))
+	r := m.r
 	m.s.Search.Query = verifyTestPrivate
 	m.s.Player.Video.Title = verifyTestPrivate
 	for _, value := range []any{m.s, m.v, verificationReport{ref: catalog.PartRef{Video: verifyTestVideo, Part: "101"}}, r} {

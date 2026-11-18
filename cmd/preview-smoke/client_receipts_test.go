@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -74,20 +76,22 @@ func TestClientReceiptStreamRejectsMissingMalformedAndLeakingClose(t *testing.T)
 }
 
 func TestClientEnvironmentKeepsFixedScenariosAndOwnedHistory(t *testing.T) {
-	in := []string{"HOME=/tmp/home", "MY_BILIBILI_E2E_CLIENT_SCENARIO=foreign", "MY_BILIBILI_E2E_HISTORY_DIR=/private", "HTTP_PROXY=private", "DYLD_INSERT_LIBRARIES=private"}
+	root := t.TempDir()
+	socket, historyDir := filepath.Join(root, "socket"), filepath.Join(root, "history")
+	const untrusted = "foreign-environment-sentinel"
+	in := []string{"HOME=" + root, "MY_BILIBILI_E2E_CLIENT_SCENARIO=" + untrusted, "MY_BILIBILI_E2E_HISTORY_DIR=" + filepath.Join(root, untrusted), "HTTP_PROXY=" + untrusted, "DYLD_INSERT_LIBRARIES=" + untrusted}
 	for _, scene := range []string{"search", "playback", "segments", "history", "account-expiry", "account-signout", "history-corrupt", "history-in-use", "close-held"} {
-		env, err := scenarioEnvironment(in, "/owned/socket", "", scene, "/owned/history")
-		joined := strings.Join(env, "\n")
-		if err != nil || !strings.Contains(joined, "MY_BILIBILI_E2E_CLIENT_SCENARIO="+scene) || !strings.Contains(joined, "MY_BILIBILI_E2E_HISTORY_DIR=/owned/history") || strings.Contains(joined, "private") || strings.Contains(joined, "foreign") {
+		env, err := scenarioEnvironment(in, socket, "", scene, historyDir)
+		if err != nil || !slices.Contains(env, "MY_BILIBILI_E2E_CLIENT_SCENARIO="+scene) || !slices.Contains(env, "MY_BILIBILI_E2E_HISTORY_DIR="+historyDir) || strings.Contains(strings.Join(env, "\n"), untrusted) {
 			t.Fatal("client environment not owned", err)
 		}
 	}
-	for _, args := range [][3]string{{"delayed", "search", "/owned"}, {"", "arbitrary", "/owned"}, {"", "search", "relative"}, {"", "", "/owned"}} {
-		if _, err := scenarioEnvironment(in, "/owned/socket", args[0], args[1], args[2]); err == nil {
+	for _, args := range [][3]string{{"delayed", "search", historyDir}, {"", "arbitrary", historyDir}, {"", "search", "relative"}, {"", "", historyDir}} {
+		if _, err := scenarioEnvironment(in, socket, args[0], args[1], args[2]); err == nil {
 			t.Fatal("unassigned/mixed client selection accepted")
 		}
 	}
-	env, err := scenarioEnvironment(in, "/owned/socket", "source-detail", "", "")
+	env, err := scenarioEnvironment(in, socket, "source-detail", "", "")
 	if err != nil || strings.Contains(strings.Join(env, "\n"), "MY_BILIBILI_E2E_CLIENT") {
 		t.Fatal("fixture mode inherited a client selector", err)
 	}

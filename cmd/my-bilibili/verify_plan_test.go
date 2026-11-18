@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"my-bilibili/internal/catalog"
+	"my-bilibili/internal/history"
 )
 
 const verifyTestVideo = "BV0000000001"
@@ -59,6 +61,9 @@ func (f verifyTestFiles) writePlan(t *testing.T, p map[string]any) {
 }
 func (f verifyTestFiles) prepare(t *testing.T) *verificationRun {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("successful on-disk verification requires POSIX private file modes")
+	}
 	r, err := prepareVerification(f.planPath, f.directory, f.executable)
 	if err != nil {
 		t.Fatal("synthetic verification preparation failed")
@@ -71,8 +76,8 @@ func verifyTestRun(t *testing.T) (*verificationRun, verifyTestFiles) {
 	f := verifyTestPaths(t)
 	return f.prepare(t), f
 }
-func verifyTestContinuation(r *verificationRun) verificationContinuation {
-	return verificationContinuation{Version: 1, ExecutableSHA256: r.executableHash, VideoID: verifyTestVideo, PartID: "101", PositionMS: 1200, HistorySHA256: strings.Repeat("b", 64), APIRequests: 8, BootstrapRequests: 1, CoverRequests: 2, MediaOpens: 1}
+func verifyTestContinuation(executableHash string) verificationContinuation {
+	return verificationContinuation{Version: 1, ExecutableSHA256: executableHash, VideoID: verifyTestVideo, PartID: "101", PositionMS: 1200, HistorySHA256: strings.Repeat("b", 64), APIRequests: 8, BootstrapRequests: 1, CoverRequests: 2, MediaOpens: 1}
 }
 
 func TestVerificationPlanExactFieldsSelectorsAndBounds(t *testing.T) {
@@ -153,6 +158,19 @@ func TestVerificationOptionIsExplicitAbsoluteAndBuildIsolated(t *testing.T) {
 	}
 }
 
+func TestVerificationSetupRefusesNonPrivateDirectoryBeforeAdmission(t *testing.T) {
+	f := verifyTestPaths(t)
+	if err := os.Chmod(f.directory, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if run, err := prepareVerification(f.planPath, f.directory, f.executable); run != nil || err != history.Storage {
+		t.Fatalf("unprotected directory: run admitted=%v, error=%v", run != nil, err)
+	}
+	if _, err := os.Lstat(filepath.Join(f.directory, "verification")); !os.IsNotExist(err) {
+		t.Fatal("unprotected directory received verification state")
+	}
+}
+
 func TestVerificationSetupOwnsFreshRunWithoutReadingHistory(t *testing.T) {
 	r, f := verifyTestRun(t)
 	canonical, err := filepath.EvalSymlinks(f.directory)
@@ -182,9 +200,8 @@ func TestVerificationSetupOwnsFreshRunWithoutReadingHistory(t *testing.T) {
 	}
 }
 
-func TestVerificationContinuationExactSchemaAndSecondLaunchAdmission(t *testing.T) {
-	r, f := verifyTestRun(t)
-	c := verifyTestContinuation(r)
+func TestVerificationContinuationExactSchema(t *testing.T) {
+	c := verifyTestContinuation(strings.Repeat("a", 64))
 	raw := verifyTestJSON(t, c)
 	if parsed, err := parseVerificationContinuation(raw); err != nil || parsed.ref() != c.ref() {
 		t.Fatal("valid private continuation rejected")
@@ -213,6 +230,12 @@ func TestVerificationContinuationExactSchemaAndSecondLaunchAdmission(t *testing.
 			t.Fatal("invalid private continuation admitted")
 		}
 	}
+}
+
+func TestVerificationSecondLaunchAdmission(t *testing.T) {
+	r, f := verifyTestRun(t)
+	c := verifyTestContinuation(r.executableHash)
+	raw := verifyTestJSON(t, c)
 	if verificationCreate(r.continuationPath, raw) != nil {
 		t.Fatal("synthetic continuation write failed")
 	}
@@ -260,7 +283,7 @@ func TestVerificationSetupRejectsUnownedChangedAndOversizedFiles(t *testing.T) {
 				}
 			} else {
 				r := f.prepare(t)
-				raw := verifyTestJSON(t, verifyTestContinuation(r))
+				raw := verifyTestJSON(t, verifyTestContinuation(r.executableHash))
 				if kind != "missing-continuation" && verificationCreate(r.continuationPath, raw) != nil {
 					t.Fatal("test continuation failed")
 				}
@@ -289,8 +312,8 @@ func TestVerificationSetupRejectsUnownedChangedAndOversizedFiles(t *testing.T) {
 					}
 				}
 			}
-			if run, err := prepareVerification(f.planPath, f.directory, f.executable); err == nil || run != nil {
-				t.Fatal("unowned/changed/oversized setup accepted")
+			if run, err := prepareVerification(f.planPath, f.directory, f.executable); err != catalog.Invalid || run != nil {
+				t.Fatalf("unowned/changed/oversized setup: run admitted=%v, error=%v", run != nil, err)
 			} else {
 				verifyTestSafe(t, err)
 			}

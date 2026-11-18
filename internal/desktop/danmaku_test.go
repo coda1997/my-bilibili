@@ -3,6 +3,7 @@ package desktop
 import (
 	"bytes"
 	"math"
+	"runtime"
 	"testing"
 	"time"
 
@@ -14,12 +15,17 @@ import (
 
 func newDanmakuHarness(t *testing.T) *harness {
 	t.Helper()
+	return newDanmakuTextHarness(t, "中文弹幕测试")
+}
+
+func newDanmakuTextHarness(t *testing.T, text string) *harness {
+	t.Helper()
 	h := newHarness()
 	h.view.Danmaku = danmakuview.New()
 	if err := h.view.Danmaku.Reset(1); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.view.Danmaku.SetEntries(1, []danmaku.Entry{{Mode: danmaku.FixedTop, Text: "中文弹幕测试", Color: 0xffffff}}); err != nil {
+	if err := h.view.Danmaku.SetEntries(1, []danmaku.Entry{{Mode: danmaku.FixedTop, Text: text, Color: 0xffffff}}); err != nil {
 		t.Fatal(err)
 	}
 	h.ui.Frame()
@@ -85,7 +91,16 @@ func TestDanmakuFittedBoundsAndSecondControlRow(t *testing.T) {
 }
 
 func TestDanmakuPaintsAboveSurface(t *testing.T) {
-	h := newDanmakuHarness(t)
+	t.Run("portable", func(t *testing.T) { checkDanmakuPaintsAboveSurface(t, "MMMM中文弹幕测试") })
+	// Headless Linux runners need not have a font for Han characters.
+	if runtime.GOOS != "linux" {
+		t.Run("Chinese", func(t *testing.T) { checkDanmakuPaintsAboveSurface(t, "中文弹幕测试") })
+	}
+}
+
+func checkDanmakuPaintsAboveSurface(t *testing.T, text string) {
+	t.Helper()
+	h := newDanmakuTextHarness(t, text)
 	h.view.Surface = func(c *gui.Context, w, height float32) {
 		gui.Box(c).Size(w, height).Background(gui.RGB(20, 40, 60)).Label("Injected surface")
 	}

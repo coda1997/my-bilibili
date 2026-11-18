@@ -7,6 +7,7 @@ import (
 	"image"
 	"math"
 	"reflect"
+	"runtime"
 	"testing"
 	"time"
 
@@ -196,7 +197,16 @@ func TestMeasuredGeometryAndMediaTime(t *testing.T) {
 }
 
 func TestVisibilityOpacityAndColorPixels(t *testing.T) {
-	entry := comment(danmaku.FixedTop, "中文弹幕测试")
+	t.Run("portable", func(t *testing.T) { checkVisibilityOpacityAndColorPixels(t, "MMMM中文弹幕测试") })
+	// The renderer uses system fonts; a headless Linux image may lack Han glyphs.
+	if runtime.GOOS != "linux" {
+		t.Run("Chinese", func(t *testing.T) { checkVisibilityOpacityAndColorPixels(t, "中文弹幕测试") })
+	}
+}
+
+func checkVisibilityOpacityAndColorPixels(t *testing.T, text string) {
+	t.Helper()
+	entry := comment(danmaku.FixedTop, text)
 	entry.Color = 0xff4050
 	v := installed(t, []danmaku.Entry{entry})
 	h := newHarness(v, 400, 136)

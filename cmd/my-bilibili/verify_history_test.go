@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
 	"time"
@@ -147,27 +148,30 @@ func TestVerificationHistoryOwnershipDigestAndPersistedMilliseconds(t *testing.T
 func TestVerificationHistoryCannotReadWithoutAcquireOrBypassInUse(t *testing.T) {
 	for _, kind := range []string{"unacquired", "in-use", "unsupported", "acquire-error"} {
 		t.Run(kind, func(t *testing.T) {
-			r, _ := verifyTestRun(t)
+			r := &verificationRun{directory: verifyTestPaths(t).directory}
 			h, spy := verifyTestOwnedHistory(t, r)
 			var owner *localhistory.Store
 			if kind == "in-use" {
+				if runtime.GOOS != "darwin" && runtime.GOOS != "linux" {
+					t.Skip("requires an acquired native history lock")
+				}
 				owner, _ = localhistory.New(r.directory)
 				if owner.Acquire() != nil {
 					t.Fatal("test owner failed")
 				}
 				defer owner.Close()
 			}
-			if kind == "unsupported" {
+			if kind == "unsupported" && (runtime.GOOS == "darwin" || runtime.GOOS == "linux") {
 				spy.acquireErr = history.LockUnsupported
 			}
 			if kind == "acquire-error" {
 				spy.acquireErr = errors.New(verifyTestPrivate)
 			}
 			if kind != "unacquired" {
-				if err := h.Acquire(); err == nil {
-					t.Fatal("acquisition refusal bypassed")
-				} else {
-					verifyTestSafe(t, err)
+				err := h.Acquire()
+				verifyTestSafe(t, err)
+				if kind == "unsupported" && err != history.LockUnsupported {
+					t.Fatalf("wrong unsupported-lock error: %v", err)
 				}
 			}
 			if records, err := h.Load(); err == nil || records != nil {
@@ -239,7 +243,7 @@ func TestVerificationHistoryPreservesUnrelatedRowsAndRejectsDeletionResetOrEvict
 			}
 		})
 	}
-	r, _ := verifyTestRun(t)
+	r := &verificationRun{directory: t.TempDir()}
 	h, _ := verifyTestOwnedHistory(t, r)
 	if h.allow(catalog.PartRef{Video: verifyTestVideo, Part: "101"}) != nil || h.allow(catalog.PartRef{Video: verifyTestVideo, Part: "102"}) != nil || h.allow(catalog.PartRef{Video: verifyTestVideo, Part: "103"}) != history.Invalid || h.allow(catalog.PartRef{Video: "BV0000000002", Part: "201"}) != history.Invalid {
 		t.Fatal("unbounded/different-video progress authorization")
@@ -327,7 +331,7 @@ func TestVerificationLaunchTwoChecksExactOwnedDigestAndRecordBeforePublication(t
 				t.Fatal("first saved checkpoint failed")
 			}
 			proof := h.proof()
-			c := verifyTestContinuation(r)
+			c := verifyTestContinuation(r.executableHash)
 			c.PositionMS = int64(proof.Records[0].Position / time.Millisecond)
 			c.HistorySHA256 = proof.Digest
 			if kind == "different-ref" {
