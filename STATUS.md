@@ -16,7 +16,7 @@ read reports by default.
 | Rapid play/pause and seek fixes | Merged (PRs #12, #14) | [0029](reports/0029-playback-intent.md), [0030](reports/0030-seek-queue.md) |
 | Playback code promoted out of `experiments/`; expiry-aware `app.Source` | Merged (PR #15, `34e6faf`) | [spec 0024](specs/0024-playback-promotion/spec.md) |
 | P0 service probes, QR-host compatibility and empty-text danmaku handling | Scoped implementation and independent review complete before rebase; anonymous five-step probe passed | [0033](reports/0033-p0-qr-host-fix.md), [0034](reports/0034-p0-empty-danmaku.md) |
-| QR login and Keychain session (P0) | Real scan, Keychain save/readback, service verification and same-binary restart restoration passed on 2026-11-17. Session retained; branch not merged, no PR | [real login and restore](reports/0036-p0-login-restored.md) |
+| QR login and Keychain session (P0) | Real scan, Keychain save/readback, service verification and same-binary restart restoration passed on 2026-11-17. Session retained; included in [the P0 client PR](https://github.com/coda1997/my-bilibili/pull/16) | [real login and restore](reports/0036-p0-login-restored.md) |
 | Asynchronous detail/media loading | Implemented and independently approved at `371428b`; full race and fresh macOS full/source native suites pass (30 + 25 checks) | [0037](reports/0037-p0-async-source.md) |
 | Native Chinese danmaku | Implemented and independently approved at cebd417; full race, native full/source/danmaku stages (30+25+30 checks) and independent Chinese pixel/timebase verification pass | [0038](reports/0038-p0-native-danmaku.md) |
 | Real Bilibili content and local history/resume | Both real parts, native A/V, a quality change, visible danmaku, local history and restart into each saved part verified on macOS at `250c5d7`. Its three review findings were fixed and independently closed at `4443b69` using offline tests and 46 fixture-native checks | [Real-account evidence](reports/0039-p0-real-client.md), [repair and closure](reports/0040-p0-focused-repair.md), [spec 0027](specs/0027-p0-real-client/spec.md) |
@@ -31,7 +31,7 @@ read reports by default.
 | M1 macOS playback feasibility | Accepted 2026-11-13 |
 | M2 one complete development loop | Merged (PR #9). Owner functional feedback recorded; formal milestone acceptance not recorded |
 | M3 one issue-to-PR loop | Accepted 2026-11-17 |
-| P0 macOS client | **Accepted 2026-11-18** by the owner at `4443b69`. [Acceptance record](reports/0041-p0-acceptance.md) |
+| P0 macOS client | **Accepted 2026-11-18** by the owner at `4443b69`. [Acceptance record](reports/0041-p0-acceptance.md) · [integration PR #16](https://github.com/coda1997/my-bilibili/pull/16) |
 
 Exit criteria are in [stage zero](docs/stage-zero.md).
 
@@ -45,7 +45,7 @@ Portable libmpv, signing/notarization, Windows playback and release are separate
 
 | Action | Prepared | Time | Unblocks | Report back |
 | --- | --- | --- | --- | --- |
-| Authorize a PR for `codex/p0-login-foundation` when ready | Rebased branch and scoped evidence in the login handoff | 2 min | PR review and candidate CI | “Open the login PR” |
+| None for P0. | The owner authorized one PR and merge for the accepted client, including the login foundation. | — | — | — |
 
 Done 2026-11-18: the owner unlocked the execution Mac and later authorized
 one new bounded plan for the available second part. The original verification
@@ -80,8 +80,8 @@ Run `20261118T122807Z-2217126d5dfb` holds the supplement, independent artifact a
 Its closed predecessor `20261118T120915Z-30716ecf14b2` holds the final repair,
 full/tagged race evidence and first pair summary. Earlier records preserve
 slider, notice, popup, fullscreen, checked-tab and resize/search failures.
-The preceding plan used repairs 6/6 and reviews 3/3 (global 20). Its request for changes led to one owner-authorized additional repair/verification and one closure, cumulative limits 7 and 4 (global 21). Completed offline run: 20261118T125821Z-84ff4504ca07, with the original decision in evidence/original-closure.md; repairs 7/7 and reviews 4/4 used. Remote issues 0/5. No current-candidate CI run or release.
+The preceding plan used repairs 6/6 and reviews 3/3 (global 20). Its request for changes led to one owner-authorized additional repair/verification and one closure, cumulative limits 7 and 4 (global 21). Completed offline run: 20261118T125821Z-84ff4504ca07, with the original decision in evidence/original-closure.md; repairs 7/7 and reviews 4/4 used. Remote issues 0/5. See [PR #16](https://github.com/coda1997/my-bilibili/pull/16) for the CI results, tested revisions and merge status.
 
 Corrected developer ZIP: `.agent/p0-three-finding-repair/my-bilibili-macOS-arm64-dev-4443b69.zip`. Its normal executable matches the fresh build; only its fixture-only counterpart was run. The earlier real-tested ZIP remains under `.agent/p0-real-checked-final/`. The installed development libmpv
 is required. Evidence and the binary are local artifacts, not part of a clone.
-No real logout, history deletion, live-content screenshots, push or release.
+No real logout, history deletion or live-content screenshots were part of verification. The local development bundle is not a public release.
