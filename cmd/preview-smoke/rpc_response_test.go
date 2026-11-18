@@ -156,10 +156,19 @@ type timedRequestWrite struct {
 
 type deadlineWriteConn struct {
 	net.Conn
-	parent  context.Context
-	trees   int
-	partial bool
-	trace   chan timedRequestWrite
+	parent   context.Context
+	trees    int
+	partial  bool
+	trace    chan timedRequestWrite
+	deadline time.Time
+}
+
+func (c *deadlineWriteConn) SetDeadline(t time.Time) error {
+	if err := c.Conn.SetDeadline(t); err != nil {
+		return err
+	}
+	c.deadline = t
+	return nil
 }
 
 func (c *deadlineWriteConn) Write(data []byte) (int, error) {
@@ -180,8 +189,11 @@ func (c *deadlineWriteConn) Write(data []byte) (int, error) {
 		written = n
 	}
 	<-c.parent.Done()
-	// This actual net.Pipe write uses the expired deadline already installed
-	// by call; no test-supplied error or fake byte count stands in for the I/O.
+	// The context and net.Pipe fire separate timers. Reapply the caller's
+	// deadline so the pipe observes its expiry before the peer can read.
+	if err := c.Conn.SetWriteDeadline(c.deadline); err != nil {
+		return written, err
+	}
 	n, err := c.Conn.Write(data[written:])
 	var timeout net.Error
 	c.trace <- timedRequestWrite{bytes: written + n, timeout: errors.As(err, &timeout) && timeout.Timeout()}
