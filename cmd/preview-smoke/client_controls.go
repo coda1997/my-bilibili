@@ -75,10 +75,45 @@ func (c *client) clientControl(ctx context.Context, key string) error {
 }
 
 func (c *client) clientAction(ctx context.Context, key string) error {
+	switch key {
+	case "client-catalog", "client-player", "client-history", "client-account":
+		return c.clientTab(ctx, key)
+	}
 	if err := c.clientControl(ctx, key); err != nil {
 		return err
 	}
 	return c.act(ctx, key)
+}
+
+// A tab action retires the player's mounted control identities. Observe the
+// selected tab in a rendered frame before using those newly mounted controls.
+func (c *client) clientTab(ctx context.Context, key string) error {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if err := c.clientControl(ctx, key); err != nil {
+		return err
+	}
+	if err := c.act(ctx, key); err != nil {
+		return err
+	}
+	for {
+		nodes, err := c.tree(ctx)
+		if err != nil {
+			return err
+		}
+		n, err := uniqueNode(nodes, key)
+		if err != nil {
+			return err
+		}
+		for _, state := range n.States {
+			if state == "selected" {
+				return nil
+			}
+		}
+		if err := wait(ctx, 25*time.Millisecond); err != nil {
+			return err
+		}
+	}
 }
 
 func (c *client) clientPopup(ctx context.Context, menu, item string) error {
