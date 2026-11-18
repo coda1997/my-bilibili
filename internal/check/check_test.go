@@ -156,10 +156,24 @@ func TestWorkflowAcceptsValidMarkdownForms(t *testing.T) {
 			},
 		},
 		{
-			name: "GitHub preserves punctuation-created double hyphen",
+			name: "GitHub omits HTML placeholders in assignment anchors",
 			setup: func(t *testing.T, root string) {
 				writeTestFile(t, root, "docs/templates/assignment.md", "# Assignment: <role> / <task-id>\n")
-				writeTestFile(t, root, "README.md", "# Root\n[assignment](docs/templates/assignment.md#assignment-role--task-id)\n")
+				writeTestFile(t, root, "README.md", "# Root\n[assignment](docs/templates/assignment.md#assignment---)\n")
+			},
+		},
+		{
+			name: "heading fragments use rendered text",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/workflow.md", "# A &amp; B\n\n# Intro <em>setup</em>\n")
+				writeTestFile(t, root, "README.md", "# Root\n[entity](docs/workflow.md#a--b)\n[HTML](docs/workflow.md#intro-setup)\n")
+			},
+		},
+		{
+			name: "code span fragments preserve literal text",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/workflow.md", "# `A &amp; B <em>`\n")
+				writeTestFile(t, root, "README.md", "# Root\n[code](docs/workflow.md#a-amp-b-em)\n")
 			},
 		},
 		{
@@ -310,10 +324,24 @@ func TestWorkflowRejectsDamagedInputs(t *testing.T) {
 			},
 		},
 		{
-			name: "non-GitHub collapsed assignment anchor",
+			name: "assignment anchor includes HTML placeholder names",
 			mutate: func(t *testing.T, root string) {
 				writeTestFile(t, root, "docs/templates/assignment.md", "# Assignment: <role> / <task-id>\n")
-				writeTestFile(t, root, "README.md", "# Root\n[assignment](docs/templates/assignment.md#assignment-role-task-id)\n")
+				writeTestFile(t, root, "README.md", "# Root\n[assignment](docs/templates/assignment.md#assignment-role--task-id)\n")
+			},
+		},
+		{
+			name: "heading fragment includes entity name",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/workflow.md", "# A &amp; B\n")
+				writeTestFile(t, root, "README.md", "# Root\n[entity](docs/workflow.md#a-amp-b)\n")
+			},
+		},
+		{
+			name: "heading fragment includes HTML tag names",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/workflow.md", "# Intro <em>setup</em>\n")
+				writeTestFile(t, root, "README.md", "# Root\n[HTML](docs/workflow.md#intro-emsetupem)\n")
 			},
 		},
 		{

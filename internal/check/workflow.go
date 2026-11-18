@@ -1,8 +1,10 @@
 package check
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"html"
 	"io/fs"
 	"net/url"
 	"os"
@@ -18,6 +20,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	extensionast "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/parser"
+	markdownHTML "github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/text"
 	"github.com/yuin/goldmark/util"
 	"gopkg.in/yaml.v3"
@@ -487,7 +490,7 @@ func markdownAnchors(document markdownDocument) (map[string]bool, error) {
 		if !entering || !ok {
 			return ast.WalkContinue, nil
 		}
-		text, err := nodePlainText(heading, document.source)
+		text, err := markdownHeadingText(heading, document.source)
 		if err != nil {
 			return ast.WalkStop, err
 		}
@@ -507,7 +510,8 @@ func markdownAnchors(document markdownDocument) (map[string]bool, error) {
 
 func markdownSlug(value string) string {
 	var slug strings.Builder
-	value = strings.TrimSpace(strings.ToLower(value))
+	// Removing inline HTML can expose leading or trailing spaces in rendered headings.
+	value = strings.ToLower(value)
 	for _, r := range value {
 		switch {
 		case unicode.IsLetter(r), unicode.IsDigit(r), r == '-', r == '_':
@@ -517,6 +521,36 @@ func markdownSlug(value string) string {
 		}
 	}
 	return slug.String()
+}
+
+func markdownHeadingText(heading *ast.Heading, source []byte) (string, error) {
+	var rendered strings.Builder
+	output := bufio.NewWriter(&rendered)
+	err := walkNodeText(heading, source, func(node ast.Node, value []byte) error {
+		var literal bool
+		switch node := node.(type) {
+		case *ast.RawHTML:
+			return nil
+		case *ast.Text:
+			literal = node.IsRaw() || node.Parent().Kind() == ast.KindCodeSpan
+		case *ast.String:
+			literal = node.IsRaw() || node.IsCode()
+		}
+		if literal {
+			markdownHTML.DefaultWriter.RawWrite(output, value)
+		} else {
+			markdownHTML.DefaultWriter.Write(output, value)
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+	if err := output.Flush(); err != nil {
+		return "", err
+	}
+	// Read back the emitted text once; literal entities in code remain literal.
+	return html.UnescapeString(rendered.String()), nil
 }
 
 func nodePlainText(node ast.Node, source []byte) (string, error) {
