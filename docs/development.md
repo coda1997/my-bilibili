@@ -75,9 +75,11 @@ finding/reproduction and the changed candidate. If the original reviewer cannot
 continue, follow the [succession procedure](workflow.md#reviewer-succession),
 including explicit human designation; do not silently substitute a reviewer.
 Select review dimensions from actual risk (correctness, architecture, security,
-native platform/UI), not an automatic fixed number of agents. Prepare the packet
-and dispatch native sub-agents under the owner's standing authorization; no
-per-dispatch permission is needed. Do not fabricate an independent result.
+native platform/UI, or evidence integrity) using
+[risk-selected independent review](workflow.md#risk-selected-independent-review),
+not an automatic fixed number of agents. Prepare the packet and dispatch native
+sub-agents under the owner's standing authorization; no per-dispatch permission
+is needed. Do not fabricate an independent result.
 
 The controller may save a sanitized assignment under its run's `evidence/`
 and attach it with `run note` before dispatch. Published packets are immutable;
@@ -107,11 +109,11 @@ the controller's run or change review/policy records.
 
 ## Repo-local skills
 
-The entrypoints are `feature-plan`, `feature-implement`, `independent-review`,
-and `pr-handoff` under `.agents/skills/`. They route to this guide and the
-canonical protocol. Personal skills/configuration are optional conveniences,
-not prerequisites or copied repository secrets. No model/provider or permission
-profile is forced on contributors by this repository.
+The entrypoints are `fix`, `feature-plan`, `feature-implement`,
+`independent-review`, and `pr-handoff` under `.agents/skills/`. They route to
+this guide and the canonical protocol. Personal skills/configuration are
+optional conveniences, not prerequisites or copied repository secrets. No
+model/provider or permission profile is forced on contributors by this repository.
 
 Codex configuration references checked on 2026-11-10:
 [AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md) and

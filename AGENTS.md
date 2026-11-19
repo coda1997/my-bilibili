@@ -22,16 +22,16 @@ still require their assigned review inputs.
 
 ## Task routing
 
-- Fast-lane fix: regression test, fix, `go run ./cmd/dev check --race`, and a
-  PR body with an evidence table; one independent code review.
-- Planning: `feature-plan`, `docs/templates/spec.md`, and `docs/templates/tasks.json`.
-- Implementation: `feature-implement`, the assigned task, and `docs/testing.md`.
-- Independent architecture/code review: `independent-review` and
+- Reproduced fast-lane defect: [`fix`](.agents/skills/fix/SKILL.md), with a failing regression, smallest repair,
+  `go run ./cmd/dev check --race`, an evidence table, and independent review.
+- Planning: [`feature-plan`](.agents/skills/feature-plan/SKILL.md), `docs/templates/spec.md`, and `docs/templates/tasks.json`.
+- Implementation: [`feature-implement`](.agents/skills/feature-implement/SKILL.md), the assigned task, and `docs/testing.md`.
+- Independent architecture/code review: [`independent-review`](.agents/skills/independent-review/SKILL.md) and
   `docs/templates/review.md`, in a separate authorized agent/context.
 - Unavailable reviewer: use the succession procedure in
   `docs/workflow.md#reviewer-succession`; do not infer reassignment or closure
   authority.
-- PR or handoff preparation: `pr-handoff` and `docs/pull-requests.md`.
+- PR or handoff preparation: [`pr-handoff`](.agents/skills/pr-handoff/SKILL.md) and `docs/pull-requests.md`.
 - Owner-only steps: add them to the owner action queue in `STATUS.md` and batch
   them; see `docs/workflow.md#owner-actions`.
 
@@ -61,6 +61,7 @@ inside every skill. Assign roles with `docs/templates/assignment.md`.
 ## Evidence and checks
 
 - Run `go run ./cmd/dev check` for a code change; use `--race` where supported.
+  It also validates the checked skill metadata, routes, and local Markdown links.
 - The controller owns `.agent/runs/`. Workers submit evidence to the controller;
   a worktree is not a security sandbox or an approval mechanism.
 - Bind evidence to a commit SHA and, for CI, the run URL for that SHA. Write
@@ -76,7 +77,9 @@ inside every skill. Assign roles with `docs/templates/assignment.md`.
 ## Code review rules
 
 - Prioritize behavioral defects, unmet acceptance criteria, platform/resource
-  risks, and missing regression tests. Formatting belongs to deterministic checks.
+  risks, and missing regression tests. Select required review dimensions from
+  [risk-selected independent review](docs/workflow.md#risk-selected-independent-review);
+  formatting belongs to deterministic checks.
 - Bind findings and closure evidence to the exact candidate and spec. A passing
   baseline CI run is not CI evidence for a changed working tree.
 

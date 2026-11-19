@@ -8,7 +8,8 @@ fullscreen test timed out; macOS and Windows passed. See [CI evidence](#verifica
 
 This is the only file that carries current state. Update it in the same change
 that moves the state. History lives in `reports/` and `git log`; agents do not
-read reports by default.
+read reports by default. Exact source identity belongs to the assigned run,
+review packet, or PR candidate; do not maintain an evergreen base SHA here.
 
 ## Product
 

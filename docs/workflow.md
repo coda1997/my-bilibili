@@ -151,12 +151,12 @@ the full lane; a reviewer may move a change from fast to full.
   privacy, dependencies, CI, checks, or this policy.
 - As a guideline, it changes at most about 200 lines of non-test code.
 
-Process: an issue or a short problem statement in the PR → a failing regression
-test for a defect → the fix → `go run ./cmd/dev check --race` → a PR with an
-[evidence table](#evidence-identity-and-tables) → one independent code review
-of the PR head commit → passing CI on that commit → the owner's merge decision.
-No spec directory, assignment packet, run record or report is required; the PR
-body is the handoff. R1–R9 still apply.
+Process for a reproduced defect: use the `fix` skill → preserve a failing
+regression → apply the smallest fix → `go run ./cmd/dev check --race` → a PR
+with an [evidence table](#evidence-identity-and-tables) → one independent
+code review of the PR head commit → passing CI on that commit → the owner's
+merge decision. No spec directory, assignment packet, run record or report is
+required; the PR body is the handoff. R1–R9 still apply.
 
 **Full lane.** Everything else: spec and task DAG, architecture review before
 freeze, a recorded run, independent code review, a report and an update to
@@ -198,6 +198,24 @@ owner step without the owner's confirmation that its precondition holds.
 ## Review and repair policy
 
 Follow [agent convergence](agent-convergence.md) R1–R9 for current finding tiers, scope, review/fix budgets, issue triage, rulings and completion.
+
+### Risk-selected independent review
+
+Choose independent reviewers from the candidate's actual changed surface. This
+table is a routing aid, not a requirement to spawn every listed reviewer:
+
+| Candidate signal | Required review dimension |
+| --- | --- |
+| New branch, state transition, validation, I/O, cancellation, or error path | Correctness and regression discrimination |
+| Shared exported contract, dependency direction, task DAG, or ownership boundary | Architecture and contract compatibility |
+| Credentials, authenticated transport, personal data, or trust-boundary change | Security and privacy |
+| Goroutine, callback, native lifecycle, media, shutdown, or resource ownership | Native/platform resource and timing |
+| Checks, CI, specs, templates, skills, agent rules, or evidence formats | Gate/workflow integrity plus separate human policy approval |
+
+One independent reviewer may cover several directly related dimensions. Add
+another separate, authorized context only when expertise or independence
+requires it. The implementation author can explain their work and evidence but
+cannot count as any required independent dimension.
 
 ### Reviewer succession
 

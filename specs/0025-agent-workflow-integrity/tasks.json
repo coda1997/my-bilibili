@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "spec_id": "0025-agent-workflow-integrity",
+  "tasks": [
+    {
+      "id": "AWF-001",
+      "title": "Freeze the workflow hardening contract",
+      "depends_on": [],
+      "write_paths": ["specs/0025-agent-workflow-integrity"],
+      "acceptance": ["AWF-AC-01", "AWF-AC-02", "AWF-AC-03", "AWF-AC-04", "AWF-AC-05"],
+      "checks": ["go run ./cmd/dev check"]
+    },
+    {
+      "id": "AWF-002",
+      "title": "Add workflow integrity validation and negative controls",
+      "depends_on": ["AWF-001"],
+      "write_paths": ["internal/check", "cmd/dev/main_test.go", "go.mod", "go.sum"],
+      "acceptance": ["AWF-AC-01", "AWF-AC-02"],
+      "checks": ["go test -count=1 ./internal/check", "go run ./cmd/dev check --race"]
+    },
+    {
+      "id": "AWF-003",
+      "title": "Route bounded fixes and risk-selected review",
+      "depends_on": ["AWF-001"],
+      "write_paths": [
+        "AGENTS.md",
+        "README.md",
+        ".agents/skills/fix",
+        ".agents/skills/independent-review",
+        "docs/development.md",
+        "docs/testing.md",
+        "docs/workflow.md"
+      ],
+      "acceptance": ["AWF-AC-03", "AWF-AC-04"],
+      "checks": ["go test -count=1 ./internal/check", "go run ./cmd/dev check --race"]
+    },
+    {
+      "id": "AWF-004",
+      "title": "Remove volatile source identity from status",
+      "depends_on": ["AWF-001"],
+      "write_paths": ["STATUS.md"],
+      "acceptance": ["AWF-AC-05"],
+      "checks": ["go test -count=1 ./internal/check", "go run ./cmd/dev check --race"]
+    }
+  ]
+}

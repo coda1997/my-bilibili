@@ -24,10 +24,23 @@ func testRepository(t *testing.T) string {
 	root := t.TempDir()
 	gitCommand(t, root, "init", "--quiet")
 	files := map[string]string{
-		".gitignore":            "/.agent/\n",
-		"go.mod":                "module example\n\ngo 1.27.3\n",
-		"specs/test/spec.md":    "# Test\n\n### TEST-AC-01\nOne observable outcome.\n",
-		"specs/test/tasks.json": `{"schema_version":1,"spec_id":"test","tasks":[{"id":"T1","title":"Task","depends_on":[],"write_paths":["cmd"],"acceptance":["TEST-AC-01"],"checks":["go test ./..."]}]}`,
+		".gitignore":                       "/.agent/\n",
+		"go.mod":                           "module example\n\ngo 1.27.3\n",
+		"README.md":                        "# Test repository\n",
+		"AGENTS.md":                        "# Agents\n\n## Task routing\n\n- Sample: [`sample`](.agents/skills/sample/SKILL.md).\n",
+		"STATUS.md":                        "# Status\n",
+		".github/copilot-instructions.md":  "# Copilot\n",
+		".github/pull_request_template.md": "# Pull request\n",
+		".agents/skills/sample/SKILL.md":   "---\nname: sample\ndescription: Sample skill\n---\n# Sample\n",
+		"docs/templates/spec.md":           "# Spec template\n",
+		"docs/agent-convergence.md":        "# Convergence\n",
+		"docs/architecture.md":             "# Architecture\n",
+		"docs/development.md":              "# Development\n",
+		"docs/pull-requests.md":            "# Pull requests\n",
+		"docs/testing.md":                  "# Testing\n",
+		"docs/workflow.md":                 "# Workflow\n",
+		"specs/test/spec.md":               "# Test\n\n### TEST-AC-01\nOne observable outcome.\n",
+		"specs/test/tasks.json":            `{"schema_version":1,"spec_id":"test","tasks":[{"id":"T1","title":"Task","depends_on":[],"write_paths":["cmd"],"acceptance":["TEST-AC-01"],"checks":["go test ./..."]}]}`,
 	}
 	for path, text := range files {
 		filename := filepath.Join(root, filepath.FromSlash(path))

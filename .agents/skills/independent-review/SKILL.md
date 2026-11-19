@@ -25,6 +25,13 @@ Choose the assigned mode:
   behavioral defects, unmet ACs, resource/platform risks, and regression gaps.
   Run relevant [checks](../../../docs/testing.md) independently where available.
 
+Select review dimensions from the
+[risk-selected independent-review table](../../../docs/workflow.md#risk-selected-independent-review).
+One reviewer may own several related dimensions when independent and equipped;
+add another separate context only when the candidate's risks require it.
+Do not use an automatic fixed fan-out, and never count the implementation
+author's review as independent.
+
 Keep the candidate read-only. Use isolated scratch for probes and return
 sanitized logs; do not write the controller's run or change historical reports.
 Do not bind dirty code solely to HEAD or accept baseline CI as changed-candidate

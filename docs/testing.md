@@ -5,8 +5,12 @@
 Install Git and the exact Go version in `go.mod` (currently 1.27.3), and make
 both available on PATH. Installation/global shell changes require the user's
 permission. Do not silently download a different toolchain to make a check pass.
+
 The project pins its dependencies in [go.mod](../go.mod) and [go.sum](../go.sum).
 For offline checks, populate the Go module cache with the pinned versions first.
+The product foundation has no parser dependency. The development checker uses
+Goldmark and YAML v3 only to validate agent Markdown and skill frontmatter;
+product packages do not import those parsers.
 
 From the repository root, with Bash/zsh:
 
@@ -76,8 +80,11 @@ tooling compatibility does not establish native product support.
 
 Map ACs to tests or named manual checks in the spec. Record `pass`, `fail`, or
 `not-tested` per required OS/capability. Coverage percentages describe tests;
-they do not prove an AC or independent approval. Go checks do not validate
-Markdown links, skill behavior, or the completeness of PR descriptions.
+they do not prove an AC or independent approval. The canonical Go check
+validates the checked workflow inventory's skill frontmatter, routing, local
+Markdown links and fragments, and repository containment. It does not execute
+the semantic behavior of a skill or validate the completeness of a PR
+description.
 
 For template/skill changes, instantiate templates in an isolated scratch
 checkout, validate through the real CLI, and exercise a realistic workflow.

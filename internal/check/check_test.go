@@ -3,9 +3,14 @@ package check
 import (
 	"bytes"
 	"context"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/yuin/goldmark/ast"
 )
 
 func TestFormattingIsReadOnly(t *testing.T) {
@@ -59,5 +64,519 @@ func TestCanceledCheck(t *testing.T) {
 	}
 	if output.Len() != 0 {
 		t.Fatal("started a step after cancellation")
+	}
+}
+
+func TestWorkflowAcceptsValidInventory(t *testing.T) {
+	root := writeWorkflowFixture(t)
+	count, err := Workflow(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count == 0 {
+		t.Fatal("workflow check covered no files")
+	}
+}
+
+func TestWorkflowAcceptsValidMarkdownForms(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(*testing.T, string)
+	}{
+		{
+			name: "non-directory skill root entries",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, ".agents/skills/.DS_Store", "metadata")
+				writeTestFile(t, root, ".agents/skills/README.md", "# Skill index\n")
+			},
+		},
+		{
+			name: "nested task-routing heading and fenced heading",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, "AGENTS.md", "# Agents\n\n## Task routing\n\n```text\n# Example heading\n```\n\n### Implementation\n\n- Sample: [`sample`](.agents/skills/sample/SKILL.md).\n")
+			},
+		},
+		{
+			name: "valid footnote and bracket identifiers",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, "README.md", "# Root\nText[^1] indexes grid[row][col].\n\n[^1]: note\n")
+			},
+		},
+		{
+			name: "inline-code heading anchor",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/workflow.md", "# Run `go test`\n")
+				writeTestFile(t, root, "README.md", "# Root\n[workflow](docs/workflow.md#run-go-test)\n")
+			},
+		},
+		{
+			name: "percent in encoded link path",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/name%20x.md", "# Percent\n")
+				writeTestFile(t, root, "README.md", "# Root\n[percent](docs/name%2520x.md)\n")
+			},
+		},
+		{
+			name: "multiple skills and command tokens on one route line",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, ".agents/skills/other/SKILL.md", "---\nname: other\ndescription: Other skill\n---\n# Other\n")
+				writeTestFile(t, root, "AGENTS.md", "# Agents\n\n## Task routing\n\n- Tools: run `gofmt`, then [`sample`](.agents/skills/sample/SKILL.md) and [`other`](.agents/skills/other/SKILL.md).\n")
+			},
+		},
+		{
+			name: "indented YAML block scalar",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, ".agents/skills/sample/SKILL.md", "---\nname: sample\ndescription: >2\n  Sample skill\n---\n# Sample\n")
+			},
+		},
+		{
+			name: "setext heading anchor",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/workflow.md", "Workflow heading\n================\n")
+				writeTestFile(t, root, "README.md", "# Root\n[workflow](docs/workflow.md#workflow-heading)\n")
+			},
+		},
+		{
+			name: "commented links are ignored",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, "README.md", "# Root\n<!-- [broken](missing.md) -->\n")
+			},
+		},
+		{
+			name: "commented headings do not end task routing",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, "AGENTS.md", "# Agents\n\n## Task routing\n\n<!--\n## Not a real section\n-->\n\n- Sample: [`sample`](.agents/skills/sample/SKILL.md).\n")
+			},
+		},
+		{
+			name: "fragment comparison ignores case",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/workflow.md", "# Mixed Case Heading\n")
+				writeTestFile(t, root, "README.md", "# Root\n[workflow](docs/workflow.md#Mixed-Case-Heading)\n")
+			},
+		},
+		{
+			name: "GitHub omits HTML placeholders in assignment anchors",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/templates/assignment.md", "# Assignment: <role> / <task-id>\n")
+				writeTestFile(t, root, "README.md", "# Root\n[assignment](docs/templates/assignment.md#assignment---)\n")
+			},
+		},
+		{
+			name: "heading fragments use rendered text",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/workflow.md", "# A &amp; B\n\n# Intro <em>setup</em>\n")
+				writeTestFile(t, root, "README.md", "# Root\n[entity](docs/workflow.md#a--b)\n[HTML](docs/workflow.md#intro-setup)\n")
+			},
+		},
+		{
+			name: "code span fragments preserve literal text",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/workflow.md", "# `A &amp; B <em>`\n")
+				writeTestFile(t, root, "README.md", "# Root\n[code](docs/workflow.md#a-amp-b-em)\n")
+			},
+		},
+		{
+			name: "GitHub reserves generated and literal duplicate anchors globally",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/workflow.md", "# Foo\n\n# Foo\n\n# Foo-1\n")
+				writeTestFile(t, root, "README.md", "# Root\n[first](docs/workflow.md#foo)\n[duplicate](docs/workflow.md#foo-1)\n[collision](docs/workflow.md#foo-1-1)\n")
+			},
+		},
+		{
+			name: "parentheses in local link path",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/foo(1).md", "# Parentheses\n")
+				writeTestFile(t, root, "README.md", "# Root\n[fixture](docs/foo(1).md)\n")
+			},
+		},
+		{
+			name: "Markdown escapes and entities in link targets",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/foo(1).md", "# Parentheses\n")
+				writeTestFile(t, root, "docs/a&b.md", "# Ampersand\n")
+				writeTestFile(t, root, "README.md", "# Root\n[inline](docs/foo\\(1\\).md)\n[reference][guide]\n[entity](docs/a&amp;b.md)\n\n[guide]: docs/foo\\(1\\).md\n")
+			},
+		},
+		{
+			name: "YAML double-quoted escapes",
+			setup: func(t *testing.T, root string) {
+				writeTestFile(t, root, ".agents/skills/sample/SKILL.md", "---\nname: \"sam\\u0070le\"\ndescription: \"Sample \\\"skill\\\"\"\n---\n# Sample\n")
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := writeWorkflowFixture(t)
+			test.setup(t, root)
+			if _, err := Workflow(root); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestWorkflowRejectsDamagedInputs(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*testing.T, string)
+	}{
+		{
+			name: "skill name mismatch",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, ".agents/skills/sample/SKILL.md", "---\nname: other\ndescription: Sample skill\n---\n# Sample\n")
+			},
+		},
+		{
+			name: "comment-only skill description",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, ".agents/skills/sample/SKILL.md", "---\nname: sample\ndescription: # absent\n---\n# Sample\n")
+			},
+		},
+		{
+			name: "empty block skill description",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, ".agents/skills/sample/SKILL.md", "---\nname: sample\ndescription: >-\n---\n# Sample\n")
+			},
+		},
+		{
+			name: "commented empty block skill description",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, ".agents/skills/sample/SKILL.md", "---\nname: sample\ndescription: >- # absent\n---\n# Sample\n")
+			},
+		},
+		{
+			name: "commented null skill description",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, ".agents/skills/sample/SKILL.md", "---\nname: sample\ndescription: null # absent\n---\n# Sample\n")
+			},
+		},
+		{
+			name: "nested frontmatter keys",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, ".agents/skills/sample/SKILL.md", "---\nmetadata:\n  name: sample\n  description: Sample skill\n---\n# Sample\n")
+			},
+		},
+		{
+			name: "empty indented block description",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, ".agents/skills/sample/SKILL.md", "---\nname: sample\ndescription: >2\n---\n# Sample\n")
+			},
+		},
+		{
+			name: "unclosed inline backtick cannot hide links",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "README.md", "# Root\nUnclosed ` text.\n\n[missing](missing.md)\n")
+			},
+		},
+		{
+			name: "missing local link",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "README.md", "# Root\n[missing](missing.md)\n")
+			},
+		},
+		{
+			name: "broken link after mismatched fence",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "README.md", "# Root\n\n````markdown\n```\n````\n[missing](missing.md)\n")
+			},
+		},
+		{
+			name: "different fence character does not close block",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "README.md", "# Root\n\n````markdown\n~~~~\n````\n[missing](missing.md)\n")
+			},
+		},
+		{
+			name: "case-mismatched local link",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "README.md", "# Root\n[workflow](docs/Workflow.md)\n")
+			},
+		},
+		{
+			name: "windows drive absolute link",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "README.md", "# Root\n[outside](C:/outside.md)\n")
+			},
+		},
+		{
+			name: "windows drive backslash link",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "README.md", "# Root\n[outside](C:\\outside.md)\n")
+			},
+		},
+		{
+			name: "windows UNC link",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "README.md", "# Root\n[outside](\\\\server\\share\\outside.md)\n")
+			},
+		},
+		{
+			name: "route after same-level heading is outside section",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "AGENTS.md", "# Agents\n\n## Task routing\n\nNo route here.\n\n## Next section\n\n- Sample: [`sample`](.agents/skills/sample/SKILL.md).\n")
+			},
+		},
+		{
+			name: "missing heading fragment",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "README.md", "# Root\n[missing](docs/workflow.md#missing-heading)\n")
+			},
+		},
+		{
+			name: "assignment anchor includes HTML placeholder names",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/templates/assignment.md", "# Assignment: <role> / <task-id>\n")
+				writeTestFile(t, root, "README.md", "# Root\n[assignment](docs/templates/assignment.md#assignment-role--task-id)\n")
+			},
+		},
+		{
+			name: "heading fragment includes entity name",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/workflow.md", "# A &amp; B\n")
+				writeTestFile(t, root, "README.md", "# Root\n[entity](docs/workflow.md#a-amp-b)\n")
+			},
+		},
+		{
+			name: "heading fragment includes HTML tag names",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "docs/workflow.md", "# Intro <em>setup</em>\n")
+				writeTestFile(t, root, "README.md", "# Root\n[HTML](docs/workflow.md#intro-emsetupem)\n")
+			},
+		},
+		{
+			name: "missing skill route",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "AGENTS.md", "# Agents\n## Task routing\n\n- Planning: no skill route.\n")
+			},
+		},
+		{
+			name: "unknown skill route",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "AGENTS.md", "# Agents\n## Task routing\n\n- Planning: [`missing-skill`](.agents/skills/missing-skill/SKILL.md).\n")
+			},
+		},
+		{
+			name: "unknown skill route with existing target",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "AGENTS.md", "# Agents\n## Task routing\n\n- Sample: [`sample`](.agents/skills/sample/SKILL.md).\n- Planning: [`missing-skill`](docs/workflow.md).\n")
+			},
+		},
+		{
+			name: "skill in comment is not a route",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "AGENTS.md", "# Agents\n## Task routing\n\n<!-- Planning: [`sample`](.agents/skills/sample/SKILL.md). -->\n")
+			},
+		},
+		{
+			name: "skill in fenced example is not a route",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "AGENTS.md", "# Agents\n## Task routing\n\n```text\n- Planning: [`sample`](.agents/skills/sample/SKILL.md).\n```\n")
+			},
+		},
+		{
+			name: "duplicate skill route",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "AGENTS.md", "# Agents\n## Task routing\n\n- Planning: [`sample`](.agents/skills/sample/SKILL.md).\n- Repair: [`sample`](.agents/skills/sample/SKILL.md).\n")
+			},
+		},
+		{
+			name: "duplicate skill route with different label formatting",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "AGENTS.md", "# Agents\n## Task routing\n\n- Planning: [`sample`](.agents/skills/sample/SKILL.md).\n- Repair: [sample](./.agents/skills/sample/SKILL.md).\n")
+			},
+		},
+		{
+			name: "broken reference link",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "README.md", "# Root\n[missing][guide]\n\n[guide]: missing.md\n")
+			},
+		},
+		{
+			name: "broken unused reference link",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "README.md", "# Root\n\n[guide]: missing.md\n")
+			},
+		},
+		{
+			name: "broken link in unused footnote",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "README.md", "# Root\n\n[^1]: [missing](missing.md)\n")
+			},
+		},
+		{
+			name: "outside root link",
+			mutate: func(t *testing.T, root string) {
+				writeTestFile(t, root, "README.md", "# Root\n[outside](../outside.md)\n")
+				writeTestFile(t, filepath.Dir(root), "outside.md", "# Outside\n")
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := writeWorkflowFixture(t)
+			test.mutate(t, root)
+			if _, err := Workflow(root); err == nil {
+				t.Fatal("accepted damaged workflow input")
+			}
+		})
+	}
+}
+
+func TestWorkflowRejectsSkillSymlinkEntry(t *testing.T) {
+	root := writeWorkflowFixture(t)
+	target := filepath.Join(root, "README.md")
+	link := filepath.Join(root, ".agents", "skills", "linked")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink fixture unavailable: %v", err)
+	}
+	if _, err := Workflow(root); err == nil {
+		t.Fatal("accepted symlinked skill entry")
+	}
+}
+
+func TestWorkflowRejectsWrongCaseInventoryFile(t *testing.T) {
+	root := writeWorkflowFixture(t)
+	if err := os.Remove(filepath.Join(root, "README.md")); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, root, "readme.md", "# Root\n")
+	if _, err := Workflow(root); err == nil || !strings.Contains(err.Error(), `path "README.md" uses wrong case`) || !strings.Contains(err.Error(), `"readme.md"`) {
+		t.Fatalf("want exact-case inventory diagnostic, got %v", err)
+	}
+}
+
+func TestWorkflowRejectsSymlinkEscapeBeforeCheckingSuffix(t *testing.T) {
+	root := writeWorkflowFixture(t)
+	outside := t.TempDir()
+	writeTestFile(t, outside, "Outside.md", "# Outside\n")
+	if err := os.Symlink(outside, filepath.Join(root, "linked")); err != nil {
+		t.Skipf("symlink fixture unavailable: %v", err)
+	}
+	target := filepath.FromSlash("linked/../README.md")
+	if filepath.Separator != '\\' {
+		target = root + string(filepath.Separator) + target
+	}
+	through := filepath.Join(root, "through")
+	if err := os.Symlink(target, through); err != nil {
+		t.Fatal(err)
+	}
+	if stored, err := os.Readlink(through); err != nil || stored != target {
+		t.Fatalf("fixture must preserve the unresolved symlink target: got %q, err=%v", stored, err)
+	}
+	for _, destination := range []string{"linked/outside.md", "through"} {
+		writeTestFile(t, root, "README.md", "# Root\n[outside]("+destination+")\n")
+		if _, err := Workflow(root); err == nil || !strings.Contains(err.Error(), "symlink outside the repository") || strings.Contains(err.Error(), "Outside.md") {
+			t.Errorf("%s: want boundary diagnostic without outside path details, got %v", destination, err)
+		}
+	}
+}
+
+func TestWorkflowAcceptsInRootSymlinks(t *testing.T) {
+	root := writeWorkflowFixture(t)
+	if err := os.Symlink("docs", filepath.Join(root, "relative")); err != nil {
+		t.Skipf("symlink fixture unavailable: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(root, "docs"), filepath.Join(root, "absolute")); err != nil {
+		t.Fatal(err)
+	}
+	sep := string(filepath.Separator)
+	target := filepath.Dir(root) + sep + "." + sep + filepath.Base(root) + sep + "docs"
+	if err := os.Symlink(target, filepath.Join(root, "dot-absolute")); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, root, "README.md", "# Root\n[relative](relative/workflow.md#workflow)\n[absolute](absolute/workflow.md#workflow)\n[dot absolute](dot-absolute/workflow.md#workflow)\n")
+	if _, err := Workflow(root); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestClassifySkillEntryRejectsSymlinkOnEveryPlatform(t *testing.T) {
+	if _, err := classifySkillEntry("linked", fs.ModeSymlink, false); err == nil {
+		t.Fatal("accepted symlink skill entry")
+	}
+}
+
+func TestWalkNodeTextPropagatesVisitorError(t *testing.T) {
+	document := parseMarkdownDocument([]byte("# Heading\n"))
+	want := errors.New("visitor failed")
+	err := walkNodeText(document.root, document.source, func(ast.Node, []byte) error {
+		return want
+	})
+	if !errors.Is(err, want) {
+		t.Fatalf("got %v, want %v", err, want)
+	}
+}
+
+func TestWorkflowRejectsLinkCycles(t *testing.T) {
+	root := writeWorkflowFixture(t)
+	if err := os.Symlink("loop", filepath.Join(root, "loop")); err != nil {
+		t.Skipf("symlink fixture unavailable: %v", err)
+	}
+	writeTestFile(t, root, "README.md", "# Root\n[loop](loop)\n")
+	if _, err := Workflow(root); err == nil || !strings.Contains(err.Error(), "symbolic link limit") {
+		t.Fatalf("want bounded symlink resolution, got %v", err)
+	}
+}
+
+func TestRunStopsBeforeCommandsOnInvalidWorkflow(t *testing.T) {
+	root := writeWorkflowFixture(t)
+	writeTestFile(t, root, "README.md", "# Root\n[missing](missing.md)\n")
+	writeTestFile(t, root, "specs/valid/spec.md", "# Valid\n\n### TEST-AC-01\n\nFixture acceptance.\n")
+	writeTestFile(t, root, "specs/valid/tasks.json", `{
+  "schema_version": 1,
+  "spec_id": "valid",
+  "tasks": [{
+    "id": "TEST-001",
+    "title": "Fixture",
+    "depends_on": [],
+    "write_paths": ["README.md"],
+    "acceptance": ["TEST-AC-01"],
+    "checks": ["go test ./..."]
+  }]
+}`)
+	var output bytes.Buffer
+	if err := Run(context.Background(), root, &output, false); err == nil {
+		t.Fatal("accepted invalid workflow input")
+	}
+	if !strings.Contains(output.String(), "agent workflow integrity") {
+		t.Fatal("canonical check did not execute the workflow step")
+	}
+	if strings.Contains(output.String(), "Go formatting") {
+		t.Fatal("canonical check continued after workflow failure")
+	}
+}
+
+func writeWorkflowFixture(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	writeTestFile(t, root, "README.md", "# Root\n")
+	writeTestFile(t, root, "AGENTS.md", "# Agents\n\n## Task routing\n\n- Sample: [`sample`](.agents/skills/sample/SKILL.md).\n")
+	writeTestFile(t, root, "STATUS.md", "# Status\n")
+	writeTestFile(t, root, ".github/copilot-instructions.md", "# Copilot\n")
+	writeTestFile(t, root, ".github/pull_request_template.md", "# Pull request\n")
+	writeTestFile(t, root, ".agents/skills/sample/SKILL.md", "---\nname: sample\ndescription: Sample skill\n---\n# Sample\n")
+	writeTestFile(t, root, "docs/templates/spec.md", "# Spec template\n")
+	for _, relative := range []string{
+		"agent-convergence.md",
+		"architecture.md",
+		"development.md",
+		"pull-requests.md",
+		"testing.md",
+		"workflow.md",
+	} {
+		writeTestFile(t, root, filepath.Join("docs", relative), "# Workflow\n")
+	}
+	return root
+}
+
+func writeTestFile(t *testing.T, root, relative, contents string) {
+	t.Helper()
+	path := filepath.Join(root, filepath.FromSlash(relative))
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
