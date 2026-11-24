@@ -75,8 +75,10 @@ cookies, authenticated media URLs, or external network access.
 Under [ADR 0005](adr/0005-platform-priority.md), macOS is the required product
 runtime for M1, M2 and P0. Windows is optional P2: missing Windows native or
 package evidence does not block those milestones and stays `not-tested`, never
-PASS or a support claim. Existing Linux/macOS/Windows Go CI checks still apply;
-tooling compatibility does not establish native product support.
+PASS or a support claim. CI runs the full Go race checks on Ubuntu and
+cross-compiles `darwin/{amd64,arm64}` and `windows/{amd64,arm64}`;
+cross-compilation validates source compatibility only and does not establish
+native macOS or Windows runtime execution.
 
 Map ACs to tests or named manual checks in the spec. Record `pass`, `fail`, or
 `not-tested` per required OS/capability. Coverage percentages describe tests;
@@ -140,10 +142,14 @@ established. Only the controller attaches logs beneath its own run directory.
 ## GitHub Actions
 
 The canonical definition is [check.yml](../.github/workflows/check.yml): PRs,
-pushes to `main`/`master`, and manual dispatch run the complete Go checks on
-Ubuntu 24.04, macOS 15, and Windows 2025. Linux/macOS jobs use `--race`; Windows
-currently uses ordinary checks. Action revisions are pinned, repository token
-permissions are read-only, and checkout does not retain Git credentials.
+pushes to `main`/`master`, and manual dispatch run the complete Go checks with
+`--race` on Ubuntu 24.04, followed by `CGO_ENABLED=0` cross-compilation
+(`go vet` and `go build`, both default and `-tags e2e`) for `darwin/amd64`,
+`darwin/arm64`, `windows/amd64`, and `windows/arm64`. Action revisions are
+pinned, repository token permissions are read-only, and checkout does not
+retain Git credentials. Cross-compilation verifies build and vet compatibility
+only; macOS runtime, race, Chinese font, and native client checks still require
+an actual Mac.
 
 - Every Go package and active spec is checked, but the CI run recorder is
   hardcoded to `specs/0001-foundation`. Feature-specific evidence selection is
