@@ -1,5 +1,13 @@
 # ADR 0005: macOS required; Windows P2 / nice-to-have
 
+> Subsequent owner CI update, 2026-11-24: GitHub Actions was narrowed from the
+> three-OS runner matrix to Ubuntu 24.04 full race checks plus `CGO_ENABLED=0`
+> cross-compilation (`go vet` and `go build`, default and `-tags e2e`) for
+> `darwin/{amd64,arm64}` and `windows/{amd64,arm64}`; see
+> [check.yml](../../.github/workflows/check.yml) and
+> [testing](../testing.md#github-actions). Historical M0 evidence and platform
+> support boundaries remain unchanged.
+
 > Acceptance update, 2026-11-13: the owner accepted M1 as completed with libmpv
 > playback and mygo UI. See [the acceptance handoff](../../reports/0025-m1-acceptance.md).
 > Pending-gate wording below describes this earlier decision's original scope;

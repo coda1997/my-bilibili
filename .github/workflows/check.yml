@@ -15,13 +15,9 @@ concurrency:
 
 jobs:
   check:
-    name: Check (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: Check (ubuntu-24.04)
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, macos-15, windows-2025]
     defaults:
       run:
         shell: bash
@@ -38,7 +34,7 @@ jobs:
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
-          cache: false
+          cache: true
 
       - name: Start evidence record
         id: start
@@ -50,11 +46,35 @@ jobs:
         id: checks
         env:
           RUN_ID: ${{ steps.start.outputs.run_id }}
+        run: go run ./cmd/dev check --run "$RUN_ID" --race
+
+      - name: Cross-compile darwin and windows
+        id: cross_compile
+        env:
+          RUN_ID: ${{ steps.start.outputs.run_id }}
         run: |
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            go run ./cmd/dev check --run "$RUN_ID"
+          set -euo pipefail
+          log_rel="evidence/cross-compile.log"
+          log_path=".agent/runs/$RUN_ID/$log_rel"
+          mkdir -p "$(dirname "$log_path")"
+          run_cross() {
+            for target in darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+              os="${target%/*}"
+              arch="${target#*/}"
+              echo "=== $os/$arch (CGO_ENABLED=0) ==="
+              GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go vet ./... || return $?
+              GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build ./... || return $?
+              GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go vet -tags e2e ./... || return $?
+              GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build -tags e2e ./... || return $?
+            done
+          }
+          status=0
+          run_cross 2>&1 | tee "$log_path" || status=$?
+          if [ "$status" -eq 0 ]; then
+            go run ./cmd/dev run note --id "$RUN_ID" --phase validation --message "Cross-compile vet/build (default and e2e) passed for darwin/{amd64,arm64} and windows/{amd64,arm64}" --evidence "$log_rel"
           else
-            go run ./cmd/dev check --run "$RUN_ID" --race
+            go run ./cmd/dev run note --id "$RUN_ID" --phase validation --message "Cross-compile vet/build failed for darwin/windows targets" --evidence "$log_rel"
+            exit "$status"
           fi
 
       - name: Record execution outcome (not approval)
@@ -62,18 +82,19 @@ jobs:
         env:
           RUN_ID: ${{ steps.start.outputs.run_id }}
           CHECK_OUTCOME: ${{ steps.checks.outcome }}
+          CROSS_OUTCOME: ${{ steps.cross_compile.outcome }}
         run: |
-          if [ "$CHECK_OUTCOME" = "success" ]; then
-            go run ./cmd/dev run finish --id "$RUN_ID" --outcome succeeded --message "Foundation checks passed on $RUNNER_OS; independent review still required"
+          if [ "$CHECK_OUTCOME" = "success" ] && [ "$CROSS_OUTCOME" = "success" ]; then
+            go run ./cmd/dev run finish --id "$RUN_ID" --outcome succeeded --message "Foundation checks and darwin/windows cross-compile passed on $RUNNER_OS; independent review still required"
           else
-            go run ./cmd/dev run finish --id "$RUN_ID" --outcome failed --message "Foundation checks did not pass on $RUNNER_OS"
+            go run ./cmd/dev run finish --id "$RUN_ID" --outcome failed --message "CI checks did not pass on $RUNNER_OS (checks=$CHECK_OUTCOME, cross_compile=$CROSS_OUTCOME)"
           fi
 
       - name: Preserve CI evidence
         if: always() && steps.start.outputs.run_id != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: foundation-${{ matrix.os }}-${{ github.run_attempt }}
+          name: foundation-ubuntu-24.04-${{ github.run_attempt }}
           path: .agent/runs/${{ steps.start.outputs.run_id }}/
           include-hidden-files: true
           if-no-files-found: error

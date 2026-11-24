@@ -250,9 +250,10 @@ PR #1 and its merged-master revision passed three-OS CI on the now-public
 repository; see the [current handoff](../reports/0003-publication.md) for exact
 source and evidence identities. Later changes require their own CI.
 
-The three-OS matrix tests the foundation tools. It is not a mygo UI or media
-runtime test. Windows uses ordinary checks; race checks run on the configured
-Linux and macOS jobs. A future Windows race job needs a validated C toolchain.
+CI runs the full foundation checks with `--race` on Ubuntu 24.04, plus
+`CGO_ENABLED=0` cross-compilation (`go vet` and `go build`, default and
+`-tags e2e`) for `darwin/{amd64,arm64}` and `windows/{amd64,arm64}`. It is not
+a macOS or Windows runtime test, nor a mygo UI or media runtime test.
 The recorder currently freezes the foundation spec even on a feature PR;
 checking all packages does not establish that feature's acceptance evidence.
 
