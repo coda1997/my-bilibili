@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -120,6 +121,7 @@ func TestWorkflowAcceptsValidMarkdownForms(t *testing.T) {
 			name: "multiple skills and command tokens on one route line",
 			setup: func(t *testing.T, root string) {
 				writeTestFile(t, root, ".agents/skills/other/SKILL.md", "---\nname: other\ndescription: Other skill\n---\n# Other\n")
+				writeClaudeSkillMirror(t, root, "other")
 				writeTestFile(t, root, "AGENTS.md", "# Agents\n\n## Task routing\n\n- Tools: run `gofmt`, then [`sample`](.agents/skills/sample/SKILL.md) and [`other`](.agents/skills/other/SKILL.md).\n")
 			},
 		},
@@ -556,6 +558,7 @@ func writeWorkflowFixture(t *testing.T) string {
 	writeTestFile(t, root, ".github/copilot-instructions.md", "# Copilot\n")
 	writeTestFile(t, root, ".github/pull_request_template.md", "# Pull request\n")
 	writeTestFile(t, root, ".agents/skills/sample/SKILL.md", "---\nname: sample\ndescription: Sample skill\n---\n# Sample\n")
+	writeClaudeSkillMirror(t, root, "sample")
 	writeTestFile(t, root, "docs/templates/spec.md", "# Spec template\n")
 	for _, relative := range []string{
 		"agent-convergence.md",
@@ -579,4 +582,294 @@ func writeTestFile(t *testing.T, root, relative, contents string) {
 	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func writeClaudeSkillMirror(t *testing.T, root, name string) {
+	t.Helper()
+	dir := filepath.Join(root, ".claude", "skills")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target := "../../.agents/skills/" + name
+	link := filepath.Join(dir, name)
+	if err := os.Symlink(target, link); err != nil {
+		if runtime.GOOS == "windows" {
+			if writeErr := os.WriteFile(link, []byte(target), 0o600); writeErr != nil {
+				t.Fatal(writeErr)
+			}
+			return
+		}
+		t.Fatal(err)
+	}
+}
+
+func writeSpecFixture(t *testing.T, root, specID, acID string) {
+	t.Helper()
+	writeTestFile(t, root, "specs/"+specID+"/spec.md", "# "+specID+"\n\n### "+acID+"\n\nObservable criterion.\n")
+	writeTestFile(t, root, "specs/"+specID+"/tasks.json", `{
+  "schema_version": 1,
+  "spec_id": "`+specID+`",
+  "tasks": [{
+    "id": "T1",
+    "title": "Fixture task",
+    "depends_on": [],
+    "write_paths": ["README.md"],
+    "acceptance": ["`+acID+`"],
+    "checks": ["go test ./..."]
+  }]
+}`)
+}
+
+func runClaudeSkillMirrorCheck(t *testing.T, root string, isWindows bool) error {
+	t.Helper()
+	absolute, err := filepath.Abs(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := filepath.EvalSymlinks(absolute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootFS, err := os.OpenRoot(resolved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rootFS.Close()
+	paths := workflowPaths{root: rootFS, sourceRoot: absolute}
+	_, skills, err := workflowInventory(paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return validateClaudeSkillMirrors(paths, skills, isWindows)
+}
+
+func TestWorkflowClaudeSkillMirrors(t *testing.T) {
+	t.Run("accepts regular DS_Store in claude skills", func(t *testing.T) {
+		root := writeWorkflowFixture(t)
+		writeTestFile(t, root, ".claude/skills/.DS_Store", "metadata")
+		if _, err := Workflow(root); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("rejects missing claude skills directory", func(t *testing.T) {
+		root := writeWorkflowFixture(t)
+		if err := os.RemoveAll(filepath.Join(root, ".claude")); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Workflow(root); err == nil {
+			t.Fatal("accepted missing .claude/skills directory")
+		}
+	})
+
+	t.Run("rejects symlinked claude skills directory", func(t *testing.T) {
+		root := writeWorkflowFixture(t)
+		if err := os.RemoveAll(filepath.Join(root, ".claude", "skills")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink("../.agents/skills", filepath.Join(root, ".claude", "skills")); err != nil {
+			t.Skipf("symlink fixture unavailable: %v", err)
+		}
+		if _, err := Workflow(root); err == nil {
+			t.Fatal("accepted symlinked .claude/skills root")
+		}
+	})
+
+	t.Run("rejects missing mirror for canonical skill", func(t *testing.T) {
+		root := writeWorkflowFixture(t)
+		if err := os.Remove(filepath.Join(root, ".claude", "skills", "sample")); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Workflow(root); err == nil || !strings.Contains(err.Error(), "missing Claude skill mirror") {
+			t.Fatalf("want missing mirror diagnostic, got %v", err)
+		}
+	})
+
+	t.Run("rejects unexpected stale entry", func(t *testing.T) {
+		root := writeWorkflowFixture(t)
+		writeClaudeSkillMirror(t, root, "stale")
+		if _, err := Workflow(root); err == nil || !strings.Contains(err.Error(), "unexpected entry") {
+			t.Fatalf("want unexpected entry diagnostic, got %v", err)
+		}
+	})
+
+	t.Run("rejects directory and symlink DS_Store", func(t *testing.T) {
+		root := writeWorkflowFixture(t)
+		if err := os.Mkdir(filepath.Join(root, ".claude", "skills", ".DS_Store"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Workflow(root); err == nil || !strings.Contains(err.Error(), ".DS_Store must be a regular file") {
+			t.Fatalf("want regular-file DS_Store diagnostic, got %v", err)
+		}
+		if err := os.Remove(filepath.Join(root, ".claude", "skills", ".DS_Store")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink("../../README.md", filepath.Join(root, ".claude", "skills", ".DS_Store")); err != nil {
+			t.Skipf("symlink fixture unavailable: %v", err)
+		}
+		if _, err := Workflow(root); err == nil || !strings.Contains(err.Error(), ".DS_Store must be a regular file") {
+			t.Fatalf("want regular-file DS_Store diagnostic for symlink, got %v", err)
+		}
+	})
+
+	t.Run("rejects mistargeted symlink and directory copy", func(t *testing.T) {
+		root := writeWorkflowFixture(t)
+		link := filepath.Join(root, ".claude", "skills", "sample")
+		if err := os.Remove(link); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(link, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := runClaudeSkillMirrorCheck(t, root, false); err == nil {
+			t.Fatal("accepted directory copy on Unix")
+		}
+		if err := runClaudeSkillMirrorCheck(t, root, true); err == nil {
+			t.Fatal("accepted directory copy on Windows")
+		}
+		if err := os.Remove(link); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink("../../.agents/skills/other", link); err != nil {
+			t.Skipf("symlink fixture unavailable: %v", err)
+		}
+		if err := runClaudeSkillMirrorCheck(t, root, false); err == nil || !strings.Contains(err.Error(), "symlink target") {
+			t.Fatalf("want wrong symlink target diagnostic on Unix, got %v", err)
+		}
+		if err := runClaudeSkillMirrorCheck(t, root, true); err == nil || !strings.Contains(err.Error(), "symlink target") {
+			t.Fatalf("want wrong symlink target diagnostic on Windows, got %v", err)
+		}
+	})
+
+	t.Run("windows pointer and backslash modes vs unix strictness", func(t *testing.T) {
+		root := writeWorkflowFixture(t)
+		entry := filepath.Join(root, ".claude", "skills", "sample")
+		if err := os.Remove(entry); err != nil {
+			t.Fatal(err)
+		}
+		// Exact plain-file Git core.symlinks=false pointer: valid on Windows, rejected on Unix.
+		writeTestFile(t, root, ".claude/skills/sample", "../../.agents/skills/sample")
+		if err := runClaudeSkillMirrorCheck(t, root, true); err != nil {
+			t.Fatalf("rejected valid Windows regular-file pointer: %v", err)
+		}
+		if err := runClaudeSkillMirrorCheck(t, root, false); err == nil {
+			t.Fatal("accepted regular-file pointer on Unix")
+		}
+		// Trailing newline must be rejected even on Windows.
+		writeTestFile(t, root, ".claude/skills/sample", "../../.agents/skills/sample\n")
+		if err := runClaudeSkillMirrorCheck(t, root, true); err == nil {
+			t.Fatal("accepted Windows pointer with trailing newline")
+		}
+		// Backslash symlink target: valid on Windows, rejected on Unix.
+		if err := os.Remove(entry); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(`..\..\.agents\skills\sample`, entry); err != nil {
+			t.Skipf("symlink fixture unavailable: %v", err)
+		}
+		if err := runClaudeSkillMirrorCheck(t, root, true); err != nil {
+			t.Fatalf("rejected Windows backslash symlink target: %v", err)
+		}
+		if err := runClaudeSkillMirrorCheck(t, root, false); err == nil {
+			t.Fatal("accepted backslash symlink target on Unix")
+		}
+	})
+}
+
+func TestSpecsCrossSpecUniqueness(t *testing.T) {
+	t.Run("accepts grandfathered historical pairs and non-numeric fixture", func(t *testing.T) {
+		root := t.TempDir()
+		writeSpecFixture(t, root, "valid", "VAL-AC-01")
+		writeSpecFixture(t, root, "0004-client-p0", "P0-AC-01")
+		writeSpecFixture(t, root, "0004-workflow-clarifications", "WFC-AC-01")
+		writeSpecFixture(t, root, "0015-m2-fixture-preview", "M2-AC-01")
+		writeSpecFixture(t, root, "0016-m2-policy-continuation", "M2-AC-01")
+		writeSpecFixture(t, root, "0025-agent-workflow-integrity", "AWF-AC-01")
+		writeSpecFixture(t, root, "0025-p0-async-source", "ASY-AC-01")
+		if err := Specs(root); err != nil {
+			t.Fatalf("rejected valid grandfathered specs: %v", err)
+		}
+	})
+
+	cases := []struct {
+		name  string
+		setup func(*testing.T, string)
+		want  string
+	}{
+		{
+			name: "new duplicate numeric prefix",
+			setup: func(t *testing.T, root string) {
+				writeSpecFixture(t, root, "0031-alpha", "ALP-AC-01")
+				writeSpecFixture(t, root, "0031-beta", "BET-AC-01")
+			},
+			want: `duplicate spec numeric prefix "0031" shared by: 0031-alpha, 0031-beta`,
+		},
+		{
+			name: "unauthorized pair under grandfathered numeric prefix 0004",
+			setup: func(t *testing.T, root string) {
+				writeSpecFixture(t, root, "0004-client-p0", "P0-AC-01")
+				writeSpecFixture(t, root, "0004-new", "NEW-AC-01")
+			},
+			want: `duplicate spec numeric prefix "0004" shared by: 0004-client-p0, 0004-new`,
+		},
+		{
+			name: "third spec under grandfathered numeric prefix 0025",
+			setup: func(t *testing.T, root string) {
+				writeSpecFixture(t, root, "0025-agent-workflow-integrity", "AWF-AC-01")
+				writeSpecFixture(t, root, "0025-p0-async-source", "ASY-AC-01")
+				writeSpecFixture(t, root, "0025-extra", "EXT-AC-01")
+			},
+			want: `duplicate spec numeric prefix "0025" shared by: 0025-agent-workflow-integrity, 0025-extra, 0025-p0-async-source`,
+		},
+		{
+			name: "new duplicate acceptance prefix",
+			setup: func(t *testing.T, root string) {
+				writeSpecFixture(t, root, "0031-alpha", "DUP-AC-01")
+				writeSpecFixture(t, root, "0032-beta", "DUP-AC-02")
+			},
+			want: `duplicate acceptance prefix "DUP" shared by: 0031-alpha, 0032-beta`,
+		},
+		{
+			name: "unauthorized pair under grandfathered acceptance prefix M2",
+			setup: func(t *testing.T, root string) {
+				writeSpecFixture(t, root, "0015-m2-fixture-preview", "M2-AC-01")
+				writeSpecFixture(t, root, "0031-other", "M2-AC-02")
+			},
+			want: `duplicate acceptance prefix "M2" shared by: 0015-m2-fixture-preview, 0031-other`,
+		},
+		{
+			name: "third spec under grandfathered acceptance prefix M2",
+			setup: func(t *testing.T, root string) {
+				writeSpecFixture(t, root, "0015-m2-fixture-preview", "M2-AC-01")
+				writeSpecFixture(t, root, "0016-m2-policy-continuation", "M2-AC-01")
+				writeSpecFixture(t, root, "0031-third", "M2-AC-02")
+			},
+			want: `duplicate acceptance prefix "M2" shared by: 0015-m2-fixture-preview, 0016-m2-policy-continuation, 0031-third`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			tc.setup(t, root)
+			err := Specs(root)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("got %v, want substring %q", err, tc.want)
+			}
+		})
+	}
+
+	t.Run("Run fails fast before go vet on duplicate spec prefix", func(t *testing.T) {
+		root := writeWorkflowFixture(t)
+		writeSpecFixture(t, root, "0031-alpha", "ALP-AC-01")
+		writeSpecFixture(t, root, "0031-beta", "BET-AC-01")
+		var output bytes.Buffer
+		err := Run(context.Background(), root, &output, false)
+		if err == nil || !strings.Contains(err.Error(), `duplicate spec numeric prefix "0031"`) {
+			t.Fatalf("want duplicate prefix error, got %v", err)
+		}
+		if strings.Contains(output.String(), "agent workflow integrity") || strings.Contains(output.String(), "go vet") {
+			t.Fatalf("Run continued after spec contract collision:\n%s", output.String())
+		}
+	})
 }

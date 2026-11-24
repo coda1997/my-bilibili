@@ -12,6 +12,9 @@ still require their assigned review inputs.
 1. Read `STATUS.md`: current state, next actions, blockers and the owner action
    queue. Do not read `reports/` by default; open a report only when STATUS or
    the task links it. Reports describe their own candidates, not the checkout.
+   Do not read `experiments/` by default; open probe code under `experiments/`
+   only when the assigned task explicitly targets an experiment or historical
+   ADR reference.
 2. Verify prerequisites in `docs/testing.md` before invoking Go. Inspect Git
    status and source identity; do not assume ignored tools/runs exist in a clone.
 3. Choose the risk lane in `docs/workflow.md#risk-lanes`. For the full lane,
@@ -35,10 +38,12 @@ still require their assigned review inputs.
 - Owner-only steps: add them to the owner action queue in `STATUS.md` and batch
   them; see `docs/workflow.md#owner-actions`.
 
-These repo-local skills live in `.agents/skills/`. If skill discovery is not
-available, read the matching `SKILL.md` directly. Skills are procedures, not
-additional authority. Keep detailed policy in the linked protocol, not copies
-inside every skill. Assign roles with `docs/templates/assignment.md`.
+These repo-local skills live in `.agents/skills/` and are mirrored via symlinks
+in `.claude/skills/` for Claude Code discovery (checked for parity by
+`go run ./cmd/dev check`). If skill discovery is not available, read the
+matching `SKILL.md` directly. Skills are procedures, not additional authority.
+Keep detailed policy in the linked protocol, not copies inside every skill.
+Assign roles with `docs/templates/assignment.md`.
 
 ## Work rules
 
@@ -61,7 +66,8 @@ inside every skill. Assign roles with `docs/templates/assignment.md`.
 ## Evidence and checks
 
 - Run `go run ./cmd/dev check` for a code change; use `--race` where supported.
-  It also validates the checked skill metadata, routes, and local Markdown links.
+  It also validates the checked skill metadata, `.claude/skills/` parity,
+  routes, cross-spec prefix uniqueness, and local Markdown links.
 - The controller owns `.agent/runs/`. Workers submit evidence to the controller;
   a worktree is not a security sandbox or an approval mechanism.
 - Bind evidence to a commit SHA and, for CI, the run URL for that SHA. Write

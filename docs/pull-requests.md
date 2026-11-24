@@ -52,14 +52,17 @@ do not attribute a successor's decision to the original reviewer.
 Before requesting merge, establish the agreed AC evidence, required platform
 results, BLOCKING closures and high-severity rulings for the candidate. Confirm actual remote required
 checks/review enforcement, not merely the existence of workflow files. After
-the owner's 2026-11-10 settings update, `master` requires PR-based linear
-history, including administrators, and only squash merging is enabled. The
-observed configuration has zero required approving reviews and no required
-status-check contexts; protection alone does not enforce the independent-review
-or CI gates described here. Recheck the live rules before merging. Continue
-using an explicit human merge decision; never bypass protection or enable
-unattended merging as a fallback. See the [publication handoff](../reports/0003-publication.md)
-for the completed supervised merge and its actual checks.
+the owner-authorized 2026-11-24 branch-protection update, `master` requires
+PR-based linear history, administrator enforcement (`enforce_admins: true`),
+squash merging, and strict required status checks for all three CI platforms
+(`Check (ubuntu-24.04)`, `Check (macos-15)`, `Check (windows-2025)`). The
+observed configuration still has zero required approving reviews, so protection
+enforces CI checks and linear history but does not enforce the
+independent-review gate described here. Recheck the live rules before merging.
+Continue using an explicit human merge decision; never bypass protection or
+enable unattended merging as a fallback. See the
+[publication handoff](../reports/0003-publication.md) for the completed
+supervised merge and its actual checks.
 
 ## Durable handoff
 
