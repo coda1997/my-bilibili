@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"unicode"
@@ -108,6 +109,9 @@ func Workflow(root string) (int, error) {
 		return 0, errors.New("workflow inventory omitted AGENTS.md")
 	}
 	if err := validateSkillRoutes(agents, skills); err != nil {
+		return 0, err
+	}
+	if err := validateClaudeSkillMirrors(paths, skills, runtime.GOOS == "windows"); err != nil {
 		return 0, err
 	}
 	linkContext := &workflowLinkContext{
@@ -363,6 +367,69 @@ func validateSkillRoutes(document markdownDocument, skills map[string]string) er
 	for name, relative := range skills {
 		if counts[name] != 1 {
 			return fmt.Errorf("AGENTS.md: skill %q (%s) must appear exactly once in Task routing", name, relative)
+		}
+	}
+	return nil
+}
+
+func validateClaudeSkillMirrors(paths workflowPaths, skills map[string]string, isWindows bool) error {
+	entries, err := paths.readDir(".claude/skills")
+	if err != nil {
+		return err
+	}
+	seen := make(map[string]bool, len(skills))
+	for _, entry := range entries {
+		name := entry.Name()
+		relative := ".claude/skills/" + name
+		info, err := paths.root.Lstat(relative)
+		if err != nil {
+			return fmt.Errorf("%s: %w", relative, err)
+		}
+		mode := info.Mode()
+		if name == ".DS_Store" {
+			if !mode.IsRegular() {
+				return fmt.Errorf("%s: .DS_Store must be a regular file", relative)
+			}
+			continue
+		}
+		if _, exists := skills[name]; !exists {
+			return fmt.Errorf("%s: unexpected entry with no canonical skill under .agents/skills/%s/SKILL.md", relative, name)
+		}
+		wantTarget := "../../.agents/skills/" + name
+		switch {
+		case mode&fs.ModeSymlink != 0:
+			target, err := paths.root.Readlink(relative)
+			if err != nil {
+				return fmt.Errorf("%s: read symlink: %w", relative, err)
+			}
+			gotTarget := target
+			if isWindows {
+				gotTarget = strings.ReplaceAll(gotTarget, "\\", "/")
+			}
+			if gotTarget != wantTarget {
+				return fmt.Errorf("%s: symlink target %q must equal %q", relative, target, wantTarget)
+			}
+		case isWindows && mode.IsRegular():
+			data, err := paths.root.ReadFile(relative)
+			if err != nil {
+				return fmt.Errorf("%s: read skill pointer: %w", relative, err)
+			}
+			if string(data) != wantTarget {
+				return fmt.Errorf("%s: Windows skill pointer %q must equal %q", relative, string(data), wantTarget)
+			}
+		default:
+			return fmt.Errorf("%s: must be a symlink targeting %q", relative, wantTarget)
+		}
+		seen[name] = true
+	}
+	names := make([]string, 0, len(skills))
+	for name := range skills {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if !seen[name] {
+			return fmt.Errorf(".claude/skills/%s: missing Claude skill mirror for %s", name, skills[name])
 		}
 	}
 	return nil

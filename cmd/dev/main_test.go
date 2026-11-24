@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -51,7 +52,27 @@ func testRepository(t *testing.T) string {
 			t.Fatal(err)
 		}
 	}
+	writeClaudeSkillMirror(t, root, "sample")
 	return root
+}
+
+func writeClaudeSkillMirror(t *testing.T, root, name string) {
+	t.Helper()
+	dir := filepath.Join(root, ".claude", "skills")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	target := "../../.agents/skills/" + name
+	link := filepath.Join(dir, name)
+	if err := os.Symlink(target, link); err != nil {
+		if runtime.GOOS == "windows" {
+			if writeErr := os.WriteFile(link, []byte(target), 0o600); writeErr != nil {
+				t.Fatal(writeErr)
+			}
+			return
+		}
+		t.Fatal(err)
+	}
 }
 
 func gitCommand(t *testing.T, root string, args ...string) {
