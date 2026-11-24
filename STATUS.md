@@ -1,10 +1,13 @@
 # Status
 
-Updated 2026-11-18. The accepted macOS P0 client is on `master`:
+Updated 2026-11-24. The accepted macOS P0 client is on `master`:
 [PR #16](https://github.com/coda1997/my-bilibili/pull/16) was squash-merged as
 [`ec4e275`](https://github.com/coda1997/my-bilibili/commit/ec4e27514e9021658205b1c0dc1ddb97b0992bac).
-The PR passed on all three platforms. On the merged commit, the Ubuntu
-fullscreen test timed out; macOS and Windows passed. See [CI evidence](#verification-and-availability).
+The earlier Ubuntu fullscreen fixture timeout on `ec4e275` was stabilized using
+virtual time in [PR #17](https://github.com/coda1997/my-bilibili/commit/c6a9152363c29dc80cce881987e7786ac7f4e762)
+(`c6a9152`), and `master` CI passed on all three platforms on `c6a9152` and
+[`a3e8fe0`](https://github.com/coda1997/my-bilibili/commit/a3e8fe00d958e7025662e2570887eb7c1baa49d9).
+See [CI evidence](#verification-and-availability).
 
 This is the only file that carries current state. Update it in the same change
 that moves the state. History lives in `reports/` and `git log`; agents do not
@@ -41,10 +44,14 @@ Exit criteria are in [stage zero](docs/stage-zero.md).
 
 ## Next actions
 
-Investigate the [Ubuntu failure on `master`](https://github.com/coda1997/my-bilibili/actions/runs/44319474570/job/134854312814).
-In `cmd/preview-smoke`, `TestFullscreenCyclesRecheckBeforeNextEntry` timed out
-at `entry-post-capture` after the first fullscreen action. This was an automated
-fixture test; the result does not establish a failure in native playback.
+- Review and approve the Phase 0 workflow-hygiene Draft PR (`specs/0030-phase0-workflow-hygiene`)
+  after three-OS CI passes (modifies `internal/check/`, `AGENTS.md`, and `docs/pull-requests.md`,
+  requiring separate human policy approval).
+- Continue post-P0 desktop client slices and Phase 1 structured `cmd/dev` telemetry / write-scope enforcement.
+
+The earlier Ubuntu `TestFullscreenCyclesRecheckBeforeNextEntry` fixture timeout on `ec4e275`
+was resolved by virtual-time `testing/synctest` stabilization in `c6a9152` and verified green
+on `master` across all three CI platforms (`44427348642`, `44429566237`).
 
 ## Owner action queue
 
@@ -67,8 +74,9 @@ release are separate work.
 
 | Revision / scope | Result | Evidence |
 | --- | --- | --- |
+| `master` push at `a3e8fe0` | macOS and Ubuntu race checks and the Windows check all passed (including stabilized fullscreen fixtures from `c6a9152`). | [Master CI (`a3e8fe0`)](https://github.com/coda1997/my-bilibili/actions/runs/44429566237) · [Master CI (`c6a9152`)](https://github.com/coda1997/my-bilibili/actions/runs/44427348642) |
 | PR #16 head `2d3fcd5` (CI tested merge `8e24962`) | macOS and Ubuntu race checks passed; the standard Windows check passed. | [PR CI](https://github.com/coda1997/my-bilibili/actions/runs/44318195874) |
-| `master` push at `ec4e275` | macOS and Windows passed; Ubuntu failed in the fullscreen test above. | [Post-merge CI](https://github.com/coda1997/my-bilibili/actions/runs/44319474570) |
+| `master` push at `ec4e275` | macOS and Windows passed; Ubuntu failed in `TestFullscreenCyclesRecheckBeforeNextEntry` (later stabilized in `c6a9152`). | [Post-merge CI](https://github.com/coda1997/my-bilibili/actions/runs/44319474570) |
 | Accepted product `4443b69` | Full and tagged Go race checks and 46 macOS fixture checks passed. The original reviewer closed all three findings. | [Repairs](reports/0040-p0-focused-repair.md) · [Owner acceptance](reports/0041-p0-acceptance.md) |
 | Real account and playback | QR login and Keychain restore passed. At `250c5d7` both parts played with the saved session, quality switching and visible danmaku were observed, and each part resumed in a fresh process. | [Login](reports/0036-p0-login-restored.md) · [Playback](reports/0039-p0-real-client.md) |
 

@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "spec_id": "0030-phase0-workflow-hygiene",
+  "tasks": [
+    {
+      "id": "HYG-001",
+      "title": "Enforce Claude skill parity and cross-spec prefix uniqueness in dev check",
+      "depends_on": [],
+      "write_paths": [
+        ".claude/skills",
+        "internal/check",
+        "cmd/dev/main_test.go"
+      ],
+      "acceptance": [
+        "HYG-AC-01",
+        "HYG-AC-02",
+        "HYG-AC-04"
+      ],
+      "checks": [
+        "go test -count=1 -race ./internal/check ./cmd/dev",
+        "go run ./cmd/dev check --race"
+      ]
+    },
+    {
+      "id": "HYG-002",
+      "title": "Update agent read-order, status, PR docs, and Phase 0 handoff report",
+      "depends_on": [
+        "HYG-001"
+      ],
+      "write_paths": [
+        "AGENTS.md",
+        "STATUS.md",
+        "docs/pull-requests.md",
+        "reports/0043-phase0-workflow-hygiene.md"
+      ],
+      "acceptance": [
+        "HYG-AC-03",
+        "HYG-AC-04"
+      ],
+      "checks": [
+        "go run ./cmd/dev check --race"
+      ]
+    }
+  ]
+}
