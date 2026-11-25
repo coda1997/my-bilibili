@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "spec_id": "0031-dev-structured-telemetry-guardrails",
+  "tasks": [
+    {
+      "id": "TEL-001",
+      "title": "Add write-scope verification in spec and Schema v2 telemetry with R4 enforcement in runlog",
+      "depends_on": [],
+      "write_paths": [
+        "internal/spec",
+        "internal/runlog"
+      ],
+      "acceptance": [
+        "TEL-AC-01",
+        "TEL-AC-02",
+        "TEL-AC-03"
+      ],
+      "checks": [
+        "go test -count=1 -race ./internal/spec ./internal/runlog"
+      ]
+    },
+    {
+      "id": "TEL-002",
+      "title": "Wire structured note telemetry, human override, and verify-scope into cmd/dev",
+      "depends_on": [
+        "TEL-001"
+      ],
+      "write_paths": [
+        "cmd/dev"
+      ],
+      "acceptance": [
+        "TEL-AC-01",
+        "TEL-AC-02",
+        "TEL-AC-03"
+      ],
+      "checks": [
+        "go test -count=1 -race ./cmd/dev ./internal/spec ./internal/runlog"
+      ]
+    },
+    {
+      "id": "TEL-003",
+      "title": "Expand cross-OS architecture import guards and update workflow docs and handoff report",
+      "depends_on": [
+        "TEL-002"
+      ],
+      "write_paths": [
+        "internal/architecture",
+        "docs/architecture.md",
+        "docs/workflow.md",
+        "docs/testing.md",
+        "STATUS.md",
+        "reports/0044-phase1-telemetry-guardrails.md"
+      ],
+      "acceptance": [
+        "TEL-AC-04"
+      ],
+      "checks": [
+        "go test -count=1 -race ./internal/architecture",
+        "go run ./cmd/dev check --race"
+      ]
+    }
+  ]
+}

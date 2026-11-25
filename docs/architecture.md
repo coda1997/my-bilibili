@@ -28,9 +28,11 @@ Do not create empty packages for every imagined future feature.
 
 Business modules must not import UI types, platform handles, database drivers,
 or Bilibili transport DTOs. Cross-module dependencies must be explicit.
-`internal/architecture` checks the app/catalog import boundary, prevents the
-account domain from depending on HTTP or nonstandard packages, and prevents
-product packages from depending on `experiments/`.
+`internal/architecture` checks the plain business boundary across `catalog`,
+`app`, `playback`, `danmaku`, and `history` (including test files) on all six
+CI build targets, prevents `internal/account` and its tests from depending on
+`net/http/...` or nonstandard packages, and prevents product packages and tests
+from depending on `experiments/`.
 
 ## Packages
 

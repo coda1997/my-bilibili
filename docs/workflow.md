@@ -75,8 +75,11 @@ Each direct child of `specs/` contains `spec.md` and `tasks.json`.
   export only when a consumer needs it; avoid two independently maintained
   definitions in the foundation.
 
-Validation checks the declared graph, not whether an agent actually stayed
-inside its write scope. Diff enforcement belongs to the later controller.
+`internal/spec.CheckWriteScope` and `go run ./cmd/dev verify-scope --spec specs/<id> --task <task-id>`
+verify committed (`--base`/`--head`), staged, unstaged, renamed (`--no-renames`),
+and untracked paths against a task's declared `write_paths`, failing closed on
+out-of-scope edits. This is deterministic local/CI verification, not a filesystem
+sandbox.
 
 The protected shared contract must be established before parallel workers
 begin. A contract change goes back to architecture review and creates a new
@@ -93,8 +96,20 @@ run with new frozen inputs; it is not an edit to the old run snapshot.
   evidence/           # Logs and other explicitly selected, sanitized evidence
 ```
 
-All run timestamps are UTC. A run starts `running`. Notes do not change that
-state. `finish` closes it with `succeeded`, `failed`, or `needs-human`; a closed
+All run timestamps are UTC. New runs use Schema v2 (existing Schema v1 runs
+remain readable without migration and reject v2 fields). A run starts `running`.
+Checkpoints may attach optional structured telemetry (`task_id` validated
+against frozen `inputs/tasks.json`, `role`, `review_round`, `fix_iteration`,
+`failure_signature`, `duration_ms`, and structured R1/R8 `findings`). `internal/runlog`
+enforces R4 limits on both write and read (at most 3 formal review rounds, 3 fix
+iterations, and a 3rd identical `failure_signature` circuit breaker that blocks
+further implementation/fix events and `finish --outcome succeeded` while still
+allowing `handoff`, `review`, and `finish --outcome needs-human`/`failed`). Only
+an explicit `human-override` event (`dev run override --confirm-human-override`)
+extends allowances or clears the active failure-halt window without erasing prior
+history; `--confirm-human-override` is a local observability record, not
+cryptographic authentication or independent review, policy, or merge authority.
+`finish` closes the run with `succeeded`, `failed`, or `needs-human`; a closed
 run cannot be appended to. A successful outcome requires recorded evidence,
 but is still not an approval. Continue an open run after interruption, or
 start a new run and mention the prior ID in its first note after a handoff.

@@ -1,13 +1,16 @@
 # Status
 
-Updated 2026-11-24. The accepted macOS P0 client is on `master`:
+Updated 2026-11-25. The accepted macOS P0 client is on `master`:
 [PR #16](https://github.com/coda1997/my-bilibili/pull/16) was squash-merged as
 [`ec4e275`](https://github.com/coda1997/my-bilibili/commit/ec4e27514e9021658205b1c0dc1ddb97b0992bac).
 The earlier Ubuntu fullscreen fixture timeout on `ec4e275` was stabilized using
-virtual time in [PR #17](https://github.com/coda1997/my-bilibili/commit/c6a9152363c29dc80cce881987e7786ac7f4e762)
-(`c6a9152`), and `master` CI passed on all three platforms on `c6a9152` and
-[`a3e8fe0`](https://github.com/coda1997/my-bilibili/commit/a3e8fe00d958e7025662e2570887eb7c1baa49d9).
-See [CI evidence](#verification-and-availability).
+virtual time in [PR #17](https://github.com/coda1997/my-bilibili/pull/17)
+([`c6a9152`](https://github.com/coda1997/my-bilibili/commit/c6a9152363c29dc80cce881987e7786ac7f4e762)).
+Phase 0 workflow hygiene ([PR #20](https://github.com/coda1997/my-bilibili/pull/20),
+[`66f00fc`](https://github.com/coda1997/my-bilibili/commit/66f00fc70420d506fbd4fbc50adbd14df0133ab1))
+and Ubuntu-race + cross-compilation CI ([PR #21](https://github.com/coda1997/my-bilibili/pull/21),
+[`f5a7fd3`](https://github.com/coda1997/my-bilibili/commit/f5a7fd3c305d5a8ef4a137f68324cc33e71b80cf))
+have landed on `master`. See [CI evidence](#verification-and-availability).
 
 This is the only file that carries current state. Update it in the same change
 that moves the state. History lives in `reports/` and `git log`; agents do not
@@ -44,14 +47,12 @@ Exit criteria are in [stage zero](docs/stage-zero.md).
 
 ## Next actions
 
-- Review and approve the Phase 0 workflow-hygiene Draft PR (`specs/0030-phase0-workflow-hygiene`)
-  after three-OS CI passes (modifies `internal/check/`, `AGENTS.md`, and `docs/pull-requests.md`,
-  requiring separate human policy approval).
-- Continue post-P0 desktop client slices and Phase 1 structured `cmd/dev` telemetry / write-scope enforcement.
-
-The earlier Ubuntu `TestFullscreenCyclesRecheckBeforeNextEntry` fixture timeout on `ec4e275`
-was resolved by virtual-time `testing/synctest` stabilization in `c6a9152` and verified green
-on `master` across all three CI platforms (`44427348642`, `44429566237`).
+- Review and approve the Phase 1 structured telemetry, R4 guardrails, and
+  cross-OS import boundary Draft PR ([spec 0031](specs/0031-dev-structured-telemetry-guardrails/spec.md))
+  after CI passes (modifies `internal/spec`, `internal/runlog`, `cmd/dev`,
+  `internal/architecture`, and workflow docs, requiring separate human policy approval).
+- Continue post-P0 desktop client slices (`0028` manual walkthrough / `0029`
+  bounded guest probe) and Phase 2 Go DAG controller planning.
 
 ## Owner action queue
 
@@ -62,8 +63,6 @@ release are separate work.
 ## Follow-ups
 
 - P0R-OBS-001/resize-search and the unrelated slider setup failure in the optional mutated run remain local reliability observations. For P0R-AT-001 and the earlier ASY-CODE-001, the local inventory proposes deriving control counts from actual outcomes (no change to trusted checks).
-- Import guard covers darwin/arm64 non-test imports only; extend it to the
-  other CI targets and test files (review advisory, spec 0024).
 - Add expiry tests for `Toggle` from Ended and reselecting the current part
   (review advisory, spec 0024).
 - LOG-ADV-001 was addressed by the account-pane integration at `cc039a8`: an
@@ -74,6 +73,7 @@ release are separate work.
 
 | Revision / scope | Result | Evidence |
 | --- | --- | --- |
+| `master` push at `f5a7fd3` (PR #21) | Ubuntu race checks and `darwin`/`windows` cross-compilation (`go vet` + `go build`, default and `-tags e2e`) passed. | [Master CI (`f5a7fd3`)](https://github.com/coda1997/my-bilibili/actions/runs/45433019721) |
 | `master` push at `a3e8fe0` | macOS and Ubuntu race checks and the Windows check all passed (including stabilized fullscreen fixtures from `c6a9152`). | [Master CI (`a3e8fe0`)](https://github.com/coda1997/my-bilibili/actions/runs/44429566237) · [Master CI (`c6a9152`)](https://github.com/coda1997/my-bilibili/actions/runs/44427348642) |
 | PR #16 head `2d3fcd5` (CI tested merge `8e24962`) | macOS and Ubuntu race checks passed; the standard Windows check passed. | [PR CI](https://github.com/coda1997/my-bilibili/actions/runs/44318195874) |
 | `master` push at `ec4e275` | macOS and Windows passed; Ubuntu failed in `TestFullscreenCyclesRecheckBeforeNextEntry` (later stabilized in `c6a9152`). | [Post-merge CI](https://github.com/coda1997/my-bilibili/actions/runs/44319474570) |
