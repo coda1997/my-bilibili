@@ -203,9 +203,14 @@ func collectChangedPaths(ctx context.Context, root, baseRev, headRev string) (st
 }
 
 func loadFindingsFile(path string) ([]runlog.Finding, error) {
-	info, err := os.Stat(path)
+	file, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("read findings file: %w", err)
+		return nil, fmt.Errorf("open findings file: %w", err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("stat findings file: %w", err)
 	}
 	if !info.Mode().IsRegular() {
 		return nil, errors.New("findings file must be a regular file")
@@ -213,11 +218,6 @@ func loadFindingsFile(path string) ([]runlog.Finding, error) {
 	if info.Size() > maxFindingsFileBytes {
 		return nil, fmt.Errorf("findings file exceeds %d bytes", maxFindingsFileBytes)
 	}
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("open findings file: %w", err)
-	}
-	defer file.Close()
 	data, err := io.ReadAll(io.LimitReader(file, maxFindingsFileBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("read findings file: %w", err)

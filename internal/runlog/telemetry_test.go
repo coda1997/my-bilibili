@@ -291,6 +291,84 @@ func TestR4ReviewAndFixLimitsAndOverrides(t *testing.T) {
 	}
 }
 
+func TestHumanOverrideCumulativeAllowanceCaps(t *testing.T) {
+	store, manifest := testStore(t)
+
+	// Reject negative and over-MaxOverrideDelta values for both review and fix overrides.
+	for _, bad := range []HumanOverride{
+		{ExtraReviewRounds: -1},
+		{ExtraFixIterations: -1},
+		{ExtraFixIterations: MaxOverrideDelta + 1},
+	} {
+		if err := store.HumanOverride(manifest.ID, "T1", "Bad override", bad, nil, testSource); err == nil {
+			t.Fatalf("accepted invalid override %+v", bad)
+		}
+	}
+
+	// Bring both allowed_review_rounds and allowed_fix_iterations from 3 to MaxScopeAllowance (1000).
+	for range 9 {
+		if err := store.HumanOverride(manifest.ID, "T1", "Add 100", HumanOverride{
+			ExtraReviewRounds:  MaxOverrideDelta,
+			ExtraFixIterations: MaxOverrideDelta,
+		}, nil, testSource); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.HumanOverride(manifest.ID, "T1", "Reach exact cap 1000", HumanOverride{
+		ExtraReviewRounds:  MaxScopeAllowance - DefaultMaxReviewRounds - 9*MaxOverrideDelta,
+		ExtraFixIterations: MaxScopeAllowance - DefaultMaxFixIterations - 9*MaxOverrideDelta,
+	}, nil, testSource); err != nil {
+		t.Fatalf("reaching exact MaxScopeAllowance failed: %v", err)
+	}
+	before, err := store.Read(manifest.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before.Budgets["T1"].AllowedReviewRounds != MaxScopeAllowance || before.Budgets["T1"].AllowedFixIterations != MaxScopeAllowance {
+		t.Fatalf("unexpected allowances at cap: %+v", before.Budgets["T1"])
+	}
+
+	// Exceeding MaxScopeAllowance by 1 must fail closed without mutating event count.
+	if err := store.HumanOverride(manifest.ID, "T1", "Exceed review cap", HumanOverride{ExtraReviewRounds: 1}, nil, testSource); err == nil || !strings.Contains(err.Error(), "exceed maximum") {
+		t.Fatalf("expected review cap rejection, got %v", err)
+	}
+	if err := store.HumanOverride(manifest.ID, "T1", "Exceed fix cap", HumanOverride{ExtraFixIterations: 1}, nil, testSource); err == nil || !strings.Contains(err.Error(), "exceed maximum") {
+		t.Fatalf("expected fix cap rejection, got %v", err)
+	}
+	after, err := store.Read(manifest.ID)
+	if err != nil || len(after.Events) != len(before.Events) {
+		t.Fatalf("rejected cap overrides mutated history: before=%d after=%d err=%v", len(before.Events), len(after.Events), err)
+	}
+}
+
+func TestHaltedRunPermitsNeedsHumanAndFailedFinish(t *testing.T) {
+	for _, outcome := range []string{"needs-human", "failed"} {
+		t.Run(outcome, func(t *testing.T) {
+			store, manifest := testStore(t)
+			for range 3 {
+				if err := store.NoteWithOptions(manifest.ID, NoteOptions{
+					Phase:            "validation",
+					Message:          "Repeated failure",
+					TaskID:           "T1",
+					FailureSignature: "internal/test:TestRepeat",
+				}, testSource); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := store.Finish(manifest.ID, outcome, "Escalating halted run", nil, testSource); err != nil {
+				t.Fatalf("Finish(%q) while halted failed: %v", outcome, err)
+			}
+			view, err := store.Read(manifest.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if view.Status != outcome || !view.Budgets["T1"].FailureHalted {
+				t.Fatalf("unexpected closed halted view: status=%q budget=%+v", view.Status, view.Budgets["T1"])
+			}
+		})
+	}
+}
+
 func TestR4RepeatedFailureCircuitBreakerAndTamperRead(t *testing.T) {
 	store, manifest := testStore(t)
 	evidence := addEvidence(t, store, manifest.ID)

@@ -111,6 +111,42 @@ func TestVerifyScopeCLI(t *testing.T) {
 			t.Fatalf("expected moved_out.go violation, got %+v", result)
 		}
 
+		// Moving an out-of-scope file INTO write_paths must also be caught via --no-renames
+		// (default git diff -M drops the source path and would miss README.md).
+		gitCommand(t, root, "reset", "--hard", "--quiet", "HEAD")
+		gitCommand(t, root, "mv", "README.md", "cmd/moved_in.md")
+		out.Reset()
+		err = execute(context.Background(), root, []string{
+			"verify-scope", "--spec", "specs/test", "--task", "T1",
+		}, &out, io.Discard)
+		if err == nil {
+			t.Fatal("missed out-of-scope file renamed into write_paths (working tree)")
+		}
+		result = scopeResult{}
+		if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(result.Violations, []string{"README.md"}) {
+			t.Fatalf("expected README.md source violation on rename-in, got %+v", result)
+		}
+		// Verify committed --base..--head rename-in is also caught via --no-renames.
+		gitCommand(t, root, "commit", "--quiet", "-m", "Rename out-of-scope file into cmd")
+		out.Reset()
+		err = execute(context.Background(), root, []string{
+			"verify-scope", "--spec", "specs/test", "--task", "T1", "--base", "HEAD~1", "--head", "HEAD",
+		}, &out, io.Discard)
+		if err == nil {
+			t.Fatal("missed out-of-scope file renamed into write_paths (committed range)")
+		}
+		result = scopeResult{}
+		if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(result.Violations, []string{"README.md"}) {
+			t.Fatalf("expected README.md violation on committed rename-in, got %+v", result)
+		}
+		gitCommand(t, root, "reset", "--hard", "--quiet", "HEAD~1")
+
 		// Committed range --base .. --head ignores dirty working tree.
 		gitCommand(t, root, "reset", "--hard", "--quiet", "HEAD")
 		if err := os.WriteFile(filepath.Join(root, "cmd", "c.go"), []byte("package c\n"), 0o600); err != nil {
@@ -235,4 +271,56 @@ func TestStructuredNoteAndOverrideCLI(t *testing.T) {
 	}, io.Discard, io.Discard); err != nil {
 		t.Fatalf("resumed implementation failed: %v", err)
 	}
+}
+
+func TestLoadFindingsFileGuards(t *testing.T) {
+	root := testRepository(t)
+	_, id := newTestRun(t, root)
+
+	t.Run("rejects directory (non-regular file)", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := execute(context.Background(), root, []string{
+			"run", "note", "--id", id, "--phase", "review", "--message", "Dir findings", "--findings-file", dir,
+		}, io.Discard, io.Discard); err == nil || !strings.Contains(err.Error(), "regular file") {
+			t.Fatalf("want regular file rejection, got %v", err)
+		}
+	})
+
+	t.Run("rejects oversized findings file (> 1 MiB)", func(t *testing.T) {
+		big := filepath.Join(t.TempDir(), "oversized.json")
+		payload := append([]byte("["), bytes.Repeat([]byte(" "), maxFindingsFileBytes)...)
+		payload = append(payload, ']')
+		if err := os.WriteFile(big, payload, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := execute(context.Background(), root, []string{
+			"run", "note", "--id", id, "--phase", "review", "--message", "Big findings", "--findings-file", big,
+		}, io.Discard, io.Discard); err == nil || !strings.Contains(err.Error(), "exceeds") {
+			t.Fatalf("want oversized rejection, got %v", err)
+		}
+	})
+
+	t.Run("rejects trailing JSON", func(t *testing.T) {
+		trailing := filepath.Join(t.TempDir(), "trailing.json")
+		if err := os.WriteFile(trailing, []byte(`[][]`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := execute(context.Background(), root, []string{
+			"run", "note", "--id", id, "--phase", "review", "--message", "Trailing JSON", "--findings-file", trailing,
+		}, io.Discard, io.Discard); err == nil || !strings.Contains(err.Error(), "exactly one JSON array") {
+			t.Fatalf("want trailing JSON rejection, got %v", err)
+		}
+	})
+
+	t.Run("rejects JSON null", func(t *testing.T) {
+		nullFile := filepath.Join(t.TempDir(), "null.json")
+		if err := os.WriteFile(nullFile, []byte(`null`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := execute(context.Background(), root, []string{
+			"run", "note", "--id", id, "--phase", "review", "--message", "Null findings", "--findings-file", nullFile,
+		}, io.Discard, io.Discard); err == nil || !strings.Contains(err.Error(), "JSON array") {
+			t.Fatalf("want JSON array rejection for null, got %v", err)
+		}
+	})
 }
