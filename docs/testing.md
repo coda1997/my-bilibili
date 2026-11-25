@@ -123,9 +123,17 @@ and returned run ID; workers run ordinary checks and return sanitized logs:
 
 ```sh
 go run ./cmd/dev run new --spec specs/<id>
+go run ./cmd/dev verify-scope --spec specs/<id> --task <task-id> --base <rev>
 go run ./cmd/dev check --run <run-id> --race
 go run ./cmd/dev run status --id <run-id> --events
 ```
+
+`dev run note` accepts optional Schema v2 telemetry flags (`--task`, `--role`,
+`--review-round`, `--fix-iteration`, `--failure-signature`, `--duration-ms`,
+`--findings-file`) and enforces R4 limits in `internal/runlog`. Extending a
+stopped R4 budget requires explicit human direction recorded via
+`dev run override --id <run-id> ... --confirm-human-override`, which is local
+observability only and never grants review, policy, or merge approval.
 
 For an explicitly allowed dirty development baseline, add `--allow-dirty` to
 `run new`. The run freezes spec/task inputs, not the entire source tree. Freeze
