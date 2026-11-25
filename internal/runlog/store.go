@@ -42,31 +42,47 @@ type Evidence struct {
 }
 
 type Event struct {
-	Sequence int        `json:"sequence"`
-	At       time.Time  `json:"at"`
-	Kind     string     `json:"kind"`
-	Phase    string     `json:"phase,omitempty"`
-	Outcome  string     `json:"outcome,omitempty"`
-	Message  string     `json:"message"`
-	Source   Source     `json:"source"`
-	Evidence []Evidence `json:"evidence,omitempty"`
+	Sequence         int            `json:"sequence"`
+	At               time.Time      `json:"at"`
+	Kind             string         `json:"kind"`
+	Phase            string         `json:"phase,omitempty"`
+	Outcome          string         `json:"outcome,omitempty"`
+	Message          string         `json:"message"`
+	Source           Source         `json:"source"`
+	Evidence         []Evidence     `json:"evidence,omitempty"`
+	TaskID           string         `json:"task_id,omitempty"`
+	Role             string         `json:"role,omitempty"`
+	ReviewRound      int            `json:"review_round,omitempty"`
+	FixIteration     int            `json:"fix_iteration,omitempty"`
+	FailureSignature string         `json:"failure_signature,omitempty"`
+	DurationMS       int64          `json:"duration_ms,omitempty"`
+	Findings         []Finding      `json:"findings,omitempty"`
+	Override         *HumanOverride `json:"override,omitempty"`
 }
 
 type View struct {
-	Manifest Manifest `json:"manifest"`
-	Status   string   `json:"status"`
-	Events   []Event  `json:"events"`
+	Manifest Manifest                `json:"manifest"`
+	Status   string                  `json:"status"`
+	Events   []Event                 `json:"events"`
+	Budgets  map[string]BudgetStatus `json:"budgets,omitempty"`
 }
 
 type Summary struct {
-	Manifest Manifest `json:"manifest"`
-	Status   string   `json:"status"`
-	Events   int      `json:"event_count"`
-	Latest   Event    `json:"latest_event"`
+	Manifest Manifest                `json:"manifest"`
+	Status   string                  `json:"status"`
+	Events   int                     `json:"event_count"`
+	Latest   Event                   `json:"latest_event"`
+	Budgets  map[string]BudgetStatus `json:"budgets,omitempty"`
 }
 
 func (view View) Summary() Summary {
-	return Summary{Manifest: view.Manifest, Status: view.Status, Events: len(view.Events), Latest: view.Events[len(view.Events)-1]}
+	return Summary{
+		Manifest: view.Manifest,
+		Status:   view.Status,
+		Events:   len(view.Events),
+		Latest:   view.Events[len(view.Events)-1],
+		Budgets:  view.Budgets,
+	}
 }
 
 type Store struct {
@@ -93,7 +109,14 @@ func (s *Store) Start(snapshot spec.Snapshot, source Source) (Manifest, error) {
 	if err := validSource(source); err != nil {
 		return Manifest{}, err
 	}
-	if err := spec.Validate(snapshot.Definition, snapshot.Markdown); err != nil {
+	decoded, err := decodeStrictTaskDefinition(snapshot.TaskJSON)
+	if err != nil {
+		return Manifest{}, err
+	}
+	if !definitionsEqual(decoded, snapshot.Definition) {
+		return Manifest{}, errors.New("snapshot TaskJSON does not match Definition")
+	}
+	if err := spec.Validate(decoded, snapshot.Markdown); err != nil {
 		return Manifest{}, err
 	}
 	if !spec.ValidPath(snapshot.Path) {
@@ -110,7 +133,7 @@ func (s *Store) Start(snapshot spec.Snapshot, source Source) (Manifest, error) {
 	}
 	now := time.Now().UTC()
 	manifest := Manifest{
-		SchemaVersion: 1,
+		SchemaVersion: 2,
 		ID:            now.Format("20060102T150405Z") + "-" + hex.EncodeToString(random[:]),
 		CreatedAt:     now,
 		SpecID:        snapshot.Definition.SpecID,
@@ -151,37 +174,71 @@ func (s *Store) Start(snapshot spec.Snapshot, source Source) (Manifest, error) {
 }
 
 func (s *Store) Read(id string) (View, error) {
+	view, _, err := s.readWithTracker(id)
+	return view, err
+}
+
+func (s *Store) readWithTracker(id string) (View, *budgetTracker, error) {
 	var view View
 	dir, err := s.directory(id)
 	if err != nil {
-		return view, err
+		return view, nil, err
 	}
 	if err := readJSON(dir, "manifest.json", &view.Manifest); err != nil {
-		return View{}, err
+		return View{}, nil, err
 	}
 	m := view.Manifest
-	if m.SchemaVersion != 1 || m.ID != id || m.CreatedAt.IsZero() || m.SpecID == "" || !spec.ValidPath(m.SpecPath) {
-		return View{}, errors.New("invalid run manifest")
+	if (m.SchemaVersion != 1 && m.SchemaVersion != 2) || m.ID != id || m.CreatedAt.IsZero() || m.SpecID == "" || !spec.ValidPath(m.SpecPath) {
+		return View{}, nil, errors.New("invalid run manifest")
 	}
 	if err := validSource(m.Source); err != nil {
-		return View{}, err
+		return View{}, nil, err
 	}
+	frozenData := make(map[string][]byte, 2)
 	for path, want := range map[string]string{"inputs/spec.md": m.SpecSHA256, "inputs/tasks.json": m.TasksSHA256} {
 		file, err := fileDigest(dir, path)
 		if err != nil {
-			return View{}, err
+			return View{}, nil, err
 		}
 		if file.SHA256 != want {
-			return View{}, fmt.Errorf("frozen input digest mismatch: %s", path)
+			return View{}, nil, fmt.Errorf("frozen input digest mismatch: %s", path)
 		}
+		filename, err := checkedPath(dir, path)
+		if err != nil {
+			return View{}, nil, err
+		}
+		data, err := os.ReadFile(filename)
+		if err != nil {
+			return View{}, nil, err
+		}
+		if digest(data) != want {
+			return View{}, nil, fmt.Errorf("frozen input digest mismatch: %s", path)
+		}
+		frozenData[path] = data
 	}
+	def, err := decodeStrictTaskDefinition(frozenData["inputs/tasks.json"])
+	if err != nil {
+		return View{}, nil, err
+	}
+	if def.SpecID != m.SpecID {
+		return View{}, nil, errors.New("frozen tasks.json spec_id does not match manifest")
+	}
+	if err := spec.Validate(def, frozenData["inputs/spec.md"]); err != nil {
+		return View{}, nil, fmt.Errorf("frozen spec inputs invalid: %w", err)
+	}
+	validTasks := make(map[string]bool, len(def.Tasks))
+	for _, task := range def.Tasks {
+		validTasks[task.ID] = true
+	}
+	tracker := newBudgetTracker(m.SchemaVersion, validTasks)
+
 	eventDir, err := checkedPath(dir, "events")
 	if err != nil {
-		return View{}, err
+		return View{}, nil, err
 	}
 	entries, err := os.ReadDir(eventDir)
 	if err != nil {
-		return View{}, err
+		return View{}, nil, err
 	}
 	view.Status = "running"
 	for _, entry := range entries {
@@ -189,46 +246,50 @@ func (s *Store) Read(id string) (View, error) {
 			continue
 		}
 		if !eventName.MatchString(entry.Name()) || entry.IsDir() {
-			return View{}, fmt.Errorf("unexpected event entry %s", entry.Name())
+			return View{}, nil, fmt.Errorf("unexpected event entry %s", entry.Name())
 		}
 		var event Event
 		if err := readJSON(dir, "events/"+entry.Name(), &event); err != nil {
-			return View{}, err
+			return View{}, nil, err
 		}
 		expected := len(view.Events) + 1
 		if event.Sequence != expected || entry.Name() != fmt.Sprintf("%06d.json", expected) {
-			return View{}, errors.New("event sequence gap or mismatch")
+			return View{}, nil, errors.New("event sequence gap or mismatch")
 		}
 		if view.Status != "running" {
-			return View{}, errors.New("event appears after run was closed")
+			return View{}, nil, errors.New("event appears after run was closed")
 		}
 		if err := validEvent(event); err != nil {
-			return View{}, err
+			return View{}, nil, err
+		}
+		if err := tracker.apply(event); err != nil {
+			return View{}, nil, err
 		}
 		if expected == 1 && (event.Source != m.Source || !event.At.Equal(m.CreatedAt)) {
-			return View{}, errors.New("started event does not match manifest provenance")
+			return View{}, nil, errors.New("started event does not match manifest provenance")
 		}
 		for _, evidence := range event.Evidence {
 			actual, err := collectEvidence(dir, evidence.Path)
 			if err != nil {
-				return View{}, err
+				return View{}, nil, err
 			}
 			if actual != evidence {
-				return View{}, fmt.Errorf("evidence digest or size mismatch: %s", evidence.Path)
+				return View{}, nil, fmt.Errorf("evidence digest or size mismatch: %s", evidence.Path)
 			}
 		}
 		if event.Kind == "finished" {
 			if event.Outcome == "succeeded" && !hasEvidence(view.Events) && len(event.Evidence) == 0 {
-				return View{}, errors.New("successful outcome has no evidence")
+				return View{}, nil, errors.New("successful outcome has no evidence")
 			}
 			view.Status = event.Outcome
 		}
 		view.Events = append(view.Events, event)
 	}
 	if len(view.Events) == 0 {
-		return View{}, errors.New("run has no started event")
+		return View{}, nil, errors.New("run has no started event")
 	}
-	return view, nil
+	view.Budgets = tracker.budgets()
+	return view, tracker, nil
 }
 
 func (s *Store) List() ([]Summary, error) {
@@ -258,7 +319,34 @@ func (s *Store) List() ([]Summary, error) {
 }
 
 func (s *Store) Note(id, phase, message string, paths []string, source Source) error {
-	return s.append(id, Event{Kind: "checkpoint", Phase: phase, Message: message, Source: source}, paths)
+	return s.NoteWithOptions(id, NoteOptions{Phase: phase, Message: message, Evidence: paths}, source)
+}
+
+func (s *Store) NoteWithOptions(id string, opts NoteOptions, source Source) error {
+	return s.append(id, Event{
+		Kind:             "checkpoint",
+		Phase:            opts.Phase,
+		Message:          opts.Message,
+		Source:           source,
+		TaskID:           opts.TaskID,
+		Role:             opts.Role,
+		ReviewRound:      opts.ReviewRound,
+		FixIteration:     opts.FixIteration,
+		FailureSignature: opts.FailureSignature,
+		DurationMS:       opts.DurationMS,
+		Findings:         opts.Findings,
+	}, opts.Evidence)
+}
+
+func (s *Store) HumanOverride(id, taskID, message string, override HumanOverride, paths []string, source Source) error {
+	o := override
+	return s.append(id, Event{
+		Kind:     "human-override",
+		Message:  message,
+		Source:   source,
+		TaskID:   taskID,
+		Override: &o,
+	}, paths)
 }
 
 func (s *Store) Finish(id, outcome, message string, paths []string, source Source) error {
@@ -304,7 +392,7 @@ func (s *Store) append(id string, event Event, paths []string) error {
 	}{os.Getpid(), time.Now().UTC()}); err != nil {
 		return err
 	}
-	view, err := s.Read(id)
+	view, tracker, err := s.readWithTracker(id)
 	if err != nil {
 		return err
 	}
@@ -316,6 +404,9 @@ func (s *Store) append(id string, event Event, paths []string) error {
 		return errors.New("event limit reached; start a continuation run")
 	}
 	if err := validEvent(event); err != nil {
+		return err
+	}
+	if err := tracker.apply(event); err != nil {
 		return err
 	}
 	for _, path := range paths {
@@ -406,6 +497,14 @@ func validEvent(event Event) error {
 		default:
 			return fmt.Errorf("invalid outcome %q", event.Outcome)
 		}
+	case "human-override":
+		if event.Phase != "" || event.Outcome != "" {
+			return errors.New("human-override event cannot set phase or outcome")
+		}
+		if event.Override == nil {
+			return errors.New("human-override event requires override payload")
+		}
+		return nil
 	default:
 		return fmt.Errorf("invalid event kind %q", event.Kind)
 	}
