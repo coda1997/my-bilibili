@@ -23,14 +23,19 @@ import (
 
 const usage = `Usage:
   dev check [--race] [--run <id>]
+  dev verify-scope --spec specs/<id> --task <task-id> [--base <rev>] [--head <rev>]
   dev run new --spec specs/<id> [--allow-dirty]
   dev run list
   dev run status --id <id> [--events]
-  dev run note --id <id> --phase <phase> --message <text> [--evidence evidence/<file>]
+  dev run note --id <id> --phase <phase> --message <text> [--evidence evidence/<file>] [--task <task-id>] [--role <role>] [--review-round N] [--fix-iteration N] [--failure-signature <sig>] [--duration-ms N] [--findings-file <path>]
+  dev run override --id <id> [--task <task-id>] --message <human-direction> [--extra-review-rounds N] [--extra-fix-iterations N] [--reset-failure-signatures] --confirm-human-override [--evidence evidence/<file>]
   dev run finish --id <id> --outcome <outcome> --message <text> [--evidence evidence/<file>]
 
 Phases: planning, implementation, validation, review, handoff.
+Roles: lead, architecture-review, implementation, code-review, controller, handoff.
 Outcomes: succeeded, failed, needs-human. Outcomes are not review approvals.
+--confirm-human-override records explicit human direction to extend local R4 budgets;
+it is not cryptographic authentication and never grants independent review, policy approval, or merge authority.
 Evidence flags may be repeated. Files must already exist in the run directory.
 `
 
@@ -74,6 +79,8 @@ func execute(ctx context.Context, root string, args []string, out, errOut io.Wri
 			return check.Run(ctx, root, out, *race)
 		}
 		return recordedCheck(ctx, root, store, *id, *race, out, check.Run)
+	case "verify-scope":
+		return verifyScopeCommand(ctx, root, args[1:], out, errOut)
 	case "run":
 		return runCommand(root, store, args[1:], out, errOut)
 	default:
@@ -133,20 +140,102 @@ func runCommand(root string, store *runlog.Store, args []string, out, errOut io.
 			return printJSON(out, view)
 		}
 		return printJSON(out, view.Summary())
-	case "note", "finish":
+	case "note":
 		id := flags.String("id", "", "run ID")
-		message := flags.String("message", "", "checkpoint or outcome description")
+		phase := flags.String("phase", "", "planning, implementation, validation, review, or handoff")
+		message := flags.String("message", "", "checkpoint description")
+		taskID := flags.String("task", "", "task ID from frozen tasks.json")
+		role := flags.String("role", "", "lead, architecture-review, implementation, code-review, controller, or handoff")
+		reviewRound := flags.Int("review-round", 0, "formal review round (>= 1 on review phase)")
+		fixIteration := flags.Int("fix-iteration", 0, "fix iteration (>= 1 on implementation/validation phase)")
+		failureSig := flags.String("failure-signature", "", "canonical failure signature for R4 circuit breaker")
+		durationMS := flags.Int64("duration-ms", 0, "optional non-negative step duration in milliseconds")
+		findingsFile := flags.String("findings-file", "", "path to JSON file containing []runlog.Finding")
 		var paths []string
 		flags.Func("evidence", "existing file relative to this run", func(path string) error {
 			paths = append(paths, path)
 			return nil
 		})
-		var phase, outcome string
-		if args[0] == "note" {
-			flags.StringVar(&phase, "phase", "", "planning, implementation, validation, review, or handoff")
-		} else {
-			flags.StringVar(&outcome, "outcome", "", "succeeded, failed, or needs-human")
+		if err := parse(flags, args[1:]); err != nil {
+			return err
 		}
+		var findings []runlog.Finding
+		if *findingsFile != "" {
+			var err error
+			findings, err = loadFindingsFile(*findingsFile)
+			if err != nil {
+				return err
+			}
+		}
+		source, err := sourceInfo(root)
+		if err != nil {
+			return err
+		}
+		opts := runlog.NoteOptions{
+			Phase:            *phase,
+			Message:          *message,
+			Evidence:         paths,
+			TaskID:           *taskID,
+			Role:             *role,
+			ReviewRound:      *reviewRound,
+			FixIteration:     *fixIteration,
+			FailureSignature: *failureSig,
+			DurationMS:       *durationMS,
+			Findings:         findings,
+		}
+		if err := store.NoteWithOptions(*id, opts, source); err != nil {
+			return err
+		}
+		view, err := store.Read(*id)
+		if err != nil {
+			return err
+		}
+		return printJSON(out, view.Summary())
+	case "override":
+		id := flags.String("id", "", "run ID")
+		taskID := flags.String("task", "", "task ID from frozen tasks.json (optional for run-level review override)")
+		message := flags.String("message", "", "explicit human direction recorded in run history")
+		extraReview := flags.Int("extra-review-rounds", 0, "additional review rounds granted by human direction")
+		extraFix := flags.Int("extra-fix-iterations", 0, "additional fix iterations granted by human direction")
+		resetFailures := flags.Bool("reset-failure-signatures", false, "clear active repeated-failure halt window while preserving history")
+		confirmHuman := flags.Bool("confirm-human-override", false, "required explicit confirmation of human direction (local observability, not auth)")
+		var paths []string
+		flags.Func("evidence", "existing file relative to this run", func(path string) error {
+			paths = append(paths, path)
+			return nil
+		})
+		if err := parse(flags, args[1:]); err != nil {
+			return err
+		}
+		if !*confirmHuman {
+			return errors.New("dev run override requires --confirm-human-override (records explicit human direction to extend local R4 budgets; not cryptographic authentication or policy/merge approval)")
+		}
+		source, err := sourceInfo(root)
+		if err != nil {
+			return err
+		}
+		override := runlog.HumanOverride{
+			ExtraReviewRounds:      *extraReview,
+			ExtraFixIterations:     *extraFix,
+			ResetFailureSignatures: *resetFailures,
+		}
+		if err := store.HumanOverride(*id, *taskID, *message, override, paths, source); err != nil {
+			return err
+		}
+		view, err := store.Read(*id)
+		if err != nil {
+			return err
+		}
+		return printJSON(out, view.Summary())
+	case "finish":
+		id := flags.String("id", "", "run ID")
+		outcome := flags.String("outcome", "", "succeeded, failed, or needs-human")
+		message := flags.String("message", "", "outcome description")
+		var paths []string
+		flags.Func("evidence", "existing file relative to this run", func(path string) error {
+			paths = append(paths, path)
+			return nil
+		})
 		if err := parse(flags, args[1:]); err != nil {
 			return err
 		}
@@ -154,12 +243,7 @@ func runCommand(root string, store *runlog.Store, args []string, out, errOut io.
 		if err != nil {
 			return err
 		}
-		if args[0] == "note" {
-			err = store.Note(*id, phase, *message, paths, source)
-		} else {
-			err = store.Finish(*id, outcome, *message, paths, source)
-		}
-		if err != nil {
+		if err := store.Finish(*id, *outcome, *message, paths, source); err != nil {
 			return err
 		}
 		view, err := store.Read(*id)
